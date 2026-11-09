@@ -1,0 +1,25 @@
+// Author: dishanhai
+plugins {
+    id 'java-library'
+    id 'maven-publish'
+    id 'net.neoforged.moddev' version '2.0.148'
+}
+
+apply from: '../gradle/library.gradle'
+
+java {
+    toolchain.languageVersion = JavaLanguageVersion.of(21)
+}
+
+repositories { mavenCentral() }
+
+neoForge {
+    version = platform_version
+    runs {
+        client { client() }
+        server { server(); programArgument '--nogui' }
+    }
+    mods {
+        sh_common_lib { sourceSet sourceSets.main }
+    }
+}

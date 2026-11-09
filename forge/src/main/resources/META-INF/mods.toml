@@ -1,0 +1,24 @@
+modLoader="javafml"
+loaderVersion="[47,48)"
+license="All Rights Reserved"
+
+[[mods]]
+modId="sh_common_lib"
+version="${mod_version}"
+displayName="SH-Common-Lib"
+authors="dishanhai"
+description="Shared Minecraft mod APIs, items, and blocks."
+
+[[dependencies.sh_common_lib]]
+modId="forge"
+mandatory=true
+versionRange="[${loader_version},48)"
+ordering="NONE"
+side="BOTH"
+
+[[dependencies.sh_common_lib]]
+modId="minecraft"
+mandatory=true
+versionRange="[${minecraft_version}]"
+ordering="NONE"
+side="BOTH"

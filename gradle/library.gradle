@@ -1,0 +1,45 @@
+// Author: dishanhai
+group = 'com.dishanhai'
+version = '0.1.0'
+
+def libraryArtifact = "sh-common-lib-${platform}-${minecraft_version}"
+base { archivesName = libraryArtifact }
+java { withSourcesJar() }
+
+sourceSets.main {
+    java.srcDir('../common/src/main/java')
+    resources.srcDir('../common/src/main/resources')
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}
+
+tasks.named('processResources') {
+    def metadata = [mod_version: project.version, minecraft_version: minecraft_version,
+                    loader_version: platform_version]
+    inputs.properties(metadata)
+    filteringCharset = 'UTF-8'
+    filesMatching(['META-INF/mods.toml', 'META-INF/neoforge.mods.toml']) {
+        expand(metadata)
+    }
+}
+
+publishing {
+    publications {
+        library(MavenPublication) {
+            artifactId = libraryArtifact
+            artifact(tasks.named('jar')) {
+                if (platform == 'forge') {
+                    builtBy { tasks.named('reobfJar') }
+                }
+            }
+            artifact(tasks.named('sourcesJar'))
+            pom {
+                name = 'SH-Common-Lib'
+                description = 'Shared Minecraft mod APIs, items, and blocks.'
+                url = 'https://github.com/dishanhai/SH-Common-Lib'
+            }
+        }
+    }
+}
