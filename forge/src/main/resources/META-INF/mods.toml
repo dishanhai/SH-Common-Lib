@@ -1,6 +1,6 @@
 modLoader="javafml"
 loaderVersion="[47,48)"
-license="All Rights Reserved"
+license="MIT"
 
 [[mods]]
 modId="sh_common_lib"

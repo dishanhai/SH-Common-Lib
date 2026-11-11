@@ -35,4 +35,4 @@ Windows 命令提示符可用 `gradlew.bat build`。成品在对应目录的 `bu
 ForgeGradle 消费项目使用 `implementation fg.deobf("com.dishanhai:sh-common-lib-forge-1.20.1:0.1.0")`；NeoForge 消费项目直接使用对应的 `implementation` 坐标。
 消费模组在自己的模组元数据中声明对 `sh_common_lib` 的依赖。游戏客户端和服务器在各自的 `mods` 目录安装对应版本的库 JAR。
 
-版权归 dishanhai 所有。对外分发前再确定发布许可证。
+SH-Common-Lib 以 [MIT License](LICENSE) 发布。
