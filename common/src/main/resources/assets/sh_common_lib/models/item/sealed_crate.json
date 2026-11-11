@@ -1,0 +1,14 @@
+{
+  "parent": "minecraft:item/generated",
+  "textures": {
+    "layer0": "sh_common_lib:item/sealed_crate_open"
+  },
+  "overrides": [
+    {
+      "predicate": {
+        "sh_common_lib:sealed": 1
+      },
+      "model": "sh_common_lib:item/sealed_crate_closed"
+    }
+  ]
+}

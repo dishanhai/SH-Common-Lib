@@ -1,0 +1,6 @@
+{
+  "parent": "minecraft:item/generated",
+  "textures": {
+    "layer0": "sh_common_lib:item/sealed_crate_closed"
+  }
+}
