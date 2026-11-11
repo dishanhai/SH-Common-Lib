@@ -8,13 +8,24 @@ plugins {
 apply from: '../gradle/library.gradle'
 
 java {
-    toolchain.languageVersion = JavaLanguageVersion.of(17)
+    toolchain.languageVersion = JavaLanguageVersion.of(21)
 }
 
-repositories { mavenCentral() }
+repositories {
+    mavenCentral()
+    maven { url = 'https://maven.blamejared.com/'; content { includeGroup 'mezz.jei' } }
+    maven { url = 'https://maven.latvian.dev/releases/'; content { includeGroup 'dev.latvian.mods' } }
+}
 
 dependencies {
     minecraft "net.minecraftforge:forge:${minecraft_version}-${platform_version}"
+    implementation files(findProperty('shBetterUiJar')
+            ?: "../../SH-Better-UI/build/libs/sh_better_ui-${sh_better_ui_version}-dev.jar")
+    runtimeOnly files(findProperty('kotlinForForgeJar')
+            ?: '../../SH-Better-UI/libs/kotlinforforge-4.12.0-all.jar')
+    compileOnly('dev.latvian.mods:kubejs-forge:2001.6.5-build.26') { transitive = false }
+    compileOnly('dev.latvian.mods:rhino-forge:2001.2.3-build.10') { transitive = false }
+    compileOnly fg.deobf('mezz.jei:jei-1.20.1-common-api:15.49.0.200')
 }
 
 minecraft {

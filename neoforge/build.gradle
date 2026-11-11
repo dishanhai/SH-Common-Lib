@@ -11,7 +11,23 @@ java {
     toolchain.languageVersion = JavaLanguageVersion.of(21)
 }
 
-repositories { mavenCentral() }
+repositories {
+    mavenCentral()
+    maven { url = 'https://thedarkcolour.github.io/KotlinForForge/'; content { includeGroup 'thedarkcolour' } }
+    maven { url = 'https://maven.latvian.dev/releases/'; content { includeGroup 'dev.latvian.mods' } }
+    maven { url = 'https://maven.blamejared.com/'; content { includeGroup 'mezz.jei' } }
+    maven { url = 'https://api.modrinth.com/maven'; content { includeModule 'maven.modrinth', 'ae2' } }
+}
+
+dependencies {
+    implementation files(findProperty('shBetterUiJar')
+            ?: "../../SH-Better-UI/neoforge/build/libs/sh_better_ui-neoforge-${minecraft_version}-${sh_better_ui_version}.jar")
+    runtimeOnly 'thedarkcolour:kotlinforforge-neoforge:5.10.0'
+    compileOnly('dev.latvian.mods:kubejs-neoforge:2101.7.2-build.381') { transitive = false }
+    compileOnly('dev.latvian.mods:rhino:2101.2.7-build.81') { transitive = false }
+    compileOnly('mezz.jei:jei-1.21.1-neoforge:19.69.0.456') { transitive = false }
+    compileOnly('maven.modrinth:ae2:19.2.18') { transitive = false }
+}
 
 neoForge {
     version = platform_version
