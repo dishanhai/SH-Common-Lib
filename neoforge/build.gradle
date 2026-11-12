@@ -7,6 +7,11 @@ plugins {
 
 apply from: '../gradle/library.gradle'
 
+sourceSets.main {
+    java.srcDir('../common/src/announcement/java')
+    resources.srcDir('../common/src/announcement/resources')
+}
+
 java {
     toolchain.languageVersion = JavaLanguageVersion.of(21)
 }
@@ -16,7 +21,7 @@ repositories {
     maven { url = 'https://thedarkcolour.github.io/KotlinForForge/'; content { includeGroup 'thedarkcolour' } }
     maven { url = 'https://maven.latvian.dev/releases/'; content { includeGroup 'dev.latvian.mods' } }
     maven { url = 'https://maven.blamejared.com/'; content { includeGroup 'mezz.jei' } }
-    maven { url = 'https://api.modrinth.com/maven'; content { includeModule 'maven.modrinth', 'ae2' } }
+    maven { url = 'https://api.modrinth.com/maven'; content { includeGroup 'maven.modrinth' } }
 }
 
 dependencies {
@@ -27,6 +32,16 @@ dependencies {
     compileOnly('dev.latvian.mods:rhino:2101.2.7-build.81') { transitive = false }
     compileOnly('mezz.jei:jei-1.21.1-neoforge:19.69.0.456') { transitive = false }
     compileOnly('maven.modrinth:ae2:19.2.18') { transitive = false }
+    if (findProperty('mekanismJar')) {
+        compileOnly files(property('mekanismJar'))
+    } else {
+        compileOnly('maven.modrinth:Ce6I4WUE:5KzzycBT') { transitive = false } // Mekanism 10.7.19.85
+    }
+    if (findProperty('appliedMekanisticsJar')) {
+        compileOnly files(property('appliedMekanisticsJar'))
+    } else {
+        compileOnly('maven.modrinth:IiATswDj:TpUCzFaW') { transitive = false } // Applied Mekanistics 1.6.3
+    }
 }
 
 neoForge {

@@ -1,12 +1,16 @@
 package com.dishanhai.sh_common_lib.neoforge;
 
 import com.dishanhai.sh_common_lib.api.ShCommonLib;
+import com.dishanhai.sh_common_lib.api.client.announcement.DefaultAnnouncement;
 import com.dishanhai.sh_common_lib.api.parcel.ParcelStorage;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModList;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.loading.FMLEnvironment;
+import net.neoforged.fml.loading.FMLPaths;
+import net.neoforged.neoforge.client.event.ScreenEvent;
+import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.registries.DeferredRegister;
 
 @Mod(ShCommonLib.MOD_ID)
@@ -17,8 +21,14 @@ public final class NeoForgeShCommonLib {
         BLOCKS.register(modBus);
         ParcelStorage.register(modBus);
         InfinityCell.register(modBus);
+        modBus.addListener(NeoForgeTickNetwork::register);
         if (ModList.get().isLoaded("ae2")) Ae2InfinityCellStorage.register(modBus);
         if (FMLEnvironment.dist == Dist.CLIENT) {
+            NeoForgeLoading.register();
+            var announcement = new DefaultAnnouncement(FMLPaths.CONFIGDIR.get());
+            NeoForge.EVENT_BUS.addListener((ScreenEvent.Init.Post event) -> announcement.onScreenInit(event.getScreen()));
+            modBus.addListener(InfinityCellDecoration::register);
+            modBus.addListener(InfinityCellDecoration::registerTooltip);
             NeoForgePlayerInfoHud.register(modBus);
             if (ModList.get().isLoaded("jei")) NeoForgeJeiShortcuts.register();
         }

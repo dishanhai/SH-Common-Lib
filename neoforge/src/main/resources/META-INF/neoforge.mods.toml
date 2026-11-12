@@ -9,6 +9,9 @@ displayName="SH-Common-Lib"
 authors="dishanhai"
 description="Shared Minecraft mod APIs, items, and blocks."
 
+[[mixins]]
+config="sh_common_lib.loading.mixins.json"
+
 [[dependencies.sh_common_lib]]
 modId="neoforge"
 type="required"

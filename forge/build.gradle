@@ -7,6 +7,11 @@ plugins {
 
 apply from: '../gradle/library.gradle'
 
+sourceSets.main {
+    java.srcDir('../common/src/announcement/java')
+    resources.srcDir('../common/src/announcement/resources')
+}
+
 java {
     toolchain.languageVersion = JavaLanguageVersion.of(21)
 }
@@ -35,11 +40,12 @@ minecraft {
             workingDirectory file("run/${name}")
             mods { sh_common_lib { source sourceSets.main } }
         }
-        client {}
+        client { arg '-mixin.config=sh_common_lib.loading.mixins.json' }
         server { args '--nogui' }
     }
 }
 
 tasks.named('jar') {
+    manifest.attributes('MixinConfigs': 'sh_common_lib.loading.mixins.json')
     finalizedBy 'reobfJar'
 }

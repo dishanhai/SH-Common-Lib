@@ -22,7 +22,14 @@ if errorlevel 1 (
 )
 popd
 
-echo Both builds succeeded. JARs are in forge\build\libs and neoforge\build\libs.
+echo Building NeoForge 26.1.2...
+call "%~dp0neoforge\gradlew.bat" -p "%~dp0neoforge-26.1.2" build %*
+if errorlevel 1 (
+    echo NeoForge 26.1.2 build failed.
+    goto finish
+)
+
+echo All builds succeeded. JARs are in each target's build\libs directory.
 set "build_result=0"
 goto finish
 
