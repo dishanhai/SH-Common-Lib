@@ -1,0 +1,6 @@
+{
+  "model": {
+    "type": "minecraft:model",
+    "model": "sh_common_lib:item/infinity_cell"
+  }
+}
