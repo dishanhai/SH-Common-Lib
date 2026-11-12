@@ -1,0 +1,20 @@
+{
+  "sh_common_lib.announcement.close": "OK",
+  "sh_common_lib.announcement.dismiss": "Don’t Show Again",
+  "sh_common_lib.announcement.history": "Release History",
+  "sh_common_lib.announcement.switch_zh": "简体中文",
+  "sh_common_lib.announcement.switch_en": "English",
+  "sh_common_lib.announcement.title_zh": "更新公告 %s",
+  "sh_common_lib.announcement.title_en": "Release Notes %s",
+  "sh_common_lib.announcement.history_entry": "%1$s  %2$s",
+  "sh_common_lib.announcement.history_page": "Release History (%1$s/%2$s)",
+  "sh_common_lib.announcement.previous": "Previous",
+  "sh_common_lib.announcement.next": "Next",
+  "sh_common_lib.announcement.empty": "No announcements",
+  "sh_common_lib.announcement.write_failed": "Could not save your preference. Try again.",
+  "sh_common_lib.announcement.scroll_hint": "Use Up, Down, Page Up, and Page Down to scroll.",
+  "sh_common_lib.announcement.link_hint": "Use Up and Down to scroll, Left and Right to select links or disclosures, Enter to activate, or Control+C to copy a web address.",
+  "sh_common_lib.announcement.details": "Details",
+  "sh_common_lib.announcement.expanded": "Expanded",
+  "sh_common_lib.announcement.collapsed": "Collapsed"
+}

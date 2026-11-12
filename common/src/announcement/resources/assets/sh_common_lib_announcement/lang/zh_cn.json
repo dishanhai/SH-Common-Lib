@@ -1,0 +1,20 @@
+{
+  "sh_common_lib.announcement.close": "确定",
+  "sh_common_lib.announcement.dismiss": "不再提示",
+  "sh_common_lib.announcement.history": "历史更新",
+  "sh_common_lib.announcement.switch_zh": "简体中文",
+  "sh_common_lib.announcement.switch_en": "English",
+  "sh_common_lib.announcement.title_zh": "更新公告 %s",
+  "sh_common_lib.announcement.title_en": "Release Notes %s",
+  "sh_common_lib.announcement.history_entry": "%1$s  %2$s",
+  "sh_common_lib.announcement.history_page": "历史更新（%1$s/%2$s）",
+  "sh_common_lib.announcement.previous": "上一页",
+  "sh_common_lib.announcement.next": "下一页",
+  "sh_common_lib.announcement.empty": "暂无历史更新",
+  "sh_common_lib.announcement.write_failed": "保存失败，请重试。",
+  "sh_common_lib.announcement.scroll_hint": "使用上、下方向键或 Page Up、Page Down 滚动。",
+  "sh_common_lib.announcement.link_hint": "使用上、下方向键滚动，左右方向键选择链接或折叠块，按回车操作，或按 Ctrl+C 复制网页地址。",
+  "sh_common_lib.announcement.details": "详情",
+  "sh_common_lib.announcement.expanded": "已展开",
+  "sh_common_lib.announcement.collapsed": "已折叠"
+}
