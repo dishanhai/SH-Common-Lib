@@ -44,6 +44,7 @@ final class SettingsGroup {
 
     private final UiSectionBar.Section section;
     private final List<Entry> entries;
+    private final boolean twoColumns;
     private final Map<Entry, UiButton> buttons = new IdentityHashMap<>();
     private final Map<Toggle, UiToggleButton> toggleControls = new IdentityHashMap<>();
     private Component status;
@@ -52,8 +53,13 @@ final class SettingsGroup {
     private int messageY;
 
     SettingsGroup(Component title, GraphicIcon icon, List<Entry> entries) {
+        this(title, icon, entries, false);
+    }
+
+    SettingsGroup(Component title, GraphicIcon icon, List<Entry> entries, boolean twoColumns) {
         this.section = new UiSectionBar.Section(title, icon);
         this.entries = List.copyOf(entries);
+        this.twoColumns = twoColumns;
     }
 
     UiSectionBar.Section section() {
@@ -68,19 +74,27 @@ final class SettingsGroup {
                 if (reason != null) messageHeight = Math.max(messageHeight, textHeight(font, reason, width));
             }
         }
-        return textHeight(font, section.label(), width) + ROW_GAP
-                + entries.size() * (ROW_HEIGHT + ROW_GAP) + messageHeight;
+        int columns = columns(width);
+        int rows = (entries.size() + columns - 1) / columns;
+        return textHeight(font, section.label(), width) + ROW_GAP + rows * (rowHeight() + rowGap()) + messageHeight;
     }
 
     void init(UiScreen screen, Font font, Bounds area) {
         this.area = area;
         unavailable = null;
-        int y = area.y() + textHeight(font, section.label(), area.width()) + ROW_GAP;
+        int top = area.y() + textHeight(font, section.label(), area.width()) + ROW_GAP;
+        int columns = columns(area.width());
+        int columnWidth = (area.width() - (columns - 1) * ROW_GAP) / columns;
+        int rowHeight = rowHeight();
+        int rowStep = rowHeight + rowGap();
         var preferences = screen.context().preferences();
-        for (Entry entry : entries) {
+        for (int index = 0; index < entries.size(); index++) {
+            var entry = entries.get(index);
+            int x = area.x() + index % columns * (columnWidth + ROW_GAP);
+            int y = top + index / columns * rowStep;
             UiButton button;
             if (entry instanceof Toggle toggle) {
-                var bounds = new Bounds(area.x(), y, area.width(), ROW_HEIGHT);
+                var bounds = new Bounds(x, y, columnWidth, rowHeight);
                 var control = new UiToggleButton(bounds, toggle.read().getAsBoolean(), preferences,
                         UiStyle.LIQUID_GLASS, toggle.label(), enabled -> save(toggle, enabled));
                 control.setIcons(GraphicIcon.SHOW, GraphicIcon.HIDE);
@@ -89,7 +103,7 @@ final class SettingsGroup {
                 toggleControls.put(toggle, control);
             } else if (entry instanceof Page page) {
                 var reason = page.unavailable().get();
-                button = new UiButton(area.x(), y, area.width(), ROW_HEIGHT, page.label(), ignored -> {
+                button = new UiButton(x, y, columnWidth, rowHeight, page.label(), ignored -> {
                     status = null;
                     page.open().accept(screen, () -> buttons.get(page));
                 }, preferences, false, UiStyle.LIQUID_GLASS);
@@ -104,10 +118,17 @@ final class SettingsGroup {
             }
             button.setSampleBackground(false);
             buttons.put(entry, screen.add(button));
-            y += ROW_HEIGHT + ROW_GAP;
         }
-        messageY = y;
+        messageY = top + (entries.size() + columns - 1) / columns * rowStep;
     }
+
+    private int columns(int width) {
+        return twoColumns && width >= 164 ? 2 : 1;
+    }
+
+    private int rowHeight() { return twoColumns ? 18 : ROW_HEIGHT; }
+
+    private int rowGap() { return twoColumns ? 3 : ROW_GAP; }
 
     private void save(Toggle toggle, boolean enabled) {
         if (toggle.save().test(enabled)) {

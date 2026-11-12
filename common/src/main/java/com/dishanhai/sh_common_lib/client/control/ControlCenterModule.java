@@ -9,12 +9,16 @@ import com.dishanhai.sh_better_ui.kernel.api.ModuleDescriptor;
 import com.dishanhai.sh_better_ui.kernel.api.ScreenService;
 import com.dishanhai.sh_better_ui.kernel.api.UIApis;
 import com.dishanhai.sh_better_ui.kernel.api.UIModule;
+import com.dishanhai.sh_better_ui.kernel.api.UIPermission;
 import com.dishanhai.sh_better_ui.kernel.api.UiId;
 import com.dishanhai.sh_better_ui.kernel.api.UiVersion;
 import com.dishanhai.sh_better_ui.kernel.api.VersionRange;
 import com.dishanhai.sh_common_lib.api.ShCommonLib;
 import com.dishanhai.sh_common_lib.client.hud.PlayerInfoHud;
+import com.dishanhai.sh_common_lib.client.hud.PlayerInfoItem;
+import com.dishanhai.sh_common_lib.client.loading.ClientLoading;
 import com.mojang.blaze3d.platform.InputConstants;
+import net.minecraft.Util;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.events.GuiEventListener;
@@ -23,14 +27,19 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import org.lwjgl.glfw.GLFW;
 
+import java.nio.file.Files;
 import java.util.List;
+import java.util.Arrays;
 import java.util.function.Supplier;
+
+import static com.dishanhai.sh_common_lib.client.hud.PlayerInfoItem.*;
 
 public final class ControlCenterModule implements UIModule {
     private static final UiId ID = new UiId(ShCommonLib.MOD_ID, "control_center");
     private static final KeyMapping OPEN_KEY = new KeyMapping("key.sh_common_lib.control_center",
-            InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_F9, "key.categories.sh_common_lib");
+            InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_F10, "key.categories.sh_common_lib");
     private static ControlCenterModule active;
+    private static PlayerInfoHud playerInfoHud;
 
     private ModuleContext module;
     private ScreenService screens;
@@ -39,6 +48,8 @@ public final class ControlCenterModule implements UIModule {
     public ModuleDescriptor descriptor() {
         return ModuleDescriptor.builder().id(ID).version(UiVersion.parse("1.0.0"))
                 .requiredCapability(UIApis.NATIVE_SCREEN, VersionRange.ANY)
+                .requiredCapability(UIApis.NATIVE_HUD, VersionRange.ANY)
+                .requestPermission(UIPermission.REGISTER_RENDER_PASS)
                 .build();
     }
 
@@ -48,6 +59,9 @@ public final class ControlCenterModule implements UIModule {
     @Override
     public void start(ModuleContext context) {
         screens = context.engine().require(UIApis.SCREENS);
+        context.engine().require(UIApis.HUD).mount(context, frame -> {
+            if (playerInfoHud != null) playerInfoHud.render(frame);
+        });
         module = context;
         active = this;
     }
@@ -61,6 +75,10 @@ public final class ControlCenterModule implements UIModule {
 
     public static KeyMapping openKey() {
         return OPEN_KEY;
+    }
+
+    public static void bindHud(PlayerInfoHud hud) {
+        playerInfoHud = hud;
     }
 
     public static void tick(PlayerInfoHud hud) {
@@ -96,7 +114,31 @@ public final class ControlCenterModule implements UIModule {
         var developer = new SettingsGroup(label("developer"), GraphicIcon.DEVELOPMENT, List.of(
                 new SettingsGroup.Page(label("developer_settings"), GraphicIcon.SETTINGS,
                         () -> null, this::openDeveloperSettings)));
-        return List.of(playerInfo, developer);
+        var loading = new SettingsGroup(label("loading"), GraphicIcon.TICK, List.of(
+                new SettingsGroup.Toggle(enabled -> label(enabled ? "loading_animation_on" : "loading_animation_off"),
+                        ClientLoading::animation, ClientLoading::setAnimation),
+                new SettingsGroup.Toggle(enabled -> label(enabled ? "loading_profiling_on" : "loading_profiling_off"),
+                        ClientLoading::profiling, ClientLoading::setProfiling),
+                new SettingsGroup.Page(label("loading_reports"), GraphicIcon.COMPUTER,
+                        () -> Files.isDirectory(ClientLoading.reportDirectory()) ? null : label("loading_reports_empty"),
+                        (parent, focus) -> Util.getPlatform().openFile(ClientLoading.reportDirectory().toFile()))));
+        return List.of(playerInfo,
+                hudItems(hud, "hud_player", GraphicIcon.PLAYER, PLAYER, FPS, PING, LOCAL_TIME),
+                hudItems(hud, "hud_world", GraphicIcon.MAP, WORLD_TIME, DIMENSION, CHUNKS, ENTITIES, BIOME),
+                hudItems(hud, "hud_location", GraphicIcon.PIN, POSITION, CHUNK, LIGHT),
+                hudItems(hud, "hud_server", GraphicIcon.TICK, TPS, MSPT),
+                hudItems(hud, "hud_computer", GraphicIcon.COMPUTER, MEMORY, CPU, GPU, DISK),
+                loading,
+                developer);
+    }
+
+    private static SettingsGroup hudItems(PlayerInfoHud hud, String group, GraphicIcon icon, PlayerInfoItem... items) {
+        List<SettingsGroup.Entry> entries = Arrays.stream(items).map(item ->
+                (SettingsGroup.Entry) new SettingsGroup.Toggle(enabled -> Component.translatable(
+                        "screen.sh_common_lib.control_center.hud_item",
+                        label("hud_item." + item.id()), label(enabled ? "item_shown" : "item_hidden")),
+                        () -> hud.shows(item), enabled -> hud.setVisible(item, enabled))).toList();
+        return new SettingsGroup(label(group), icon, entries, true);
     }
 
     private void openDeveloperSettings(Screen parent, Supplier<? extends GuiEventListener> returnFocus) {
