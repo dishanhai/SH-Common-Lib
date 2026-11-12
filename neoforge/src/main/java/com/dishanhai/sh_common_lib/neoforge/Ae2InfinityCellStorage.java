@@ -37,9 +37,14 @@ final class Ae2InfinityCellStorage implements ICellHandler {
     private static AEKey key(ItemStack stack) {
         var target = InfinityCell.target(stack);
         if (target == null) return null;
-        if (!target.fluid()) return AEItemKey.of(target.itemStack());
-        var fluid = target.fluidStack();
-        return fluid.isEmpty() ? null : AEFluidKey.of(fluid);
+        return switch (target.kind()) {
+            case ITEM -> AEItemKey.of(target.itemStack());
+            case FLUID -> {
+                var fluid = target.fluidStack();
+                yield fluid.isEmpty() ? null : AEFluidKey.of(fluid);
+            }
+            case CHEMICAL -> InfinityCell.supportsChemicals() ? AppliedMekanisticsCells.key(target.id()) : null;
+        };
     }
 
     private record Inventory(Component description, AEKey key) implements StorageCell {

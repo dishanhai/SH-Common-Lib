@@ -1,6 +1,8 @@
 package com.dishanhai.sh_common_lib.compat.jei;
 
 import com.dishanhai.sh_common_lib.api.ShCommonLib;
+import com.dishanhai.sh_common_lib.client.loading.ClientLoading;
+import com.dishanhai.sh_common_lib.client.loading.ModLoadingStatus;
 import com.mojang.datafixers.util.Either;
 import mezz.jei.api.IModPlugin;
 import mezz.jei.api.JeiPlugin;
@@ -8,6 +10,11 @@ import mezz.jei.api.constants.VanillaTypes;
 import mezz.jei.api.ingredients.IIngredientHelper;
 import mezz.jei.api.ingredients.IIngredientType;
 import mezz.jei.api.ingredients.ITypedIngredient;
+import mezz.jei.api.registration.IModIngredientRegistration;
+import mezz.jei.api.registration.IRecipeCategoryRegistration;
+import mezz.jei.api.registration.IRecipeRegistration;
+import mezz.jei.api.registration.IRuntimeRegistration;
+import mezz.jei.api.registration.ISubtypeRegistration;
 import mezz.jei.api.runtime.IJeiRuntime;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
@@ -49,13 +56,47 @@ public final class JeiShortcuts implements IModPlugin {
     }
 
     @Override
+    public void registerItemSubtypes(ISubtypeRegistration registration) {
+        ModLoadingStatus.jeiStage("jei_subtypes");
+    }
+
+    @Override
+    public void registerIngredients(IModIngredientRegistration registration) {
+        ModLoadingStatus.jeiStage("jei_ingredients");
+    }
+
+    @Override
+    public void registerCategories(IRecipeCategoryRegistration registration) {
+        ModLoadingStatus.jeiStage("jei_categories");
+    }
+
+    @Override
+    public void registerRecipes(IRecipeRegistration registration) {
+        ModLoadingStatus.jeiStage("jei_recipes");
+    }
+
+    @Override
+    public void registerRuntime(IRuntimeRegistration registration) {
+        ModLoadingStatus.jeiStage("jei_runtime");
+    }
+
+    @Override
     public void onRuntimeAvailable(IJeiRuntime newRuntime) {
         runtime = newRuntime;
+        if (ClientLoading.animation() || ClientLoading.profiling()) {
+            var manager = newRuntime.getIngredientManager();
+            long ingredients = manager.getRegisteredIngredientTypes().stream()
+                    .mapToLong(type -> manager.getAllIngredients(type).size())
+                    .sum();
+            long categories = newRuntime.getRecipeManager().createRecipeCategoryLookup().includeHidden().get().count();
+            ModLoadingStatus.jeiReady(ingredients, categories);
+        }
     }
 
     @Override
     public void onRuntimeUnavailable() {
         runtime = null;
+        ModLoadingStatus.clearJei();
     }
 
     public static boolean keyPressed(Screen screen, int key, int modifiers, boolean ownsShortcuts,
