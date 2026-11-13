@@ -250,12 +250,15 @@ final class AnnouncementText extends AbstractWidget {
     protected void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         if (area.height() < 3 || textRight() <= area.x() + 1) return;
         var preferences = owner.context().preferences();
-        var focus = new DarkModeTheme.State(0, 0, 0, isFocused(), true,
-                preferences.reducedMotion(), preferences.highContrast());
-        DarkModeTheme.input(graphics, area.x(), area.y(), area.width(), area.height(), focus);
         Action hovered = hit(mouseX, mouseY);
         int foreground = contrast(LiquidGlassTheme.textColor());
         int accent = preferences.highContrast() ? foreground : contrast(LiquidGlassTheme.accentColor());
+        int surface = DarkModeTheme.surfaceColor() & 0xFFFFFF;
+        boolean opaque = AnnouncementAppearance.solid() || !preferences.useBackdropBlur();
+        int fill = surface | (opaque ? 0xFF000000 : 0xB8000000);
+        int edge = isFocused() ? accent : foreground & 0x36FFFFFF;
+        ShBetterUiApi.materials().roundedRect(graphics, area.x(), area.y(), area.width(), area.height(),
+                6, preferences.highContrast() && isFocused() ? 2 : 1, edge, fill);
         graphics.enableScissor(area.x() + 1, area.y() + 1, textRight(), area.bottom() - 1);
         try {
             for (var row : rows) {

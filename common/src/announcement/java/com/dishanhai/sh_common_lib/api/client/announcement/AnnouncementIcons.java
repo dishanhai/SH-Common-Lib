@@ -5,7 +5,6 @@ import com.google.gson.JsonParseException;
 import com.google.gson.JsonParser;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.Style;
-import net.minecraft.resources.ResourceLocation;
 
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -22,8 +21,8 @@ import java.util.stream.Collectors;
 /** Adds SHBUI's bitmap icons to the logical runs before Minecraft wraps and hit-tests them. */
 final class AnnouncementIcons {
     private static final String NAMESPACE = "sh_common_lib_announcement";
-    private static final ResourceLocation INLINE_FONT = ResourceLocation.tryParse(NAMESPACE + ":inline_icons");
-    private static final ResourceLocation QUOTED_FONT = ResourceLocation.tryParse(NAMESPACE + ":quoted_icons");
+    private static final String INLINE_FONT = NAMESPACE + ":inline_icons";
+    private static final String QUOTED_FONT = NAMESPACE + ":quoted_icons";
     private static final Map<String, Glyph> AUTOMATIC = automaticGlyphs();
     private static final Map<String, Glyph> QUOTED = quotedGlyphs();
     private static final Map<Integer, String> NAMES = glyphNames();
@@ -60,7 +59,7 @@ final class AnnouncementIcons {
                 var decoration = decorations.get(index++);
                 if (decoration.start() > start) result.append(run.slice(start, decoration.start()));
                 var glyph = decoration.glyph();
-                var iconStyle = run.style().withFont(glyph.font()).withBold(false).withItalic(false)
+                var iconStyle = AnnouncementPlatform.apply(run.style(), glyph.font()).withBold(false).withItalic(false)
                         .withUnderlined(false).withStrikethrough(false).withObfuscated(false).withInsertion(null);
                 result.append(Component.literal(glyph.text()).setStyle(iconStyle));
                 start = decoration.end();
@@ -89,7 +88,7 @@ final class AnnouncementIcons {
     }
 
     static boolean isIcon(Style style) {
-        return INLINE_FONT.equals(style.getFont()) || QUOTED_FONT.equals(style.getFont());
+        return AnnouncementPlatform.matches(style, INLINE_FONT) || AnnouncementPlatform.matches(style, QUOTED_FONT);
     }
 
     static String name(int codePoint) {
@@ -133,10 +132,10 @@ final class AnnouncementIcons {
         return Map.copyOf(names);
     }
 
-    private static HashMap<String, Glyph> loadGlyphs(ResourceLocation font) {
+    private static HashMap<String, Glyph> loadGlyphs(String font) {
         var glyphs = new HashMap<String, Glyph>();
         try (var resource = AnnouncementIcons.class.getResourceAsStream(
-                "/assets/" + font.getNamespace() + "/font/" + font.getPath() + ".json")) {
+                "/assets/" + NAMESPACE + "/font/" + font.substring(NAMESPACE.length() + 1) + ".json")) {
             if (resource == null) throw new IOException("Missing announcement icon font " + font);
             var reader = new InputStreamReader(resource, StandardCharsets.UTF_8);
             var providers = JsonParser.parseReader(reader).getAsJsonObject().getAsJsonArray("providers");
@@ -163,7 +162,7 @@ final class AnnouncementIcons {
         }
     }
 
-    private record Glyph(String text, ResourceLocation font, String name) {}
+    private record Glyph(String text, String font, String name) {}
     private record Decoration(int start, int end, Glyph glyph) {}
     private record Run(int start, String text, Style style) {
         Component slice(int from, int to) {

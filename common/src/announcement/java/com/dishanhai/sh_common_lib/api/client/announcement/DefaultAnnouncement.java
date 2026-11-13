@@ -19,7 +19,7 @@ public final class DefaultAnnouncement {
     public void onScreenInit(Screen screen) {
         if (checked || !(screen instanceof TitleScreen)) return;
         var client = Minecraft.getInstance();
-        client.tell(() -> {
+        AnnouncementPlatform.schedule(client, () -> {
             if (checked || client.screen != screen) return;
             checked = true;
             new AnnouncementCatalog(directory).installDefaultPreset();

@@ -71,6 +71,7 @@ public final class FullscreenAnnouncements {
         private UiButton historyButton;
         private UiButton languageButton;
         private UiButton dismissButton;
+        private UiButton appearanceButton;
 
         private AnnouncementPage(List<Document> documents, Document document) {
             this.documents = documents;
@@ -80,9 +81,9 @@ public final class FullscreenAnnouncements {
 
         private void open(Screen parent, HistoryPage history) {
             var builder = ShBetterUiApi.screen(title(document, english)).parent(parent).backButton(false)
-                    .themeBackground().onInit(this::layout).onRender(FullscreenAnnouncements::drawPanel);
+                    .onInit(this::layout).onRender(FullscreenAnnouncements::drawPanel);
             if (history != null) builder.returnFocus(() -> history.selectedButton);
-            builder.open();
+            AnnouncementAppearance.create(builder).open();
         }
 
         private void layout(UiScreen screen) {
@@ -109,6 +110,9 @@ public final class FullscreenAnnouncements {
                 body = null;
                 rebuild(screen, () -> screen.setFocused(languageButton));
             }));
+            int appearanceIndex = actions.size();
+            if (AnnouncementAppearance.available()) actions.add(new Action(label("appearance"), GraphicIcon.SETTINGS,
+                    () -> AnnouncementAppearance.open(screen, () -> appearanceButton)));
 
             var font = Minecraft.getInstance().font;
             int ideal = actions.stream().mapToInt(action -> font.width(action.label()) + GraphicIcon.PIXELS + 16).max().orElseThrow();
@@ -126,6 +130,7 @@ public final class FullscreenAnnouncements {
             screen.setFocused(body);
             historyButton = null;
             languageButton = null;
+            appearanceButton = null;
             for (int i = 0; i < actions.size(); i++) {
                 var action = actions.get(i);
                 var button = screen.button(x + i % columns * (buttonWidth + GAP),
@@ -142,6 +147,7 @@ public final class FullscreenAnnouncements {
                 }
                 if (documents.size() > 1 && i == historyIndex) historyButton = button;
                 if (document.hasEnglish() && i == languageIndex) languageButton = button;
+                if (i == appearanceIndex) appearanceButton = button;
             }
         }
 
@@ -172,9 +178,9 @@ public final class FullscreenAnnouncements {
 
         private void open(Screen parent, AnnouncementPage announcement) {
             var builder = ShBetterUiApi.screen(label("history")).parent(parent).backButton(false)
-                    .themeBackground().onInit(this::layout).onRender(this::render);
+                    .onInit(this::layout).onRender(this::render);
             if (announcement != null) builder.returnFocus(() -> announcement.historyButton);
-            builder.open();
+            AnnouncementAppearance.create(builder).open();
         }
 
         private void layout(UiScreen screen) {
@@ -252,9 +258,7 @@ public final class FullscreenAnnouncements {
     }
 
     private static void drawPanel(UiScreen screen, UiFrame frame) {
-        var panel = panel(screen);
-        LiquidGlassTheme.popover(frame.graphics(), panel.x(), panel.y(), panel.width(), panel.height(),
-                frame.preferences());
+        AnnouncementAppearance.drawPanel(frame, panel(screen));
     }
 
     private static Component title(Document document, boolean english) {
