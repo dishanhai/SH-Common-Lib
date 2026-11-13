@@ -93,7 +93,7 @@ final class PlayerInfoHudScreen extends Screen {
         UiButton cancel = button(buttonX + 2 * (buttonWidth + gap), buttonWidth, CommonComponents.GUI_CANCEL,
                 ignored -> onClose());
         UiButton done = button(buttonX + 3 * (buttonWidth + gap), buttonWidth, CommonComponents.GUI_DONE, ignored -> {
-            saveFailed = !hud.save(new PlayerInfoHudSettings(enabled, x, y, scalePercent, initial.visibleItems()));
+            saveFailed = !hud.save(initial.withLayout(enabled, x, y, scalePercent));
             if (saveFailed) {
                 minecraft.getNarrator().sayNow(SAVE_FAILED);
             } else {
@@ -110,7 +110,7 @@ final class PlayerInfoHudScreen extends Screen {
     }
 
     private PlayerInfoHudLayout.View fitPreview() {
-        return layout.fit(width, height, toolbarY, scalePercent, minecraft.getWindow().getGuiScale());
+        return layout.fit(width, height, toolbarY, scalePercent, minecraft.getWindow().getGuiScale(), hud.pageIndex());
     }
 
     private UiButton button(int x, int width, Component label, UiButton.OnPress action) {
@@ -193,6 +193,7 @@ final class PlayerInfoHudScreen extends Screen {
         @Override
         protected void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
             view.panel().draw(graphics, font, UiPreferences.configured(), getX(), getY(), placement.scale(), TEXT_SAMPLE);
+            view.drawSeparators(graphics, font, getX(), getY(), UiPreferences.configured());
             if (dragging || isFocused() || isHovered()) {
                 int border = dragging ? LiquidGlassTheme.accentColor() : LiquidGlassTheme.textColor();
                 graphics.renderOutline(getX(), getY(), getWidth(), getHeight(), border);

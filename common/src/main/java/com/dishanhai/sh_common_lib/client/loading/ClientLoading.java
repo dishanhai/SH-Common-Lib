@@ -40,6 +40,7 @@ public final class ClientLoading {
 
     public static void initialize(Path configDirectory, boolean hasJei) {
         var directory = configDirectory.resolve("sh_common_lib");
+        com.dishanhai.sh_common_lib.client.jei.JeiSearchPreferences.initialize(directory);
         settings = new LoadingSettings(directory.resolve("loading.properties"));
         ModLoadingStatus.initialize(hasJei);
         reports = new LoadingReports(directory.resolve("loading_reports"));
@@ -55,6 +56,9 @@ public final class ClientLoading {
     public static boolean profiling() { return settings != null && settings.profiling(); }
     public static boolean setAnimation(boolean enabled) { return settings != null && settings.save(enabled, profiling()); }
     public static boolean setProfiling(boolean enabled) { return settings != null && settings.save(animation(), enabled); }
+    public static boolean applySettings(boolean animation, boolean profiling) {
+        return settings != null && settings.save(animation, profiling);
+    }
     public static Path reportDirectory() { return reports.directory(); }
 
     /** Loader hooks may capture this reference before dispatching work to background workers. */

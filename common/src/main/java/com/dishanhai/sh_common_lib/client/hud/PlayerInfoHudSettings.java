@@ -1,3 +1,4 @@
+// Author: dishanhai
 package com.dishanhai.sh_common_lib.client.hud;
 
 import java.io.IOException;
@@ -10,29 +11,58 @@ import java.util.EnumSet;
 import java.util.Properties;
 import java.util.Set;
 
-record PlayerInfoHudSettings(boolean enabled, double x, double y, int scalePercent, Set<PlayerInfoItem> visibleItems) {
+/** Immutable HUD configuration; persistence remains owned by the HUD. */
+public record PlayerInfoHudSettings(boolean enabled, double x, double y, int scalePercent, Set<PlayerInfoItem> visibleItems,
+                                    Set<HudGroups.Group> visibleGroups, boolean showGroupTitles, boolean showGroupSeparators) {
     static final int MIN_SCALE = 50;
     static final int MAX_SCALE = 200;
     static final int SCALE_STEP = 5;
     private static final int DEFAULT_SCALE = 75;
-    static final PlayerInfoHudSettings DEFAULT = fromProperties(new Properties());
+    public static final PlayerInfoHudSettings DEFAULT = fromProperties(new Properties());
 
-    PlayerInfoHudSettings {
+    public PlayerInfoHudSettings {
         int bounded = Math.clamp(scalePercent, MIN_SCALE, MAX_SCALE);
         scalePercent = MIN_SCALE + Math.round((bounded - MIN_SCALE) / (float) SCALE_STEP) * SCALE_STEP;
         visibleItems = Set.copyOf(visibleItems);
+        visibleGroups = Set.copyOf(visibleGroups);
     }
 
-    boolean shows(PlayerInfoItem item) {
+    public PlayerInfoHudSettings(boolean enabled, double x, double y, int scalePercent, Set<PlayerInfoItem> visibleItems) {
+        this(enabled, x, y, scalePercent, visibleItems, EnumSet.allOf(HudGroups.Group.class), true, true);
+    }
+
+    public boolean shows(PlayerInfoItem item) {
         return visibleItems.contains(item);
     }
 
-    PlayerInfoHudSettings withItem(PlayerInfoItem item, boolean visible) {
+    public PlayerInfoHudSettings withEnabled(boolean value) {
+        return new PlayerInfoHudSettings(value, x, y, scalePercent, visibleItems, visibleGroups, showGroupTitles, showGroupSeparators);
+    }
+
+    public PlayerInfoHudSettings withItem(PlayerInfoItem item, boolean visible) {
         var items = EnumSet.noneOf(PlayerInfoItem.class);
         items.addAll(visibleItems);
         if (visible) items.add(item);
         else items.remove(item);
-        return new PlayerInfoHudSettings(enabled, x, y, scalePercent, items);
+        return new PlayerInfoHudSettings(enabled, x, y, scalePercent, items, visibleGroups, showGroupTitles, showGroupSeparators);
+    }
+
+    public boolean showsGroup(HudGroups.Group group) { return group == HudGroups.Group.CONTROLS || visibleGroups.contains(group); }
+
+    public PlayerInfoHudSettings withGroup(HudGroups.Group group, boolean visible) {
+        if (group == HudGroups.Group.CONTROLS) return this;
+        var groups = EnumSet.noneOf(HudGroups.Group.class);
+        groups.addAll(visibleGroups);
+        if (visible) groups.add(group); else groups.remove(group);
+        return new PlayerInfoHudSettings(enabled, x, y, scalePercent, visibleItems, groups, showGroupTitles, showGroupSeparators);
+    }
+
+    public PlayerInfoHudSettings withDecorations(boolean titles, boolean separators) {
+        return new PlayerInfoHudSettings(enabled, x, y, scalePercent, visibleItems, visibleGroups, titles, separators);
+    }
+
+    public PlayerInfoHudSettings withLayout(boolean value, double newX, double newY, int scale) {
+        return new PlayerInfoHudSettings(value, newX, newY, scale, visibleItems, visibleGroups, showGroupTitles, showGroupSeparators);
     }
 
     static PlayerInfoHudSettings read(Path file) throws IOException {
@@ -50,8 +80,13 @@ record PlayerInfoHudSettings(boolean enabled, double x, double y, int scalePerce
         for (var item : PlayerInfoItem.values()) {
             if (readBoolean(properties, "show." + item.id(), item.defaultVisible())) items.add(item);
         }
+        var groups = EnumSet.noneOf(HudGroups.Group.class);
+        for (var group : HudGroups.Group.values()) {
+            if (readBoolean(properties, "group." + group.name().toLowerCase(java.util.Locale.ROOT), true)) groups.add(group);
+        }
         return new PlayerInfoHudSettings(readBoolean(properties, "enabled", true),
-                readPosition(properties, "x"), readPosition(properties, "y"), readScale(properties), items);
+                readPosition(properties, "x"), readPosition(properties, "y"), readScale(properties), items, groups,
+                readBoolean(properties, "groupTitles", true), readBoolean(properties, "groupSeparators", true));
     }
 
     private static int readScale(Properties properties) {
@@ -87,6 +122,11 @@ record PlayerInfoHudSettings(boolean enabled, double x, double y, int scalePerce
         for (var item : PlayerInfoItem.values()) {
             properties.setProperty("show." + item.id(), Boolean.toString(shows(item)));
         }
+        for (var group : HudGroups.Group.values()) {
+            properties.setProperty("group." + group.name().toLowerCase(java.util.Locale.ROOT), Boolean.toString(showsGroup(group)));
+        }
+        properties.setProperty("groupTitles", Boolean.toString(showGroupTitles));
+        properties.setProperty("groupSeparators", Boolean.toString(showGroupSeparators));
         Path directory = Files.createDirectories(file.getParent());
         Path pending = Files.createTempFile(directory, "sh_common_lib-player-info-", ".tmp");
         try {
