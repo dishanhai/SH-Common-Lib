@@ -50,6 +50,9 @@ public final class JeiShortcuts implements IModPlugin {
     private static final Pattern DISALLOWED_CHAT_CHARACTERS = Pattern.compile("[\\x00-\\x1F\\x7F\\u00A7]");
     private static volatile IJeiRuntime runtime;
 
+    /** Client-thread access for the optional search enhancement. */
+    public static IJeiRuntime runtime() { return runtime; }
+
     @Override
     public Identifier getPluginUid() {
         return ID;
@@ -95,6 +98,7 @@ public final class JeiShortcuts implements IModPlugin {
 
     @Override
     public void onRuntimeUnavailable() {
+        com.dishanhai.sh_common_lib.client.jei.JeiSearchAssistant.runtimeUnavailable();
         runtime = null;
         ModLoadingStatus.clearJei();
     }

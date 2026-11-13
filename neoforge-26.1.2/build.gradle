@@ -12,7 +12,8 @@ java {
 }
 
 sourceSets.main.java {
-    srcDir '../neoforge/src/main/java'
+    srcDir '../neoforge-1.21.1/src/main/java'
+    srcDir '../common/src/announcement/java'
     exclude '**/AppliedMekanisticsCells.java'
     // A file in this version's source tree replaces the same path in a shared tree.
     def versionSources = file('src/main/java')
@@ -24,8 +25,9 @@ sourceSets.main.java {
         replacement.isFile() && entry.file != replacement
     }
 }
+sourceSets.main.resources.srcDir '../common/src/announcement/resources'
 
-def infinityCellResources = fileTree('../neoforge/src/main/resources') {
+def infinityCellResources = fileTree('../neoforge-1.21.1/src/main/resources') {
     include 'assets/sh_common_lib/models/item/infinity_cell.json'
     include 'assets/sh_common_lib/textures/item/infinity_cell.png'
 }
@@ -36,6 +38,7 @@ repositories {
     mavenCentral()
     maven { url = 'https://thedarkcolour.github.io/KotlinForForge/'; content { includeGroup 'thedarkcolour' } }
     maven { url = 'https://api.modrinth.com/maven'; content { includeGroup 'maven.modrinth' } }
+    maven { url = 'https://www.cursemaven.com'; content { includeGroup 'curse.maven' } }
 }
 
 def shBetterUi = file(findProperty('shBetterUiJar')
@@ -44,6 +47,15 @@ def shBetterUi = file(findProperty('shBetterUiJar')
 dependencies {
     implementation files(shBetterUi)
     runtimeOnly "thedarkcolour:kotlinforforge-neoforge:${kff_version}"
+    // Optional ULK integrations; these mods remain separate runtime dependencies.
+    if (findProperty('mekanismJar')) {
+        compileOnly files(property('mekanismJar'))
+    } else {
+        compileOnly('curse.maven:mekanism-version-locked-1713956:9267959') { transitive = false } // Community port 2.11
+    }
+    compileOnly('maven.modrinth:vvuO3ImH:dRnRThvD') { transitive = false }
+    compileOnly('maven.modrinth:TyCTlI4b:bsFkej1I') { transitive = false }
+    compileOnly('maven.modrinth:nmoqTijg:szWFBgsm') { transitive = false }
     compileOnly('maven.modrinth:kubejs:5yNEdyfc') { transitive = false } // KubeJS 8.0.8
     compileOnly('maven.modrinth:rhino:SqkDvOLG') { transitive = false } // Rhino 2101.2.8-build.91
     compileOnly('maven.modrinth:jei:7qmEzno8') { transitive = false } // JEI 29.47.0.110
@@ -57,8 +69,9 @@ tasks.named('compileJava') {
         }
         new java.util.zip.ZipFile(shBetterUi).withCloseable { jar ->
             if (jar.getEntry('META-INF/neoforge.mods.toml') == null
-                    || jar.getEntry('com/dishanhai/sh_better_ui/kernel/api/UIPlatform.class') == null) {
-                throw new GradleException("SH-Better-UI at ${shBetterUi} must be the NeoForge ${minecraft_version} mod JAR with its client kernel.")
+                    || jar.getEntry('com/dishanhai/sh_better_ui/client/api/ControlsApi.class') == null
+                    || jar.getEntry('com/dishanhai/sh_better_ui/client/glass/LiquidGlassSurface.class') == null) {
+                throw new GradleException("SH-Better-UI at ${shBetterUi} must provide the NeoForge ${minecraft_version} controls and liquid glass API.")
             }
         }
     }

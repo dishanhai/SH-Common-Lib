@@ -1,5 +1,8 @@
 package com.dishanhai.sh_common_lib.client.hud;
 
+import com.dishanhai.sh_better_ui.client.api.ShBetterUiApi;
+import com.dishanhai.sh_better_ui.client.gui.display.GraphicDisplayLayout.Bounds;
+import com.dishanhai.sh_better_ui.client.gui.scaled.UiPreferences;
 import com.dishanhai.sh_common_lib.client.ClientPanels;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.AbstractSliderButton;
@@ -66,19 +69,13 @@ final class PlayerInfoHudScreen extends Screen {
         int gap = 4;
         int buttonX = (width - buttonWidth * 4 - gap * 3) / 2;
         int sliderWidth = Math.min(220, width - 16);
-        scaleSlider = sliderWidth > 8 ? new AbstractSliderButton((width - sliderWidth) / 2, 0, sliderWidth, 18,
-                scaleLabel(), (double) (scalePercent - MIN_SCALE) / (MAX_SCALE - MIN_SCALE)) {
-            @Override
-            protected void updateMessage() {
-                setMessage(scaleLabel());
-            }
-
-            @Override
-            protected void applyValue() {
-                scalePercent = MIN_SCALE + (int) Math.round(value * (MAX_SCALE - MIN_SCALE) / SCALE_STEP) * SCALE_STEP;
-                preview.updatePlacement();
-            }
-        } : null;
+        scaleSlider = sliderWidth > 8 ? ShBetterUiApi.controls().slider(
+                new Bounds((width - sliderWidth) / 2, toolbarY + 15, sliderWidth, 18),
+                MIN_SCALE, MAX_SCALE, SCALE_STEP, scalePercent, UiPreferences.configured(),
+                value -> Component.translatable(LANG + "scale", value), value -> {
+                    scalePercent = value;
+                    preview.updatePlacement();
+                }) : null;
         Button toggle = button(buttonX, buttonWidth, toggleLabel(), button -> {
             enabled = !enabled;
             button.setMessage(toggleLabel());
@@ -92,7 +89,7 @@ final class PlayerInfoHudScreen extends Screen {
         Button cancel = button(buttonX + 2 * (buttonWidth + gap), buttonWidth, CommonComponents.GUI_CANCEL,
                 ignored -> onClose());
         Button done = button(buttonX + 3 * (buttonWidth + gap), buttonWidth, CommonComponents.GUI_DONE, ignored -> {
-            saveFailed = !hud.save(new PlayerInfoHudSettings(enabled, x, y, scalePercent, initial.visibleItems()));
+            saveFailed = !hud.save(initial.withLayout(enabled, x, y, scalePercent));
             if (saveFailed) {
                 minecraft.getNarrator().saySystemNow(SAVE_FAILED);
             } else {
@@ -103,21 +100,16 @@ final class PlayerInfoHudScreen extends Screen {
         if (scaleSlider != null) addWidget(scaleSlider);
         buttons.forEach(this::addWidget);
         addWidget(preview);
-        if (scaleSlider != null) scaleSlider.setY(toolbarY + 15);
         for (Button button : buttons) button.setY(toolbarY + 36);
         setInitialFocus(preview.visible ? preview : done);
     }
 
     private PlayerInfoHudLayout.View fitPreview() {
-        return layout.fit(width, height, toolbarY, scalePercent, minecraft.getWindow().getGuiScale());
+        return layout.fit(width, height, toolbarY, scalePercent, minecraft.getWindow().getGuiScale(), hud.pageIndex());
     }
 
     private Button button(int x, int width, Component label, Button.OnPress action) {
-        return Button.builder(label, action).bounds(x, 0, width, 20).build();
-    }
-
-    private Component scaleLabel() {
-        return Component.translatable(LANG + "scale", scalePercent);
+        return ClientPanels.button(x, 0, width, 20, label, action);
     }
 
     private Component toggleLabel() {
@@ -166,10 +158,7 @@ final class PlayerInfoHudScreen extends Screen {
     @Override
     public void onClose() {
         minecraft.setScreen(parent);
-        if (parent != null && minecraft.screen == parent) {
-            var focus = returnFocus.get();
-            if (focus != null && parent.children().contains(focus)) parent.setFocused(focus);
-        }
+        ClientPanels.restoreFocus(parent, returnFocus);
     }
 
     @Override
@@ -194,6 +183,7 @@ final class PlayerInfoHudScreen extends Screen {
         @Override
         protected void extractWidgetRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
             view.panel().draw(graphics, font, getX(), getY(), placement.scale());
+            view.drawSeparators(graphics, font, getX(), getY());
             if (dragging || isFocused() || isHovered()) {
                 int border = dragging ? ClientPanels.ACCENT : ClientPanels.TEXT;
                 graphics.outline(getX(), getY(), getWidth(), getHeight(), border);

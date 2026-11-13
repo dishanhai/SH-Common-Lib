@@ -5,6 +5,8 @@ import com.dishanhai.sh_common_lib.api.ShCommonLib;
 import com.dishanhai.sh_common_lib.client.BlockInspectionShortcuts;
 import com.dishanhai.sh_common_lib.client.control.ControlCenterModule;
 import com.dishanhai.sh_common_lib.client.hud.PlayerInfoHud;
+import com.dishanhai.sh_common_lib.client.hud.HudRuntimeInfo;
+import com.dishanhai.sh_common_lib.client.hud.PlayerInfoItem;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.resources.Identifier;
@@ -25,10 +27,16 @@ final class NeoForgePlayerInfoHud {
     private NeoForgePlayerInfoHud() {}
 
     static void register(IEventBus modBus) {
-        PlayerInfoHud hud = new PlayerInfoHud(FMLPaths.CONFIGDIR.get(), NeoForgeTickNetwork::request,
-                () -> Minecraft.getInstance().getDebugOverlay().showDebugScreen());
+        PlayerInfoHud hud = new PlayerInfoHud(FMLPaths.CONFIGDIR.get(), NeoForgeTickNetwork::request, NeoForgeTickNetwork::requestWeather,
+                () -> Minecraft.getInstance().getDebugOverlay().showDebugScreen(),
+                new HudRuntimeInfo(PlayerInfoItem.NEOFORGE_VERSION, NeoForgePlayerInfoHud::runtimeMods, id -> ModList.get().isLoaded(id)));
         KeyMapping copyData = inspectionKey(BlockInspectionShortcuts.COPY_DATA, GLFW.GLFW_KEY_I);
         KeyMapping copyState = inspectionKey(BlockInspectionShortcuts.COPY_STATE, GLFW.GLFW_KEY_K);
+        KeyMapping previousPage = pageKey("key.sh_common_lib.hud_previous_page", GLFW.GLFW_KEY_LEFT);
+        KeyMapping nextPage = pageKey("key.sh_common_lib.hud_next_page", GLFW.GLFW_KEY_RIGHT);
+        hud.bindPageKeys(previousPage, nextPage);
+        hud.bindAe2Request(NeoForgeTickNetwork::requestAe2);
+        hud.bindInventoryRequest(NeoForgeTickNetwork::requestInventoryHud);
         modBus.addListener((RegisterGuiLayersEvent event) -> event.registerAboveAll(
                 Identifier.fromNamespaceAndPath(ShCommonLib.MOD_ID, "player_info"),
                 (graphics, delta) -> hud.render(graphics)));
@@ -37,6 +45,8 @@ final class NeoForgePlayerInfoHud {
             event.register(ControlCenterModule.openKey());
             event.register(copyData);
             event.register(copyState);
+            event.register(previousPage);
+            event.register(nextPage);
         });
         modBus.addListener((FMLClientSetupEvent event) -> ModList.get().getModContainerById(ShCommonLib.MOD_ID)
                 .ifPresent(container -> container.registerExtensionPoint(IConfigScreenFactory.class,
@@ -48,8 +58,24 @@ final class NeoForgePlayerInfoHud {
         });
     }
 
+    private static HudRuntimeInfo.Mods runtimeMods() {
+        var modList = ModList.get();
+        var mods = modList.getMods();
+        String minecraftVersion = mods.stream().filter(mod -> mod.getModId().equals("minecraft"))
+                .map(mod -> mod.getVersion().toString()).findFirst().orElse(null);
+        String loaderVersion = mods.stream().filter(mod -> mod.getModId().equals("neoforge"))
+                .map(mod -> mod.getVersion().toString()).findFirst().orElse(null);
+        long loaded = mods.stream().filter(mod -> modList.getModContainerById(mod.getModId()).isPresent()).count();
+        return new HudRuntimeInfo.Mods(minecraftVersion, loaderVersion, loaded, mods.size());
+    }
+
     private static KeyMapping inspectionKey(String name, int key) {
         return new KeyMapping(name, KeyConflictContext.IN_GAME, KeyModifier.CONTROL,
+                InputConstants.Type.KEYSYM, key, NeoForgeKeyMappings.CATEGORY);
+    }
+
+    private static KeyMapping pageKey(String name, int key) {
+        return new KeyMapping(name, KeyConflictContext.IN_GAME, KeyModifier.ALT,
                 InputConstants.Type.KEYSYM, key, NeoForgeKeyMappings.CATEGORY);
     }
 }

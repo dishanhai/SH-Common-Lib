@@ -1,6 +1,7 @@
 // Author: dishanhai
 package com.dishanhai.sh_common_lib.api.client;
 
+import com.dishanhai.sh_better_ui.client.gui.scaled.UiPreferences;
 import com.dishanhai.sh_common_lib.client.ClientPanels;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -19,7 +20,8 @@ public final class LoadingTemplate {
         if (width < 24) return;
         int x = (graphics.guiWidth() - width) / 2;
         int y = graphics.guiHeight() * 3 / 4;
-        ClientPanels.panel(graphics, x, y, width, 9);
+        graphics.fill(x, y, x + width, y + 9, 0xFF18202C);
+        graphics.outline(x, y, width, 9, 0xCC8393A7);
         int length = Math.round((width - 4) * Math.clamp(progress, 0f, 1f));
         if (length > 0) {
             graphics.fill(x + 2, y + 2, x + 2 + length, y + 7, ClientPanels.ACCENT);
@@ -50,7 +52,8 @@ public final class LoadingTemplate {
             length = Math.round(track * Math.clamp(progress, 0f, 1f));
         } else {
             length = Math.max(1, track / 4);
-            double position = (1 - Math.cos(elapsedMillis * Math.PI / 800)) / 2;
+            double position = UiPreferences.configured().reducedMotion()
+                    ? 0.5 : (1 - Math.cos(elapsedMillis * Math.PI / 800)) / 2;
             offset = (int) Math.round((track - length) * position);
         }
         if (length > 0) {
