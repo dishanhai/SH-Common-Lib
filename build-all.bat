@@ -12,7 +12,7 @@ if errorlevel 1 (
 )
 popd
 
-pushd "%~dp0neoforge" || goto directory_error
+pushd "%~dp0neoforge-1.21.1" || goto directory_error
 echo Building NeoForge...
 call gradlew.bat build %*
 if errorlevel 1 (
@@ -23,7 +23,7 @@ if errorlevel 1 (
 popd
 
 echo Building NeoForge 26.1.2...
-call "%~dp0neoforge\gradlew.bat" -p "%~dp0neoforge-26.1.2" build %*
+call "%~dp0neoforge-1.21.1\gradlew.bat" -p "%~dp0neoforge-26.1.2" build %*
 if errorlevel 1 (
     echo NeoForge 26.1.2 build failed.
     goto finish

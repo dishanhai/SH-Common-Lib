@@ -1,6 +1,6 @@
 // Author: dishanhai
 group = 'com.dishanhai'
-version = '0.2.0'
+version = '0.3.0'
 
 def libraryArtifact = "sh-common-lib-${platform}-${minecraft_version}"
 base { archivesName = libraryArtifact }
@@ -11,8 +11,104 @@ sourceSets.main {
     resources.srcDir('../common/src/main/resources')
 }
 
+sourceSets {
+    controlCenterVerification {
+        java.srcDir('../common/src/test/java')
+        compileClasspath += sourceSets.main.output
+        runtimeClasspath += sourceSets.main.output
+    }
+}
+
+tasks.register('controlCenterDraftTest', JavaExec) {
+    group = 'verification'
+    description = 'Checks staged control center settings, reset, retry, and HUD editor merging.'
+    classpath = sourceSets.controlCenterVerification.runtimeClasspath
+    mainClass = 'com.dishanhai.sh_common_lib.client.control.ControlCenterDraftTest'
+}
+
+tasks.register('clientSearchTest', JavaExec) {
+    group = 'verification'
+    description = 'Checks ULK client search and suggestion results.'
+    javaLauncher = javaToolchains.launcherFor { languageVersion = project.java.toolchain.languageVersion }
+    classpath = sourceSets.controlCenterVerification.runtimeClasspath + sourceSets.main.runtimeClasspath
+    mainClass = 'com.dishanhai.sh_common_lib.api.client.ulk.ClientSearchTest'
+}
+
+tasks.register('searchHistoryTest', JavaExec) {
+    group = 'verification'
+    description = 'Checks bounded local search history and persistence.'
+    javaLauncher = javaToolchains.launcherFor { languageVersion = project.java.toolchain.languageVersion }
+    classpath = sourceSets.controlCenterVerification.runtimeClasspath
+    mainClass = 'com.dishanhai.sh_common_lib.api.client.ulk.SearchHistoryTest'
+}
+
+tasks.register('jeiSearchSettingsTest', JavaExec) {
+    group = 'verification'
+    description = 'Checks JEI search setting persistence and invalid values.'
+    javaLauncher = javaToolchains.launcherFor { languageVersion = project.java.toolchain.languageVersion }
+    classpath = sourceSets.controlCenterVerification.runtimeClasspath + sourceSets.main.runtimeClasspath
+    mainClass = 'com.dishanhai.sh_common_lib.client.jei.JeiSearchSettingsTest'
+}
+
+tasks.register('searchCompletionUndoTest', JavaExec) {
+    group = 'verification'
+    description = 'Checks completion undo and invalidation after editing.'
+    classpath = sourceSets.controlCenterVerification.runtimeClasspath
+    mainClass = 'com.dishanhai.sh_common_lib.client.jei.SearchCompletionUndoTest'
+}
+
+tasks.register('recipePreviewBoundsTest', JavaExec) {
+    group = 'verification'
+    description = 'Checks title and JEI drawable border separation in recipe previews.'
+    classpath = sourceSets.controlCenterVerification.runtimeClasspath
+    mainClass = 'com.dishanhai.sh_common_lib.client.jei.RecipePreviewBoundsTest'
+}
+
+tasks.register('searchPagingTest', JavaExec) {
+    group = 'verification'
+    description = 'Checks JEI candidate page and selection boundaries.'
+    classpath = sourceSets.controlCenterVerification.runtimeClasspath
+    mainClass = 'com.dishanhai.sh_common_lib.client.jei.SearchPagingTest'
+}
+
+tasks.register('inventoryScanTrackerTest', JavaExec) {
+    group = 'verification'
+    description = 'Checks ULK storage identity, bounded traversal and count overflow.'
+    classpath = sourceSets.controlCenterVerification.runtimeClasspath
+    mainClass = 'com.dishanhai.sh_common_lib.internal.ulk.InventoryScanTrackerTest'
+}
+
+def ulkVerificationClasses = layout.buildDirectory.dir('classes/ulkVerification')
+tasks.register('compileUlkVerification', JavaCompile) {
+    source files('../common/src/test/ulk-fixtures/net/minecraft/world/item/ItemStack.java',
+            '../common/src/test/ulk-verification/com/dishanhai/sh_common_lib/api/ulk/InventorySnapshotTest.java',
+            '../common/src/main/java/com/dishanhai/sh_common_lib/internal/ulk/InventoryScanTracker.java',
+            '../common/src/main/java/com/dishanhai/sh_common_lib/api/ulk/InventorySource.java',
+            '../common/src/main/java/com/dishanhai/sh_common_lib/api/ulk/InventoryEntry.java',
+            '../common/src/main/java/com/dishanhai/sh_common_lib/api/ulk/InventorySnapshot.java',
+            '../common/src/main/java/com/dishanhai/sh_common_lib/api/ulk/InventoryScan.java')
+    classpath = files()
+    destinationDirectory = ulkVerificationClasses
+}
+
+tasks.register('inventorySnapshotTest', JavaExec) {
+    group = 'verification'
+    description = 'Checks ULK snapshot copying, source status, totals and bounds with isolated item fixtures.'
+    dependsOn tasks.named('compileUlkVerification')
+    classpath = files(ulkVerificationClasses)
+    mainClass = 'com.dishanhai.sh_common_lib.api.ulk.InventorySnapshotTest'
+}
+
+tasks.named('check') {
+    dependsOn tasks.named('controlCenterDraftTest'), tasks.named('clientSearchTest'), tasks.named('searchHistoryTest'), tasks.named('jeiSearchSettingsTest'), tasks.named('searchCompletionUndoTest'), tasks.named('recipePreviewBoundsTest'), tasks.named('searchPagingTest'), tasks.named('inventoryScanTrackerTest'), tasks.named('inventorySnapshotTest')
+}
+
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
+}
+
+tasks.withType(JavaExec).configureEach {
+    javaLauncher = javaToolchains.launcherFor { languageVersion = project.java.toolchain.languageVersion }
 }
 
 tasks.named('processResources') {
