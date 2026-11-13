@@ -1,6 +1,8 @@
 package com.dishanhai.sh_common_lib.forge;
 
 import com.dishanhai.sh_common_lib.api.ShCommonLib;
+import com.dishanhai.sh_common_lib.api.ulk.UnifiedLibKernel;
+import com.dishanhai.sh_common_lib.forge.ulk.ForgeUlkPlatform;
 import com.dishanhai.sh_common_lib.api.client.announcement.DefaultAnnouncement;
 import com.dishanhai.sh_common_lib.api.parcel.ParcelStorage;
 import net.minecraft.world.level.block.Block;
@@ -23,6 +25,7 @@ public final class ForgeShCommonLib {
 
     public ForgeShCommonLib(FMLJavaModLoadingContext context) {
         IEventBus modBus = context.getModEventBus();
+        UnifiedLibKernel.install(new ForgeUlkPlatform());
         BLOCKS.register(modBus);
         ParcelStorage.register(modBus);
         ForgeTickNetwork.register();
