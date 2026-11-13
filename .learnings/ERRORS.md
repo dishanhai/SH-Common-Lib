@@ -1,5 +1,9 @@
 # 构建经验
 
+- HUD 在空间不足时，逐个尝试保留数据行若每次都新建面板，会重复测量之前所有行的文字；每次刷新数据都会再次触发。行高一致且宽度由最长文字决定时，应缓存每行测量并复用尺寸计算，同时核对缩放边界和原有优先级。
+- NeoForge 26.1.2 的硬件遥测回退路径与旧版本不同：CPU、内存和磁盘原先在调用线程读取。HUD 开启这些项目时，应在后台限频采样并返回缓存，不能只检查旧版本的异步服务。
+- 无线终端的已绑定网络不等于玩家当前可连接的网络。查询 AE2 HUD 数据时应使用终端自己的宿主检查范围和供电，避免只调用 `getLinkedGrid` 就暴露远程网络；扩展终端可能覆盖宿主和量子连接行为。
+
 - Forge 1.20.1 和 NeoForge 1.21.1 构建可能被公告模块 `AnnouncementCatalog` 中缺少 `Locale` 符号阻断。核对该模块的当前工作区改动后再修复，并重跑受影响的构建。
 
 - 为隔离的 Minecraft 1.21.1 客户端手写 `options.txt` 且含现代按键名称时，需写入 `version:3955`。缺少数据版本会让旧版按键转换器把 `key.keyboard.f9` 当整数解析，导致帧率上限和首次引导等其余选项也未加载。
@@ -44,7 +48,29 @@
 
 - Forge 在 Windows 上执行 `processResources` 时曾报输出目录中的 `assets` 不存在，命令结束后该目录可正常读取。使用 `--no-watch-fs` 重跑构建成功，并从重新生成的 JAR 验证了预设资源。
 - NeoForge 26.1.2 子项目没有单独的 Gradle Wrapper。从项目根目录用 `./neoforge/gradlew -p neoforge-26.1.2`，并为该构建指定 JDK 25。
+- Minecraft 26.1.2 移除了 `Minecraft.tell` 与 `StringSplitter.componentStyleAtWidth`。需要等当前屏幕或输入事件结束时，用 `schedule(wrapRunnable(task))` 排队。点击已排版的公告文本时，用 `StringSplitter.stringWidth` 累加带样式字形的宽度，使行内图标也参与命中。
+- 隔离 26.1.2 客户端验证主菜单自动公告时，将该实例的 `onboardAccessibility` 设为 `false`，否则游戏先停在辅助功能引导。验证 SHBUI 滑杆的方向键操作前，先给滑杆焦点并按原版输入模式进入调整状态。
 
 - 更新公告的 `<!-- lang:en -->` 分区应保留正文中的 `<details>` 与 `<summary>`。只解开包住整段英文的旧语言切换外层，否则新版公告中的中文和英文折叠都会丢失。
 
 - 离线验收公告位图字体时，Forge 1.20.1 的 `GlyphProviderDefinition.CODEC` 在 NeoForge 1.21.1 中不可用。两端可用 `BitmapProvider.Definition.CODEC.codec()` 读取位图定义，再用原版加载器检查字形宽度与 SHBUI 贴图资源。
+
+- Git Bash 调用 Windows 命令时，MSYS 可能把 `tasklist /FI` 的选项转换成路径；可为该命令设置 `MSYS_NO_PATHCONV=1`。若 PATH 中的 Codex `rg` 在 Git Bash 下无法执行，先改用可执行的 Windows `rg.exe` 或其他只读查找方式。
+
+- NeoForge 目录从 `neoforge` 改名为 `neoforge-1.21.1` 后，除批处理构建入口外，还要同步 26.1.2 的共享源码和资源路径，以及 1.21.1 使用的同级 SHBUI JAR 路径；分别无额外路径参数重跑两端构建。
+
+- 多个 Codex 聊天共用工作区时，共享 Java 源码和 SHBUI 本地 JAR 可能暂处于接口迁移的中间状态。确认相关改动与依赖构建完成后再验证消费方，不能用迁移前的编译结果代表最终工作区。
+
+- Minecraft 26.1.2 的 `ServerPlayer` 不再提供旧版的 `getServer()`；跨版本服务端线程检查应由平台实现分别通过旧版 `player.getServer()` 和新版 `player.level().getServer()` 获取服务器。
+- 多来源物品扫描中，饰品栏或背包读取不完整也可能隐藏背包及无线终端。快照需要把不完整状态传播到依赖其发现过程的可用来源，不能将这些来源误报为未找到。
+- Forge 1.20.1 的 `FriendlyByteBuf.writeBoolean` 返回 Netty `ByteBuf`；写完布尔值后重新使用原 `FriendlyByteBuf` 写 VarInt，不能继续链式调用 `writeVarInt`。
+- Neo ECO AE 21.2.17 的 `NEComputationCluster.getActiveCPUCount()` 在联网时汇总整个运算网络；逐台 HUD 使用 `getActiveCPUs().size()` 表示该机器本地活动 CPU。
+
+- 查询正在运行的 Minecraft JVM 时，完整启动参数可能含访问令牌；应只检查进程存在性或先在本地过滤所需非敏感字段，绝不将完整命令行写入工具输出。
+- 多个聊天同时构建同一 NeoForge 输出目录会导致 Gradle 清理与写入冲突；等待其他构建结束后串行重跑。Minecraft 26.1.2 的 `AbstractWidget` 自定义绘制实现应使用 `extractWidgetRenderState`。
+
+- 在 `Minecraft.setScreen` 触发的屏幕 `init` 中同步打开 UUK 页面，会在原屏幕切换尚未完成时挂载，触发 `A UI tree can only mount on the active native Screen`。将切换排队到当前切屏完成之后，并用实际客户端复验。
+
+- Gradle 的自定义 `JavaExec` 任务可能使用运行 Gradle 的 Java 17，而项目源码由 Java 21 或 25 工具链编译；应显式设置 `javaLauncher` 为项目工具链，再运行测试。
+
+- 当前 Windows 命令工具即使指定 Git Bash 也可能误触发 WSL 占位程序；可通过 Node 的 `execFile` 显式启动 `C:\Program Files\Git\bin\bash.exe`，继续使用 Git Bash。
