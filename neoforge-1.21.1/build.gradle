@@ -26,8 +26,12 @@ repositories {
 
 dependencies {
     implementation files(findProperty('shBetterUiJar')
-            ?: "../../SH-Better-UI/neoforge/build/libs/sh_better_ui-neoforge-${minecraft_version}-${sh_better_ui_version}.jar")
+            ?: "../../SH-Better-UI/neoforge-1.21.1/build/libs/sh_better_ui-neoforge-${minecraft_version}-${sh_better_ui_version}.jar")
     runtimeOnly 'thedarkcolour:kotlinforforge-neoforge:5.10.0'
+    // Optional ULK integrations; these mods remain separate runtime dependencies.
+    compileOnly('maven.modrinth:vvuO3ImH:yohfFbgD') { transitive = false }
+    compileOnly('maven.modrinth:TyCTlI4b:tJnK2DE1') { transitive = false }
+    compileOnly('maven.modrinth:nmoqTijg:ceT6tucA') { transitive = false }
     compileOnly('dev.latvian.mods:kubejs-neoforge:2101.7.2-build.381') { transitive = false }
     compileOnly('dev.latvian.mods:rhino:2101.2.7-build.81') { transitive = false }
     compileOnly('mezz.jei:jei-1.21.1-neoforge:19.69.0.456') { transitive = false }

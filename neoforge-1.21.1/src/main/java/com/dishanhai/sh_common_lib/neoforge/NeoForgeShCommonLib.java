@@ -1,6 +1,8 @@
 package com.dishanhai.sh_common_lib.neoforge;
 
 import com.dishanhai.sh_common_lib.api.ShCommonLib;
+import com.dishanhai.sh_common_lib.api.ulk.UnifiedLibKernel;
+import com.dishanhai.sh_common_lib.neoforge.ulk.NeoForgeUlkPlatform;
 import com.dishanhai.sh_common_lib.api.client.announcement.DefaultAnnouncement;
 import com.dishanhai.sh_common_lib.api.parcel.ParcelStorage;
 import net.neoforged.api.distmarker.Dist;
@@ -18,6 +20,7 @@ public final class NeoForgeShCommonLib {
     private static final DeferredRegister.Blocks BLOCKS = DeferredRegister.createBlocks(ShCommonLib.MOD_ID);
 
     public NeoForgeShCommonLib(IEventBus modBus) {
+        UnifiedLibKernel.install(new NeoForgeUlkPlatform());
         BLOCKS.register(modBus);
         ParcelStorage.register(modBus);
         InfinityCell.register(modBus);
