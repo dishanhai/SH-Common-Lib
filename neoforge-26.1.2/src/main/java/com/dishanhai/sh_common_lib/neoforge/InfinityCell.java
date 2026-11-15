@@ -21,6 +21,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.TooltipFlag;
 import net.minecraft.world.item.component.TooltipDisplay;
 import net.neoforged.bus.api.IEventBus;
+import net.neoforged.fml.ModList;
 import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.registries.DeferredItem;
 import net.neoforged.neoforge.registries.DeferredRegister;
@@ -59,6 +60,11 @@ final class InfinityCell extends Item {
         return stack.is(ITEM.get()) ? stack.get(TARGET.get()) : null;
     }
 
+    static boolean supportsChemicals() {
+        var mods = ModList.get();
+        return mods.isLoaded("ae2") && mods.isLoaded("mekanism") && mods.isLoaded("appmek");
+    }
+
     @Override
     public Component getName(ItemStack stack) {
         var target = target(stack);
@@ -68,8 +74,11 @@ final class InfinityCell extends Item {
     @Override
     public Optional<TooltipComponent> getTooltipImage(ItemStack stack) {
         var target = target(stack);
-        return target != null && target.kind() == Kind.CHEMICAL
-                ? Optional.empty() : InfinityCellTooltip.create(target);
+        if (target != null && target.kind() == Kind.CHEMICAL
+                && (!supportsChemicals() || !AppliedMekanisticsCells.hasChemical(target.id()))) {
+            return Optional.empty();
+        }
+        return InfinityCellTooltip.create(target);
     }
 
     @Override
@@ -125,7 +134,7 @@ final class InfinityCell extends Item {
             if (ingredient instanceof FluidStack stack && !stack.isEmpty()) {
                 return new Target(Kind.FLUID, BuiltInRegistries.FLUID.getKey(stack.getFluid()), stack.getComponentsPatch());
             }
-            return null;
+            return supportsChemicals() ? AppliedMekanisticsCells.fromIngredient(ingredient) : null;
         }
 
         ItemStack itemStack() {
@@ -149,7 +158,8 @@ final class InfinityCell extends Item {
                     var stack = fluidStack();
                     yield stack.isEmpty() ? Component.literal(id.toString()) : stack.getHoverName();
                 }
-                case CHEMICAL -> Component.literal(id.toString());
+                case CHEMICAL -> supportsChemicals()
+                        ? AppliedMekanisticsCells.name(id) : Component.literal(id.toString());
             };
         }
     }

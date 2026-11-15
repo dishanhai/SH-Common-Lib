@@ -10,6 +10,9 @@ import com.dishanhai.sh_common_lib.internal.performance.Ae2Snapshot;
 import com.dishanhai.sh_common_lib.internal.performance.ClientAe2Monitor;
 import com.dishanhai.sh_common_lib.internal.performance.InventoryHudSnapshot;
 import com.dishanhai.sh_common_lib.internal.performance.ClientInventoryHudMonitor;
+import com.dishanhai.sh_common_lib.internal.performance.ClientEcoMachineMonitor;
+import com.dishanhai.sh_common_lib.internal.performance.EcoMachineSnapshot;
+import com.dishanhai.sh_common_lib.internal.performance.EcoNetworkDiagnostics;
 import net.minecraft.network.Connection;
 import net.minecraft.network.ConnectionProtocol;
 import net.minecraft.network.FriendlyByteBuf;
@@ -26,6 +29,21 @@ final class NeoForgeTickNetwork {
 
     static void register(RegisterPayloadHandlersEvent event) {
         var registrar = event.registrar("1").optional();
+        registrar.playToServer(EcoMachineRequest.TYPE, EcoMachineRequest.CODEC, (request, context) -> {
+            if (!(context.player() instanceof ServerPlayer player) || !ecoMachineSupported(context.connection())
+                    || request.mask() < 1 || request.mask() > 15 || !EcoMachineSnapshot.allow(player)) return;
+            String dimension = player.level().dimension().identifier().toString();
+            EcoMachineSnapshot snapshot = new EcoMachineSnapshot(dimension, request.mask(), EcoMachineSnapshot.NOT_INSTALLED, false, java.util.List.of());
+            if (net.neoforged.fml.ModList.get().isLoaded("neoecoae") && net.neoforged.fml.ModList.get().isLoaded("ae2")) {
+                try { snapshot = NeoForgeEcoMachines.sample(player, dimension, request.mask()); }
+                catch (RuntimeException | LinkageError ignored) {
+                    snapshot = new EcoMachineSnapshot(dimension, request.mask(), EcoMachineSnapshot.ERROR, false, java.util.List.of());
+                }
+            }
+            context.reply(new EcoMachineReply(snapshot));
+        });
+        registrar.playToClient(EcoMachineReply.TYPE, EcoMachineReply.CODEC,
+                (reply, context) -> ClientEcoMachineMonitor.INSTANCE.accept(context.connection(), reply.snapshot()));
         registrar.playToServer(InventoryRequest.TYPE, InventoryRequest.CODEC, (request, context) -> {
             if (!(context.player() instanceof ServerPlayer player) || !inventorySupported(context.connection())
                     || request.flags() < 1 || request.flags() > 3 || !InventoryHudSnapshot.allow(player)) return;
@@ -35,8 +53,16 @@ final class NeoForgeTickNetwork {
                 try { sources = InventoryHudSnapshot.inspect(player); scanned = true; }
                 catch (RuntimeException | LinkageError ignored) { }
             }
+            var eco = new EcoNetworkDiagnostics.Network(InventoryHudSnapshot.ECO_NOT_INSTALLED, 0, 0, false);
+            if ((request.flags() & 2) != 0 && net.neoforged.fml.ModList.get().isLoaded("neoecoae")
+                    && net.neoforged.fml.ModList.get().isLoaded("ae2")) {
+                try { eco = NeoForgeEcoHud.sample(player); }
+                catch (RuntimeException | LinkageError ignored) {
+                    eco = new EcoNetworkDiagnostics.Network(InventoryHudSnapshot.ECO_ERROR, 0, 0, false);
+                }
+            }
             context.reply(new InventoryReply(new InventoryHudSnapshot(player.level().dimension().identifier().toString(),
-                    request.flags(), scanned, sources, InventoryHudSnapshot.ECO_NOT_INSTALLED, 0, 0, false)));
+                    request.flags(), scanned, sources, eco.state(), eco.nodes(), eco.active(), eco.truncated())));
         });
         registrar.playToClient(InventoryReply.TYPE, InventoryReply.CODEC,
                 (reply, context) -> ClientInventoryHudMonitor.INSTANCE.accept(context.connection(), reply.snapshot()));
@@ -90,6 +116,27 @@ final class NeoForgeTickNetwork {
     static void requestInventoryHud(Connection connection, int flags) {
         if (inventorySupported(connection)) connection.send(new ServerboundCustomPayloadPacket(new InventoryRequest(flags)));
     }
+    static void requestEcoMachines(Connection connection, int mask) {
+        if (ecoMachineSupported(connection)) connection.send(new ServerboundCustomPayloadPacket(new EcoMachineRequest(mask)));
+    }
+    private static boolean ecoMachineSupported(Connection connection) {
+        return connection.isConnected()
+                && NetworkRegistry.hasChannel(connection, ConnectionProtocol.PLAY, EcoMachineRequest.TYPE.id())
+                && NetworkRegistry.hasChannel(connection, ConnectionProtocol.PLAY, EcoMachineReply.TYPE.id());
+    }
+    private record EcoMachineRequest(int mask) implements CustomPacketPayload {
+        private static final Type<EcoMachineRequest> TYPE = new Type<>(Identifier.fromNamespaceAndPath(ShCommonLib.MOD_ID, "eco_machines_v1/request"));
+        private static final StreamCodec<FriendlyByteBuf, EcoMachineRequest> CODEC = StreamCodec.of(
+                (buf, request) -> buf.writeVarInt(request.mask()), buf -> new EcoMachineRequest(buf.readVarInt()));
+        @Override public Type<EcoMachineRequest> type() { return TYPE; }
+    }
+    private record EcoMachineReply(EcoMachineSnapshot snapshot) implements CustomPacketPayload {
+        private static final Type<EcoMachineReply> TYPE = new Type<>(Identifier.fromNamespaceAndPath(ShCommonLib.MOD_ID, "eco_machines_v1/reply"));
+        private static final StreamCodec<FriendlyByteBuf, EcoMachineReply> CODEC = StreamCodec.of(
+                (buf, reply) -> reply.snapshot().encode(buf), buf -> new EcoMachineReply(EcoMachineSnapshot.decode(buf)));
+        @Override public Type<EcoMachineReply> type() { return TYPE; }
+    }
+
     private static boolean inventorySupported(Connection connection) {
         return connection.isConnected()
                 && NetworkRegistry.hasChannel(connection, ConnectionProtocol.PLAY, InventoryRequest.TYPE.id())

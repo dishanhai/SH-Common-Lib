@@ -15,10 +15,15 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 abstract class NeoForgeLevelLoadingScreenMixin {
     @Shadow private LevelLoadTracker loadTracker;
 
+    @Inject(method = "tick", at = @At("HEAD"))
+    private void shclib$trackWorldProgress(CallbackInfo ci) {
+        ClientLoading.worldProgress(loadTracker.hasProgress());
+    }
+
     @Inject(method = "extractRenderState", at = @At(value = "INVOKE",
             target = "Lnet/minecraft/client/multiplayer/LevelLoadTracker;statusView()Lnet/minecraft/server/level/progress/ChunkLoadStatusView;"),
             cancellable = true)
     private void shclib$renderChunks(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick, CallbackInfo ci) {
-        if (ClientLoading.renderWorldChunks(graphics, loadTracker.serverProgress())) ci.cancel();
+        if (ClientLoading.renderWorldProgress(graphics, loadTracker.hasProgress(), loadTracker.serverProgress())) ci.cancel();
     }
 }

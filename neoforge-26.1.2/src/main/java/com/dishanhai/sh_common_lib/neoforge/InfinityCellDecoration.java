@@ -1,6 +1,7 @@
 // Author: dishanhai
 package com.dishanhai.sh_common_lib.neoforge;
 
+import appeng.client.api.AEKeyRendering;
 import com.dishanhai.sh_better_ui.kernel.api.richtext.RichLayoutSnapshot;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
@@ -32,7 +33,9 @@ final class InfinityCellDecoration {
         switch (target.kind()) {
             case ITEM -> drawItem(graphics, target, x, y, size);
             case FLUID -> drawFluid(graphics, target, x, y, size);
-            case CHEMICAL -> { }
+            case CHEMICAL -> {
+                if (InfinityCell.supportsChemicals()) drawChemical(graphics, target, x, y, size);
+            }
         }
     }
 
@@ -57,6 +60,19 @@ final class InfinityCellDecoration {
         var tintSource = model.fluidTintSource();
         int tint = tintSource == null ? 0xFFFFFFFF : tintSource.colorAsStack(fluid);
         graphics.blitSprite(RenderPipelines.GUI_TEXTURED, model.stillMaterial().sprite(), x, y, size, size, tint);
+    }
+
+    private static void drawChemical(GuiGraphicsExtractor graphics, InfinityCell.Target target, int x, int y, int size) {
+        var key = AppliedMekanisticsCells.key(target.id());
+        if (key == null || AEKeyRendering.get(key) == null) return;
+        var pose = graphics.pose();
+        pose.pushMatrix();
+        try {
+            pose.translate(x, y).scale(size / 16F);
+            AEKeyRendering.drawInGui(Minecraft.getInstance(), graphics, 0, 0, key);
+        } finally {
+            pose.popMatrix();
+        }
     }
 
     private record Tooltip(InfinityCellTooltip content, RichLayoutSnapshot layout) implements ClientTooltipComponent {

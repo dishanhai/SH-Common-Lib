@@ -34,7 +34,7 @@ Windows 命令提示符可用 `gradlew.bat build`。成品在对应目录的 `bu
 ./neoforge-1.21.1/gradlew -p neoforge-26.1.2 build
 ```
 
-此构建读取同级 `SH-Better-UI/neoforge-26.1.2/build/libs/` 下的模组 JAR，也可用 `-PshBetterUiJar=<路径>` 指定。化学品无限元件集成等待 Mekanism 和 Applied Mekanistics 的兼容版本。
+此构建读取同级 `SH-Better-UI/neoforge-26.1.2/build/libs/` 下的模组 JAR，也可用 `-PshBetterUiJar=<路径>` 指定。26.1.2 的化学品无限元件以 Mekanism: Version Locked 2.11 和 Applied Mekanistics: Version Locked 1.6.0-port1 为编译基线。
 
 Windows 下可在项目根目录运行 `build-all.bat` 构建三个版本。将 `JAVA_HOME` 设为 Java 21，如果 Gradle 无法自动发现 Java 25，则用 `JAVA25_HOME` 指定其安装目录。脚本会把通用参数传给三个构建。单独指定 SH-Better-UI 版本或 JAR 时，请调用对应版本的 Gradle 构建命令。
 
@@ -59,6 +59,8 @@ InventorySnapshot.Status aeStatus = snapshot.sources().get(InventorySource.AE2);
 调用方也可在已有访问权限后，向 `inspect` 追加 `InventoryProvider`；安装对应模组并声明编译依赖时，可用 `Ae2Inventories.grid(grid)`、`Ae2Inventories.storage(identity, storage)` 和 `MekanismInventories.frequency(frequency)` 提供明确的库存。调用方负责验证这些显式对象的权限。自动终端查询检查 AE 连接范围与电量，以及 QIO 物品和频率权限。查询不会主动提取物品或扣除终端电量。
 
 ULK 通过客户端 UUK 模块发布 `UnifiedLibUiService.KEY`，可使用 `UnifiedUI.get().require(UnifiedLibUiService.KEY)` 发现相同服务。服务仍要求传入 `ServerPlayer` 并在服务器线程执行；目前没有提供客户端到远程服务器的通用查询协议，客户端界面需要由消费模组实现必要的数据同步。
+
+NeoForge 1.21.1 的服务端会通过 `META-INF/sh_better_ui.automation` 自动发现 `sh_common_lib:inventory/count`（契约版本 1）。请搭配含第三方服务端发现入口的 SH-Better-UI 1.0.11 构建。在服务端线程用 `ServerCapabilities.forPlayer(player)` 获取当前在线玩家的能力目录。查询参数 `item` 为注册物品 ID。同一 ID 的数据组件变体合计为 `count`（64 位整数），`sources` 返回各来源的扫描状态，键为小写的 `InventorySource` 名称。查询复用该玩家通过 ULK 可访问的来源。若某个来源为 `INCOMPLETE`，返回数量可能低于实际值。
 
 Forge 1.20.1 使用 Curios 5.14.1、Sophisticated Backpacks 3.26.20、AE2 15.4.10 和 Mekanism 10.4.16 的接口构建；NeoForge 1.21.1 使用 Curios 9.5.1、Sophisticated Backpacks 3.26.21、AE2 19.2.18 和 Mekanism 10.7.19。NeoForge 26.1.2 使用 Curios 15.0.0、Sophisticated Backpacks 3.26.20、AE2 26.1.13-beta，以及非官方社区移植版 Mekanism: Version Locked 2.11 的接口；其他 Mekanism 移植版需要单独验证。可选模组均需独立安装，不打包进 SHCLIB。
 
@@ -105,7 +107,7 @@ Forge 1.20.1 与 NeoForge 1.21.1 安装 AE2 时，加载界面显示实际观察
 
 Forge 1.20.1 和 NeoForge 1.21.1 的游戏 HUD 与位置编辑器通过 SH-Better-UI 绘制 Liquid Glass、轻微字形柔边和彩色像素图标。标签和强调文字按玻璃合成后的亮度范围调整对比度，优先保留原有色相。关闭背景模糊或暂时无法取样时，按面板的亮度范围选色。
 
-NeoForge 26.1.2 的主控中心、HUD 编辑器和公告使用 SH-Better-UI 控件。货匣、HUD 和世界加载卡片也接入 SH-Better-UI 的玻璃面板。开启高对比度、关闭背景模糊或无法取得背景时，面板改用实色。HUD 字色按深色底板选择。电脑读数包括内存、CPU、磁盘与渲染器名称，GPU 引擎利用率和显存读数等待对应的 SH-Better-UI 遥测服务。
+NeoForge 26.1.2 的主控中心、HUD 编辑器和公告使用 SH-Better-UI 控件。货匣、HUD 和世界加载卡片也接入 SH-Better-UI 的玻璃面板。开启高对比度、关闭背景模糊或无法取得背景时，面板改用实色。HUD 字色按深色底板选择。安装含 UUK 遥测服务的 SH-Better-UI 构建可读取 GPU 引擎利用率和显存。使用旧构建时，GPU 回退为渲染器名称。
 
 NeoForge 26.1.2 在遥测服务不可用时会后台刷新内存、CPU 和磁盘读数；首次采样完成前可能暂时显示不可用。
 
@@ -125,7 +127,7 @@ HUD 使用标题和细线区分玩家、世界、位置、服务器、电脑、�
 
 ULK 库存汇总、来源详情和 Neo ECO AE 网络节点均默认关闭，可在玩家信息 HUD 设置中分别启用，并可单独隐藏分组。ULK 显示服务端对当前玩家可读取来源的快照条目和物品数量，以及可用、未找到、不可用或不完整状态；不发送物品明细。汇总是观察到的条目数量而非不同物品的种类，跨系统引用的库存可能重复，数量超过 `long` 上限时饱和。扫描仍可能耗费服务器时间，启用后约每 30 秒刷新一次；服务端未安装相应版本时显示不可用。
 
-NeoForge 1.21.1 的 Neo ECO AE 项目读取玩家背包中首个已连接 AE2 无线终端的网络，统计节点归属为 Neo ECO AE 的总数及其中活跃数；遍历上限为 1024 个网络节点，超限时提示部分结果。节点统计不等同于机器数量，也不代表合成网络全部性能指标。其他版本显示未安装或不支持，不引入额外运行时依赖。
+三端的 Neo ECO AE 项目读取玩家背包中首个已连接 AE2 无线终端的网络，统计 Neo ECO AE 节点总数及其中活跃数。遍历上限为 1024 个网络节点，超限时提示部分结果。Forge 1.20.1 对应 Neo ECO AE 20.4.2，提供合成、运算和存储系统读数。NeoForge 1.21.1 和 26.1.2 另可读取大型工作站。
 
 四种 Neo ECO AE 多方块 HUD 项目可以独立开启：合成系统显示本机线程与工作者数；运算系统显示活动 CPU、本机线程和本机计算存储；存储系统显示驱动器、能源单元与无限模式；大型工作站显示并行、温度、工作和过热状态。每台机器显示维度和坐标，以及其已扫描网络节点的在线状态。仅发现当前无线终端网络内已成型且已加载的机器；同一多方块的多个节点会去重。每次最多遍历 1024 个节点并显示 32 台机器，超限或机器数据无法完整读取时提示不完整。约每 30 秒刷新，不强制加载区块。服务端需要支持该功能的 SHCLIB；旧服务端和不兼容版本显示不可用。
 
@@ -178,6 +180,8 @@ Forge 1.20.1 同时装有 `gt_shanhai` 时，`Ctrl+A` 仍由本库处理，其�
 
 ### JEI 搜索增强
 
+在「主控中心 → 设置 → JEI 搜索」开启「素材渲染优化」并点击「应用」。Forge 1.20.1 和 NeoForge 1.21.1 对 JEI 批量绘制的平面生成物品模型只提交朝向屏幕的面，继续使用原有纹理及其动画。NeoForge 26.1.2 让适用的 JEI 动态物品图标复用 Minecraft 的 GUI 物品图集，每个图标以 50 毫秒为间隔错开刷新。JEI 的行列数、分页和滚动均沿用原有设置。开关默认关闭，独立于搜索增强总开关。
+
 搜索框聚焦且内容为空时，启用持久历史会显示最近搜索；`Ctrl+Tab` 可切换最近、收藏和常用来源。点击、`Tab` 或单独按 `Enter` 可恢复所选内容。`Alt+←/→` 翻页，`Ctrl+←/→` 切换配方预览，`Alt+Enter` 打开所选物品的 JEI 合成页。每次查询最多显示 500 条候选，每项最多提供 128 个配方预览。仅选中行使用强模糊及边框，主面板使用原液态玻璃 HUD。以上功能需要本次更新的对应版本 SH-Better-UI。
 
 聚焦 JEI 的原搜索框后，SHCLIB 使用 ULK 搜索接口提供候选词，并以 UUK 液态玻璃 HUD 显示候选、图标和快捷键。在有足够空间时，选中候选的首个获取配方会显示在旁边。使用 `↑/↓` 选择候选，鼠标位于面板或搜索框上时也可滚轮选择；越过当前页的首尾会翻页，越过整个列表的首尾会循环。搜索增强启用且搜索框聚焦时，无修饰键上下箭头由增强层处理。`Ctrl+Z` 撤销最近一次补全或删除，`Esc` 收起候选，`Ctrl+↑/↓` 浏览已保存的查询历史。输入改变后，补全撤销状态会失效。
@@ -194,11 +198,21 @@ Forge 1.20.1 同时装有 `gt_shanhai` 时，`Ctrl+A` 仍由本库处理，其�
 
 空搜索时可用 `Ctrl+Tab` 切换最近、收藏、常用、随机物品、任务物品和聊天提及来源；禁用的来源会跳过。随机候选来自可见 JEI 素材，索引刷新时重新抽取。任务候选来自 FTB Quests 客户端已同步、可见、前置条件已满足且未完成的物品任务；未安装或尚未同步时为空。聊天来源默认关闭，开启后只记录玩家消息中识别出的已知物品名称，忽略系统消息，不保存原文，断开连接时清空。三种来源在主控中心可分别开关；其他宿主可复用 ULK 的 `SearchSources` 并自行提供可见名称、任务数据和连接生命周期。来源名称能唯一对应 JEI 材料时支持预览和 `Alt+Enter`，重名时仅补全名称。
 
+空搜索默认显示混合推荐，轮流展示启用的来源并标注类型；重复名称只出现一次。`SearchSources.mix` 提供可复用的来源配额、轮询和去重。
+
+输入 `@` 时可按模组显示名称及其创造模式标签页的本地化名称查找，并补全实际模组 ID；也可在 `config/sh_common_lib/jei-search-mod-names.json` 按命名空间配置名称数组，例如 `{"ae2":["应用能源"]}`。输入 `#` 时会显示标签 ID 和资源包中的本地化名称，也可按本地化名称查找。没有完整翻译的标签使用路径片段及已提供的片段翻译。配方预览直接叠在历史／书签区域上；当前选择能唯一对应 JEI 素材时持续显示其 tooltip。
+
+服务器热词使用 SHCLIB 的可选协议，客户端「接收服务器热词」与「分享搜索词给服务器」分别配置且默认关闭。要允许服务端汇总，管理员需在服务端 `config/sh_common_lib/hotwords-server.properties` 中设置 `enabled=true` 并重启服务端。开启分享后，完成或离开搜索时的词会发送给支持该协议的服务端；词条在服务端内存中限量、限速保存，六小时未更新后在下次处理时清理，停止服务器时清除。服务端未安装支持协议的 SHCLIB 或未启用时不提供该协议的热词，旧服务端不会收到本协议数据。若同时安装 JEIGuess 并开启接收，山海搜索也会读取 JEIGuess 已接收的服务器热词；两者的上报通道独立，JEIGuess 自身的上报行为仍由 JEIGuess 配置控制。
+
+同时安装 JEIGuess 时，首次进入主菜单或世界会提示选择山海搜索或 JEIGuess，避免两个搜索候选面板重叠。选择会保存到 `config/sh_common_lib/jei-search-provider.properties`，也可在主控中心的「JEI 搜索 → 切换搜索增强」重新选择。选择山海搜索会关闭 JEIGuess 的搜索总开关；选择 JEIGuess 会启用该开关并停用山海搜索增强。JEIGuess 的其他功能和设置保留。按 Esc 可暂时返回，之后仍可从主控中心选择；无法读取或保存兼容配置时会提示失败，山海搜索保持停用。未安装 JEIGuess 时正常使用山海搜索。
+
 主控中心的「JEI 搜索」可分别设置增强预测、持久历史、HUD、配方预览、按键提示和液态玻璃，修改需点击「应用」。历史保存在客户端 `config/sh_common_lib/jei-search-history.properties`，可在同一设置页确认清除；关闭持久历史不会删除已保存的记录。设置保存在 `config/sh_common_lib/jei-search.properties`。这些开关不改变 JEI 自带的搜索或历史；在 SHCLIB 有候选时，增强层优先显示。若当前 JEI 版本无法识别原搜索框，增强层会回退，JEI 原功能仍可使用。
 
-NeoForge 1.21.1 安装 AE2 并开启 JEI 作弊模式后，悬停物品或流体按 `Ctrl+Shift+左键`，松手时通过 JEI 请求发放 `sh_common_lib:infinity_cell`。同时安装 Mekanism 和 Applied Mekanistics 后，也可以用同样的操作绑定化学品。每张元件只绑定一种材料，物品和流体会保留数据组件。物品栏图标的左上角显示绑定材料的模型或原材质。元件工作台无法调整或追加材料。放入 ME 驱动器后可无限取出绑定的材料，存入同一材料会被元件吸收，每张元件待机消耗 8 AE/t。发放权限由 JEI 和服务端决定。
+三端安装 AE2 并开启 JEI 作弊模式后，悬停物品或流体按 `Ctrl+Shift+左键`，松手时通过 JEI 请求发放 `sh_common_lib:infinity_cell`。同时安装对应版本的 Mekanism 和 Applied Mekanistics 后，可绑定化学品。每张元件只绑定一种材料，物品和流体会保留 Forge NBT 或 NeoForge 数据组件。物品栏图标的左上角显示绑定材料的模型或原材质。元件工作台无法调整或追加材料。放入 ME 驱动器后可无限取出绑定的材料，存入同一材料会被元件吸收，每张元件待机消耗 8 AE/t。发放权限由 JEI 和服务端决定。
 
-此功能以 JEI 19.69.0.456、AE2 19.2.18、Mekanism 10.7.19.85 和 Applied Mekanistics 1.6.3 构建。离线构建时，可以用 `-PmekanismJar=<JAR 路径>` 和 `-PappliedMekanisticsJar=<JAR 路径>` 指向本地副本。
+Forge 使用 Applied Mekanistics 1.4.3，NeoForge 1.21.1 使用 1.6.3，NeoForge 26.1.2 使用 Version Locked 1.6.0-port1。构建时可用 `-PappliedMekanisticsJar=<JAR 路径>` 指向本地依赖。
+
+Forge 1.20.1、NeoForge 1.21.1 和 NeoForge 26.1.2 的 JEI 素材列表和书签会在可下单物品或流体的右下角显示 6×6 的 SHBUI 角标。打开 ME 储存终端时使用终端同步的数据。在普通背包、工作台等页面，服务端优先读取玩家交互范围内最近的在线 ME 储存终端，其次读取背包中能连接的无线终端。联机时，后台同步需要服务端也安装支持此功能的 SHCLIB。「JEI 搜索 → AE2 可下单角标」可以关闭显示。
 
 ## 密封货匣
 

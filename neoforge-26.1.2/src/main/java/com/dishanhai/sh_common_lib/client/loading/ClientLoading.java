@@ -39,6 +39,7 @@ public final class ClientLoading {
     public static void initialize(Path configDirectory, boolean hasJei) {
         var directory = configDirectory.resolve("sh_common_lib");
         com.dishanhai.sh_common_lib.client.jei.JeiSearchPreferences.initialize(directory);
+        com.dishanhai.sh_common_lib.client.item.ArtisanAppearancePreferences.initialize(directory);
         settings = new LoadingSettings(directory.resolve("loading.properties"));
         ModLoadingStatus.initialize(hasJei);
         reports = new LoadingReports(directory.resolve("loading_reports"));
@@ -86,7 +87,7 @@ public final class ClientLoading {
     }
 
     public static void screenInitialized(Screen screen) {
-        if (!animation() && !profiling()) return;
+        if (screen instanceof LevelLoadingScreen || (!animation() && !profiling())) return;
         var client = Minecraft.getInstance();
         Stage next = stageOf(screen);
         if (next != null && (stage != null || client.level == null)) transition(next);
@@ -121,14 +122,20 @@ public final class ClientLoading {
         }
     }
 
+    public static void worldProgress(boolean hasServerProgress) {
+        if (animation() || profiling()) transition(hasServerProgress ? Stage.CHUNKS : Stage.TERRAIN);
+    }
+
     /** Draws the visual replacement after vanilla has drawn its background and updated narration. */
-    public static boolean renderWorldChunks(GuiGraphicsExtractor graphics, float fraction) {
-        if (stage != Stage.CHUNKS || !animation() || graphics.guiWidth() < 56 || graphics.guiHeight() < 48) return false;
-        int progress = Math.round(Math.clamp(fraction, 0f, 1f) * 100);
+    public static boolean renderWorldProgress(GuiGraphicsExtractor graphics, boolean hasServerProgress, float fraction) {
+        worldProgress(hasServerProgress);
+        if (!animation() || graphics.guiWidth() < 56 || graphics.guiHeight() < 48) return false;
+        int progress = hasServerProgress ? Math.round(Math.clamp(fraction, 0f, 1f) * 100) : 0;
+        Component detail = hasServerProgress
+                ? Component.translatable("screen.sh_common_lib.loading.chunk_progress", label("chunks"), progress)
+                : label("terrain");
         int top = (graphics.guiHeight() - 48) / 2;
-        boolean rendered = render(graphics, top, label("world"),
-                Component.translatable("screen.sh_common_lib.loading.chunk_progress", label("chunks"), progress),
-                progress == 0 ? Float.NaN : progress / 100f, stageTime);
+        boolean rendered = render(graphics, top, label("world"), detail, progress == 0 ? Float.NaN : progress / 100f, stageTime);
         if (rendered) renderModStatus(graphics, top + 52, false);
         return rendered;
     }
@@ -153,7 +160,7 @@ public final class ClientLoading {
 
     private static Stage stageOf(Screen screen) {
         if (screen instanceof ConnectScreen) return Stage.CONNECT;
-        if (screen instanceof LevelLoadingScreen) return Stage.CHUNKS;
+        if (screen instanceof LevelLoadingScreen) return Stage.TERRAIN;
         if (screen != null && screen.getTitle().getContents() instanceof TranslatableContents title) {
             return switch (title.getKey()) {
                 case "selectWorld.data_read" -> Stage.LOCAL_DATA;
@@ -228,7 +235,7 @@ public final class ClientLoading {
     }
 
     private enum Stage {
-        LOCAL_DATA("local_data"), LOCAL_RESOURCES("resources"), CONNECT("connect"), CHUNKS("chunks");
+        LOCAL_DATA("local_data"), LOCAL_RESOURCES("resources"), CONNECT("connect"), CHUNKS("chunks"), TERRAIN("terrain");
 
         private final String key;
 

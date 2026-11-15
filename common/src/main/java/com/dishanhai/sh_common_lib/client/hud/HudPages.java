@@ -38,4 +38,18 @@ final class HudPages {
     }
 
     record Result<T>(List<List<T>> pages, int omitted) {}
+
+    static final class Widths {
+        private int[] maximums;
+
+        int reserve(int page, int pageCount, int measured, int limit) {
+            if (maximums == null || maximums.length != pageCount) maximums = new int[pageCount];
+            maximums[page] = Math.max(maximums[page], measured);
+            return Math.min(maximums[page], limit);
+        }
+
+        void clear() {
+            maximums = null;
+        }
+    }
 }

@@ -2,6 +2,7 @@ package com.dishanhai.sh_common_lib.neoforge;
 
 import com.dishanhai.sh_common_lib.compat.jei.JeiShortcuts;
 import com.dishanhai.sh_common_lib.client.jei.JeiSearchAssistant;
+import com.dishanhai.sh_common_lib.client.jei.JeiSearchProvider;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.component.DataComponentPatch;
 import net.minecraft.nbt.CompoundTag;
@@ -22,11 +23,14 @@ final class NeoForgeJeiShortcuts {
     private NeoForgeJeiShortcuts() {}
 
     static void register() {
+        NeoForgeHotWordsNetwork.bindClient();
+        JeiSearchProvider.initialize(ModList.get().isLoaded("jeiguess"));
         NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, (ClientChatReceivedEvent event) -> {
             if (!event.isSystem()) JeiSearchAssistant.chatReceived(event.getMessage().getString());
         });
         NeoForge.EVENT_BUS.addListener(EventPriority.HIGHEST, (ScreenEvent.KeyPressed.Pre event) -> {
-            if (JeiSearchAssistant.keyPressed(event.getScreen(), event.getKeyCode(), event.getModifiers())
+            if (JeiShortcuts.openHoveredRecipe(event.getScreen(), event.getKeyCode(), event.getScanCode())
+                    || JeiSearchAssistant.keyPressed(event.getScreen(), event.getKeyCode(), event.getModifiers())
                     || JeiShortcuts.keyPressed(event.getScreen(), event.getKeyCode(), event.getModifiers(),
                     true, DATA_KIND, NeoForgeJeiShortcuts::serializeData)) {
                 event.setCanceled(true);
@@ -40,14 +44,16 @@ final class NeoForgeJeiShortcuts {
             if (JeiSearchAssistant.mouseScrolled(event.getScreen(), event.getMouseX(), event.getMouseY(), event.getScrollDeltaY()))
                 event.setCanceled(true);
         });
-        NeoForge.EVENT_BUS.addListener(EventPriority.HIGHEST, (ScreenEvent.CharacterTyped.Pre event) ->
-                JeiSearchAssistant.characterTyped(event.getScreen()));
+        NeoForge.EVENT_BUS.addListener(EventPriority.HIGHEST, (ScreenEvent.CharacterTyped.Pre event) -> {
+            if (JeiShortcuts.suppressRecipeCharacter(event.getScreen())) event.setCanceled(true);
+            else JeiSearchAssistant.characterTyped(event.getScreen());
+        });
         NeoForge.EVENT_BUS.addListener(EventPriority.HIGHEST, (ScreenEvent.Render.Pre event) ->
                 JeiSearchAssistant.beforeRender(event.getScreen()));
         NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, (ScreenEvent.Render.Post event) ->
                 JeiSearchAssistant.render(event.getScreen(), event.getGuiGraphics(), event.getMouseX(), event.getMouseY()));
         NeoForge.EVENT_BUS.addListener((ScreenEvent.Closing event) -> JeiSearchAssistant.close(event.getScreen()));
-        NeoForge.EVENT_BUS.addListener((ClientTickEvent.Post event) -> JeiSearchAssistant.tick());
+        NeoForge.EVENT_BUS.addListener((ClientTickEvent.Post event) -> { JeiSearchProvider.tick(); JeiSearchAssistant.tick(); });
         var infinityCells = ModList.get().isLoaded("ae2") ? NeoForgeJeiInfinityCells.register() : null;
         NeoForge.EVENT_BUS.addListener((RenderTooltipEvent.GatherComponents event) ->
                 JeiShortcuts.appendTooltipHints(event.getItemStack(), event.getTooltipElements(), true, DATA_KIND,

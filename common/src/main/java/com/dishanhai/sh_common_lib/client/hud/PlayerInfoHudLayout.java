@@ -29,19 +29,10 @@ final class PlayerInfoHudLayout {
     private final List<Row> rows;
     private final List<UiHudPanel.Row> shortcuts;
     private final Component pageKeys;
-    private final Panel fullPanel;
     private final boolean titles, separators;
     private final Map<HudGroups.Group, Row> headings;
     private Viewport lastViewport;
     private View lastView;
-
-    PlayerInfoHudLayout(Font font, List<Row> rows, List<UiHudPanel.Row> shortcuts) {
-        this(font, rows, shortcuts, Component.translatable(LANG + "page_keys_default"), true, true);
-    }
-
-    PlayerInfoHudLayout(Font font, List<Row> rows, List<UiHudPanel.Row> shortcuts, Component pageKeys) {
-        this(font, rows, shortcuts, pageKeys, true, true);
-    }
 
     PlayerInfoHudLayout(Font font, List<Row> rows, List<UiHudPanel.Row> shortcuts, Component pageKeys,
                         boolean titles, boolean separators) {
@@ -51,16 +42,15 @@ final class PlayerInfoHudLayout {
         this.pageKeys = pageKeys;
         this.titles = titles;
         this.separators = separators;
-        this.headings = headings(Integer.MAX_VALUE);
-        fullPanel = panel(this.rows, null, headings);
-    }
-
-    View fit(int width, int height, int usableHeight, int scalePercent, double guiScale) {
-        return fit(width, height, usableHeight, scalePercent, guiScale, 0);
+        this.headings = headings();
     }
 
     View fit(int width, int height, int usableHeight, int scalePercent, double guiScale, int page) {
-        var viewport = new Viewport(width, height, usableHeight, scalePercent, guiScale, page);
+        return fit(width, height, usableHeight, scalePercent, guiScale, page, null);
+    }
+
+    View fit(int width, int height, int usableHeight, int scalePercent, double guiScale, int page, HudPages.Widths pageWidths) {
+        var viewport = new Viewport(width, height, usableHeight, scalePercent, guiScale, page, pageWidths);
         if (!viewport.equals(lastViewport)) {
             lastView = layout(viewport);
             lastViewport = viewport;
@@ -73,18 +63,17 @@ final class PlayerInfoHudLayout {
         float minimum = Math.min(requested, NATIVE_TEXT_SCALE);
         int budgetWidth = (int) (viewport.width() * WIDTH_SHARE);
         int budgetHeight = Math.min(viewport.usableHeight(), (int) (viewport.height() * HEIGHT_SHARE));
-        if (fits(fullPanel, budgetWidth, budgetHeight, minimum)) {
-            return place(fullPanel, viewport, budgetWidth, budgetHeight, requested, 0, 1);
-        }
-
         // Measure the panel's fixed icon column, padding and margins at the minimum readable scale.
-        var empty = new UiHudPanel(font, List.of()).fit(budgetWidth, Integer.MAX_VALUE, minimum);
+        var emptyPanel = new UiHudPanel(font, List.of());
+        var empty = emptyPanel.fit(budgetWidth, Integer.MAX_VALUE, minimum);
         int textWidth = (int) Math.floor(empty.travelX() / (double) minimum);
+        var emptySize = emptyPanel.fit(Integer.MAX_VALUE, Integer.MAX_VALUE, 1f);
         var shortened = rows.stream().map(row -> new Row(truncate(row.content(), textWidth), row.priority(), row.group())).toList();
-        var shortHeadings = headings(textWidth);
-        var shortenedPanel = panel(shortened, null, shortHeadings);
+        var shortHeadings = new EnumMap<HudGroups.Group, Row>(HudGroups.Group.class);
+        headings.forEach((group, row) -> shortHeadings.put(group, new Row(truncate(row.content(), textWidth), 0, group)));
+        var shortenedPanel = panel(shortened, null, shortHeadings, textWidth);
         if (rows.isEmpty() || fits(shortenedPanel, budgetWidth, budgetHeight, minimum)) {
-            return place(shortenedPanel, viewport, budgetWidth, budgetHeight, requested, 0, 1);
+            return place(shortenedPanel, viewport, budgetWidth, budgetHeight, requested, 0, 1, emptySize.width(), textWidth);
         }
 
         // Reserve one line for the notice before testing each row in retention order.
@@ -92,15 +81,13 @@ final class PlayerInfoHudLayout {
         int hidden = rows.size();
         String noticeKey = "space_limited";
         var notice = notice(noticeKey, hidden);
-        if (!fits(panel(List.of(), notice, shortHeadings), budgetWidth, budgetHeight, minimum)) {
+        if (font.width(notice.text()) > textWidth) {
             noticeKey = "space_limited_short";
             notice = notice(noticeKey, hidden);
         }
         // UiHudPanel has uniform-height rows and its width is the widest label. Measure each
         // candidate label once instead of rebuilding and remeasuring a panel for every trial.
-        var emptyPanel = new UiHudPanel(font, List.of());
-        var emptySize = emptyPanel.fit(Integer.MAX_VALUE, Integer.MAX_VALUE, 1f);
-        var baseSize = panel(List.of(), null, shortHeadings).body().fit(Integer.MAX_VALUE, Integer.MAX_VALUE, 1f);
+        var baseSize = panel(List.of(), null, shortHeadings, textWidth).body().fit(Integer.MAX_VALUE, Integer.MAX_VALUE, 1f);
         int rowHeight = new UiHudPanel(font, List.of(rows.get(0).content())).fit(Integer.MAX_VALUE, Integer.MAX_VALUE, 1f).height() - emptySize.height();
         // A near-zero scale keeps the empty panel at one pixel and avoids rounding at the viewport edge.
         var available = emptyPanel.fit(budgetWidth, budgetHeight, Float.MIN_NORMAL);
@@ -113,30 +100,32 @@ final class PlayerInfoHudLayout {
         if (!pages.pages().isEmpty()) {
             int selected = Math.floorMod(viewport.page(), pages.pages().size());
             var pageFooter = truncate(pageNotice(selected + 1, pages.pages().size(), pages.omitted()), textWidth);
-            return place(panel(pages.pages().get(selected), pageFooter, shortHeadings), viewport, budgetWidth, budgetHeight,
-                    requested, pages.omitted(), pages.pages().size());
+            return place(panel(pages.pages().get(selected), pageFooter, shortHeadings, textWidth), viewport, budgetWidth, budgetHeight,
+                    requested, pages.omitted(), pages.pages().size(), emptySize.width(), textWidth);
         }
-        var result = TextFit.selectRows(shortened, Row::priority, rowFit, new Row(notice, 0, HudGroups.Group.CONTROLS));
+        var result = TextFit.selectRows(shortened, Row::priority, rowFit, new Row(truncate(notice, textWidth), 0, HudGroups.Group.CONTROLS));
         hidden = result.omitted();
-        return place(panel(result.visible(), notice(noticeKey, hidden), shortHeadings),
-                viewport, budgetWidth, budgetHeight, requested, hidden, 1);
+        return place(panel(result.visible(), truncate(notice(noticeKey, hidden), textWidth), shortHeadings, textWidth),
+                viewport, budgetWidth, budgetHeight, requested, hidden, 1, emptySize.width(), textWidth);
     }
 
     private UiHudPanel.Row truncate(UiHudPanel.Row row, int width) {
         var text = HudText.truncate(font, row.text(), width);
+        if (text == row.text() && font.width(text) > width) text = Component.empty();
         return text == row.text() ? row : new UiHudPanel.Row(row.icon(), row.iconColor(), text);
     }
 
-    private Map<HudGroups.Group, Row> headings(int width) {
+    private Map<HudGroups.Group, Row> headings() {
         var result = new EnumMap<HudGroups.Group, Row>(HudGroups.Group.class);
         if (!titles) return result;
         var groups = java.util.EnumSet.noneOf(HudGroups.Group.class);
         for (var row : rows) groups.add(row.group());
         groups.add(HudGroups.Group.CONTROLS);
         for (var group : groups) {
-            var text = Component.translatable(LANG + "group." + group.name().toLowerCase(Locale.ROOT)).withStyle(net.minecraft.ChatFormatting.BOLD);
+            var text = Component.translatable(LANG + "group." + group.name().toLowerCase(Locale.ROOT))
+                    .withStyle(net.minecraft.ChatFormatting.BOLD);
             var content = new UiHudPanel.Row(GraphicIcon.INFO, 0x00000000, text);
-            result.put(group, new Row(width == Integer.MAX_VALUE ? content : truncate(content, width), 0, group));
+            result.put(group, new Row(content, 0, group));
         }
         return result;
     }
@@ -146,26 +135,37 @@ final class PlayerInfoHudLayout {
                 headings::get, lines && separators);
     }
 
-    private Panel panel(List<Row> rows, UiHudPanel.Row notice, Map<HudGroups.Group, Row> headings) {
+    private Panel panel(List<Row> rows, UiHudPanel.Row notice, Map<HudGroups.Group, Row> headings, int textWidth) {
         var entries = new ArrayList<Row>(rows);
         if (notice != null) entries.add(new Row(notice, 0, HudGroups.Group.CONTROLS));
-        for (var shortcut : shortcuts) entries.add(new Row(shortcut, 0, HudGroups.Group.CONTROLS));
+        for (var shortcut : shortcuts) entries.add(new Row(truncate(shortcut, textWidth), 0, HudGroups.Group.CONTROLS));
         var plan = sections(entries, headings, true, true);
-        return new Panel(new UiHudPanel(font, plan.rows().stream().map(Row::content).toList()), plan.boundaries());
+        var visible = plan.rows().stream().map(Row::content).toList();
+        return new Panel(new UiHudPanel(font, visible), visible, plan.boundaries());
     }
 
     private static boolean fits(Panel panel, int width, int height, float scale) {
         return panel.body().fit(width, height, scale).scale() >= scale;
     }
 
-    private static View place(Panel panel, Viewport viewport, int budgetWidth, int budgetHeight,
-                              float requested, int hidden, int pages) {
-        float limit = panel.body().fit(budgetWidth, budgetHeight, requested).scale();
+    private View place(Panel panel, Viewport viewport, int budgetWidth, int budgetHeight,
+                       float requested, int hidden, int pages, int emptyWidth, int textWidth) {
+        var body = panel.body();
+        int width = body.fit(Integer.MAX_VALUE, Integer.MAX_VALUE, 1f).width();
+        if (viewport.pageWidths() != null) {
+            int measured = width - emptyWidth;
+            int page = Math.floorMod(viewport.page(), pages);
+            int reserved = viewport.pageWidths().reserve(page, pages, measured, textWidth);
+            if (reserved > measured) {
+                body = new UiHudPanel(font, panel.rows(), reserved);
+                width = emptyWidth + reserved;
+            }
+        }
+        float limit = body.fit(budgetWidth, budgetHeight, requested).scale();
         float minimum = Math.min(NATIVE_TEXT_SCALE, limit);
         float scale = new TextFit.Scale(requested, minimum, viewport.guiScale()).within(limit);
         // The budget sets the panel size. The entire usable viewport determines its travel.
-        int width = panel.body().fit(Integer.MAX_VALUE, Integer.MAX_VALUE, 1f).width();
-        return new View(panel.body(), panel.body().fit(viewport.width(), viewport.usableHeight(), scale),
+        return new View(body, body.fit(viewport.width(), viewport.usableHeight(), scale),
                 hidden, pages, panel.boundaries(), width);
     }
 
@@ -180,7 +180,7 @@ final class PlayerInfoHudLayout {
     }
 
     record Row(UiHudPanel.Row content, int priority, HudGroups.Group group) {}
-    private record Panel(UiHudPanel body, List<Integer> boundaries) {}
+    private record Panel(UiHudPanel body, List<UiHudPanel.Row> rows, List<Integer> boundaries) {}
     record View(UiHudPanel panel, UiHudPanel.Placement placement, int hidden, int pages,
                 List<Integer> boundaries, int panelWidth) {
         void drawSeparators(GuiGraphics graphics, Font font, int x, int y, UiPreferences preferences) {
@@ -188,5 +188,6 @@ final class PlayerInfoHudLayout {
                     preferences.highContrast(), LiquidGlassTheme.textColor());
         }
     }
-    private record Viewport(int width, int height, int usableHeight, int scalePercent, double guiScale, int page) {}
+    private record Viewport(int width, int height, int usableHeight, int scalePercent, double guiScale, int page,
+                            HudPages.Widths pageWidths) {}
 }

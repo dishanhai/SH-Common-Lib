@@ -12,6 +12,9 @@ import com.dishanhai.sh_common_lib.api.client.ulk.SearchHistory;
 import com.dishanhai.sh_common_lib.api.client.ulk.SearchMatch;
 import com.dishanhai.sh_common_lib.api.client.ulk.SearchRanking;
 import com.dishanhai.sh_common_lib.api.client.ulk.SearchSources;
+import com.dishanhai.sh_common_lib.api.client.ulk.SearchTagNames;
+import com.dishanhai.sh_common_lib.api.client.ulk.ClientHotWords;
+import com.dishanhai.sh_common_lib.api.client.ulk.SearchModNames;
 import com.dishanhai.sh_common_lib.compat.jei.JeiShortcuts;
 import mezz.jei.api.runtime.IJeiRuntime;
 import net.minecraft.client.Minecraft;
@@ -44,8 +47,10 @@ public final class JeiSearchAssistant {
     private static final int MAX_PREVIEWS = 128;
     private static final SearchCompletionUndo UNDO = new SearchCompletionUndo();
     private static final PopupMotion MOTION = new PopupMotion();
+    private static final SearchPreviewGate PREVIEW_GATE = new SearchPreviewGate(150);
     private static IJeiRuntime failureRuntime;
     private static boolean failed;
+    private static boolean suspended;
     private static Object overlay;
     private static Field searchField;
     private static boolean fieldChecked;
@@ -69,13 +74,17 @@ public final class JeiSearchAssistant {
     private static final AsyncClientSearch<JeiSearchBridge.Ingredient> SEARCH = new AsyncClientSearch<>(SEARCH_EXECUTOR, true);
     private static List<ClientSearch.Suggestion<JeiSearchBridge.Ingredient>> suggestions = List.of();
     private static List<String> historyItems = List.of();
+    private static List<SearchSources.MixedItem> mixedItems = List.of();
     private static Map<String, JeiSearchBridge.Ingredient> ingredientsByName = Map.of();
+    private static Map<String, String> tagDisplayNames = Map.of();
+    private static Map<String, String> modDisplayNames = Map.of();
     private static boolean historyMode;
     private static boolean helpExpanded;
-    private static int historyGroup;
+    private static int historyGroup = 6;
     private static final SearchSources SOURCES = new SearchSources(128, new Random());
     private static final FtbQuestSearchSource QUESTS = FtbQuestSearchSource.create();
     private static Object sourceConnection;
+    private static long nextGuessHotWords = Long.MIN_VALUE;
     private static Object rankedSource;
     private static SearchHistory rankedHistory;
     private static long rankedHistoryRevision = Long.MIN_VALUE;
@@ -172,7 +181,12 @@ public final class JeiSearchAssistant {
             } else historyItems = switch (historyGroup) {
                 case 3 -> SOURCES.random();
                 case 4 -> SOURCES.quest();
-                default -> SOURCES.chat();
+                case 5 -> SOURCES.chat();
+                case 7 -> ClientHotWords.words();
+                default -> {
+                    mixedItems = mixed(options);
+                    yield mixedItems.stream().map(SearchSources.MixedItem::text).toList();
+                }
             };
             suggestions = List.of();
             suggestionQuery = query;
@@ -189,7 +203,8 @@ public final class JeiSearchAssistant {
         }
         int itemCount = itemCount();
         if (!historyMode && itemCount > 0) drawGhost(graphics, box, query);
-        boolean showHints = options.hints() && (itemCount > 0 || !groups.isEmpty());
+        boolean showHelpEntry = options.hints() && (itemCount > 0 || !groups.isEmpty());
+        boolean showHints = showHelpEntry && helpExpanded;
         boolean showFeedback = feedback != null && System.nanoTime() < feedbackUntil;
         if (itemCount == 0 && !showHints && !showFeedback) {
             rowsDrawn = 0;
@@ -208,19 +223,27 @@ public final class JeiSearchAssistant {
             String label = historyMode ? historyItems.get(i) : suggestions.get(i).label();
             boolean favorite = history != null && options.history() && history.isFavorite(completion(i));
             Component text = highlight(label, historyMode ? "" : query);
-            if (!historyMode && label.startsWith("@") && !suggestions.get(i).value().modName().isBlank())
-                text = Component.translatable("sh_common_lib.jei.search.mod_display", text, suggestions.get(i).value().modName());
+            if (historyMode && historyGroup == 6)
+                text = Component.translatable("sh_common_lib.jei.search.mixed_item",
+                        Component.translatable("sh_common_lib.jei.search.source_" + mixedItems.get(i).source())
+                                .withStyle(sourceColor(mixedItems.get(i).source())), text);
+            if (!historyMode && label.startsWith("@") && !modDisplayNames.getOrDefault(label.substring(1), suggestions.get(i).value().modName()).isBlank())
+                text = Component.translatable("sh_common_lib.jei.search.mod_display", text,
+                        modDisplayNames.getOrDefault(label.substring(1), suggestions.get(i).value().modName()));
+            if (!historyMode && label.startsWith("#") && tagDisplayNames.containsKey(label.substring(1)))
+                text = Component.translatable("sh_common_lib.jei.search.tag_display", text, tagDisplayNames.get(label.substring(1)));
             rows.add(new UiHudPanel.Row(UiHudPanel.icon(favorite ? "favorite" : historyMode ? "history" : "search"), favorite ? 0xffffd175 : 0xffa9caff, i == selected
                     ? Component.translatable("sh_common_lib.jei.search.first", text) : text));
         }
+        if (itemCount > 0) rows.add(new UiHudPanel.Row(UiHudPanel.icon("info"), 0xffd5deeb,
+                Component.translatable("sh_common_lib.jei.search.page_counter",
+                        SearchPaging.page(selected, MAX_ROWS) + 1, SearchPaging.pages(itemCount, MAX_ROWS))));
         if (showFeedback) rows.add(new UiHudPanel.Row(UiHudPanel.icon("info"), 0xffa9caff, feedback));
         if (showHints && itemCount > 0) rows.add(new UiHudPanel.Row(UiHudPanel.icon("keyboard"), 0xffd5deeb,
                 Component.translatable("sh_common_lib.jei.search.hints")));
-        if (showHints && helpExpanded && itemCount > 0) rows.add(new UiHudPanel.Row(UiHudPanel.icon("keyboard"), 0xffd5deeb,
-                Component.translatable("sh_common_lib.jei.search.page_hint", SearchPaging.page(selected, MAX_ROWS) + 1, SearchPaging.pages(itemCount, MAX_ROWS))));
-        if (showHints && helpExpanded && !historyMode && itemCount > 0) rows.add(new UiHudPanel.Row(UiHudPanel.icon("keyboard"), 0xffd5deeb,
+        if (showHints && !historyMode && itemCount > 0) rows.add(new UiHudPanel.Row(UiHudPanel.icon("keyboard"), 0xffd5deeb,
                 Component.translatable("sh_common_lib.jei.search.recipe_hint")));
-        if (showHints && helpExpanded && itemCount > 0) rows.add(new UiHudPanel.Row(UiHudPanel.icon("reset"), 0xffd5deeb,
+        if (showHints && itemCount > 0) rows.add(new UiHudPanel.Row(UiHudPanel.icon("reset"), 0xffd5deeb,
                 Component.translatable("sh_common_lib.jei.search.undo_hint")));
         if (showHints && (options.history() || historyMode)) rows.add(new UiHudPanel.Row(UiHudPanel.icon("history"), 0xffd5deeb,
                 historyMode ? Component.translatable(switch (historyGroup) {
@@ -229,11 +252,13 @@ public final class JeiSearchAssistant {
                     case 3 -> "sh_common_lib.jei.search.group_random";
                     case 4 -> "sh_common_lib.jei.search.group_quest";
                     case 5 -> "sh_common_lib.jei.search.group_chat";
+                    case 6 -> "sh_common_lib.jei.search.group_mixed";
+                    case 7 -> "sh_common_lib.jei.search.group_hot";
                     default -> "sh_common_lib.jei.search.group_recent";
                 }) : Component.translatable("sh_common_lib.jei.search.history_only")));
-        if (showHints && helpExpanded && options.history() && itemCount > 0 && (!historyMode || historyGroup < 3)) rows.add(new UiHudPanel.Row(UiHudPanel.icon("history"), 0xffd5deeb,
+        if (showHints && options.history() && itemCount > 0 && (!historyMode || historyGroup < 3)) rows.add(new UiHudPanel.Row(UiHudPanel.icon("history"), 0xffd5deeb,
                 Component.translatable(historyMode ? "sh_common_lib.jei.search.manage_history" : "sh_common_lib.jei.search.manage_candidate")));
-        if (showHints) rows.add(new UiHudPanel.Row(UiHudPanel.icon("keyboard"), 0xffd5deeb,
+        if (showHelpEntry) rows.add(new UiHudPanel.Row(UiHudPanel.icon("keyboard"), 0xffd5deeb,
                 Component.translatable(helpExpanded ? "sh_common_lib.jei.search.help_close" : "sh_common_lib.jei.search.help_open")));
         var panel = new UiHudPanel(font, rows);
         lastPanel = panel;
@@ -241,8 +266,8 @@ public final class JeiSearchAssistant {
         PopupArea.Rect host = current instanceof AbstractContainerScreen<?> container
                 ? new PopupArea.Rect(container.getLeftPos(), container.getTopPos(), container.getImageWidth(), container.getImageHeight()) : null;
         var desired = panel.fit(current.width, current.height, 1f);
-        area = PopupArea.leftOf(current.width, current.height, box.getX(), host, 4, desired.width(), desired.height());
-        if (area.width() < 64 || area.height() < 30) { rowsDrawn = 0; return; }
+        area = JeiSearchLayout.candidates(current.width, current.height, box.getX(), host, desired.width(), desired.height());
+        if (area == null) { rowsDrawn = 0; return; }
         var placement = panel.fit(area.width() + 8, area.height() + 8, 1f);
         width = placement.width();
         height = placement.height();
@@ -258,8 +283,12 @@ public final class JeiSearchAssistant {
         contentVisible = frame.progress() >= 0.5f;
         if (fw <= 0 || fh <= 0) return;
         panel.drawReveal(graphics, font, preferences, x, y, scale, lastSelectedRow, fx, fy, fw, fh, frame.progress());
-        if (frame.acceptsInput() && options.preview() && selectedIngredient() != null) {
-            try { drawPreview(graphics, current, preferences, mouseX, mouseY); }
+        boolean nativeTooltip = selectedIngredient() != null && JeiShortcuts.hovered(current, mouseX, mouseY).isPresent();
+        boolean previewVisible = false;
+        if (frame.acceptsInput() && options.preview() && selectedIngredient() != null
+                && PREVIEW_GATE.ready(selectedIngredient().key(), System.nanoTime() / 1_000_000L)) {
+            graphics.nextStratum();
+            try { previewVisible = drawPreview(graphics, current, preferences, mouseX, mouseY, !nativeTooltip); }
             catch (RuntimeException | LinkageError error) {
                 previewKey = selectedIngredient().key();
                 preview = null;
@@ -268,6 +297,10 @@ public final class JeiSearchAssistant {
                 previewLayout = null;
                 LOGGER.warn("Could not render JEI recipe preview", error);
             }
+        }
+        if (frame.acceptsInput() && selectedIngredient() != null
+                && !nativeTooltip && !previewVisible) {
+            renderSelectedTooltip(graphics, x - 4);
         }
     }
 
@@ -281,7 +314,9 @@ public final class JeiSearchAssistant {
         var box = activeBox();
         if (box == null || current != Minecraft.getInstance().screen) return false;
         var options = JeiSearchPreferences.current();
-        if (!dismissed && options.hud() && options.hints() && key == GLFW.GLFW_KEY_F1 && modifiers == 0) {
+        if (!dismissed && options.hud() && options.hints() && modifiers == 0
+                && (key == GLFW.GLFW_KEY_F1 || key == GLFW.GLFW_KEY_F3)
+                && (itemCount() > 0 || !enabledGroups(options).isEmpty())) {
             helpExpanded = !helpExpanded;
             return true;
         }
@@ -399,6 +434,12 @@ public final class JeiSearchAssistant {
         try {
             var options = JeiSearchPreferences.current();
             Object connection = Minecraft.getInstance().getConnection();
+            var listener = Minecraft.getInstance().getConnection();
+            ClientHotWords.update(listener == null ? null : listener.getConnection(), options.hotSource(), options.hotShare(), System.nanoTime() / 1_000_000L);
+            if (options.hotSource() && listener != null && JeiSearchProvider.installed() && System.nanoTime() >= nextGuessHotWords) {
+                nextGuessHotWords = System.nanoTime() + 5_000_000_000L;
+                ClientHotWords.acceptExternal(listener.getConnection(), JeiGuessCompatibility.hotWords());
+            }
             SOURCES.session(connection);
             if (sourceConnection != connection) {
                 sourceConnection = connection;
@@ -433,7 +474,26 @@ public final class JeiSearchAssistant {
         if (options.randomSource()) groups.add(3);
         if (options.questSource()) groups.add(4);
         if (options.chatSource()) groups.add(5);
+        if (options.hotSource()) groups.add(7);
+        if (groups.size() > 1) groups.add(0, 6);
         return groups;
+    }
+
+    private static List<SearchSources.MixedItem> mixed(JeiSearchSettings options) {
+        var groups = new ArrayList<SearchSources.Group>();
+        if (options.history()) {
+            loadHistory();
+            if (history != null) groups.add(new SearchSources.Group("favorite", history.favorites()));
+        }
+        if (options.questSource()) groups.add(new SearchSources.Group("quest", SOURCES.quest()));
+        if (options.history() && history != null) {
+            groups.add(new SearchSources.Group("recent", history.entries()));
+            groups.add(new SearchSources.Group("frequent", history.frequent()));
+        }
+        if (options.chatSource()) groups.add(new SearchSources.Group("chat", SOURCES.chat()));
+        if (options.hotSource()) groups.add(new SearchSources.Group("hot", ClientHotWords.words()));
+        if (options.randomSource()) groups.add(new SearchSources.Group("random", SOURCES.random()));
+        return SearchSources.mix(groups, 3, 18);
     }
 
     public static boolean mouseClicked(Screen current, double mouseX, double mouseY, int button) {
@@ -499,19 +559,25 @@ public final class JeiSearchAssistant {
 
     /** Flush the current query and release JEI-owned objects before its runtime is discarded. */
     public static void runtimeUnavailable() {
-        if (screen != null) close(screen);
+        if (screen != null && JeiSearchPreferences.current().enabled()) close(screen);
+        else { wasFocused = false; finish(); }
         overlay = null;
         searchField = null;
         hideNativeCompletion = null;
         SEARCH.replace(List.of());
         SOURCES.session(null);
+        ClientHotWords.reset();
+        nextGuessHotWords = Long.MIN_VALUE;
         SOURCES.replaceAvailable(List.of());
         ingredientsByName = Map.of();
+        tagDisplayNames = Map.of();
+        modDisplayNames = Map.of();
         sourceConnection = null;
         if (QUESTS != null) QUESTS.reset(SOURCES);
         SEARCH.request("", MAX_ROWS);
         suggestions = List.of();
         historyItems = List.of();
+        mixedItems = List.of();
         historyMode = false;
         preview = null;
         previews = List.of();
@@ -537,6 +603,11 @@ public final class JeiSearchAssistant {
     }
 
     private static boolean available() {
+        if (!JeiSearchPreferences.current().enabled()) {
+            if (!suspended) { suspended = true; runtimeUnavailable(); }
+            return false;
+        }
+        suspended = false;
         IJeiRuntime runtime = JeiShortcuts.runtime();
         if (runtime != failureRuntime) {
             failureRuntime = runtime;
@@ -545,7 +616,7 @@ public final class JeiSearchAssistant {
             wasFocused = false;
             screen = null;
         }
-        return runtime != null && !failed;
+        return runtime != null && !failed && JeiSearchProvider.useShclib();
     }
 
     private static void fail(Throwable error) {
@@ -562,6 +633,8 @@ public final class JeiSearchAssistant {
         dismissed = false;
         UNDO.clear();
         MOTION.reset();
+        PREVIEW_GATE.reset();
+        helpExpanded = false;
         lastPanel = null;
     }
 
@@ -593,7 +666,7 @@ public final class JeiSearchAssistant {
 
     private static JeiSearchBridge.Ingredient selectedIngredient() {
         if (selected < 0 || selected >= itemCount()) return null;
-        if (historyMode) return historyGroup < 3 ? null : ingredientsByName.get(completion(selected));
+        if (historyMode) return ingredientsByName.get(completion(selected));
         return isIngredientSuggestion(selected) ? suggestions.get(selected).value() : null;
     }
 
@@ -604,6 +677,24 @@ public final class JeiSearchAssistant {
         return Component.empty().append(Component.literal(label.substring(0, range.start())))
                 .append(Component.literal(label.substring(range.start(), range.end())).withStyle(net.minecraft.ChatFormatting.AQUA))
                 .append(Component.literal(label.substring(range.end())));
+    }
+
+    private static net.minecraft.ChatFormatting sourceColor(String source) {
+        return switch (source) {
+            case "quest" -> net.minecraft.ChatFormatting.GOLD;
+            case "favorite" -> net.minecraft.ChatFormatting.LIGHT_PURPLE;
+            case "frequent" -> net.minecraft.ChatFormatting.AQUA;
+            case "recent" -> net.minecraft.ChatFormatting.GRAY;
+            case "chat" -> net.minecraft.ChatFormatting.YELLOW;
+            case "hot" -> net.minecraft.ChatFormatting.RED;
+            default -> net.minecraft.ChatFormatting.GREEN;
+        };
+    }
+
+    public static boolean helpKeyHeld() {
+        long window = Minecraft.getInstance().getWindow().handle();
+        return GLFW.glfwGetKey(window, GLFW.GLFW_KEY_F1) == GLFW.GLFW_PRESS
+                || GLFW.glfwGetKey(window, GLFW.GLFW_KEY_F3) == GLFW.GLFW_PRESS;
     }
 
     private static void drawGhost(GuiGraphicsExtractor graphics, EditBox box, String query) {
@@ -651,7 +742,9 @@ public final class JeiSearchAssistant {
     }
 
     private static void remember(String query) {
-        if (!JeiSearchPreferences.current().history() || query == null || query.isBlank()) return;
+        if (query == null || query.isBlank()) return;
+        ClientHotWords.report(query, System.nanoTime() / 1_000_000L);
+        if (!JeiSearchPreferences.current().history()) return;
         loadHistory();
         if (history == null) return;
         history.record(query);
@@ -691,13 +784,27 @@ public final class JeiSearchAssistant {
         Language nextLanguage = Language.getInstance();
         if (revision == nextRevision && language == nextLanguage) return;
         var entries = new ArrayList<ClientSearch.Entry<JeiSearchBridge.Ingredient>>();
+        var tabs = JeiModNames.snapshot();
+        var modNames = new LinkedHashMap<String, String>();
+        var modLabels = new LinkedHashMap<String, String>();
         for (var ingredient : JeiSearchBridge.ingredients()) {
             if (!ingredient.visible() || ingredient.name().isBlank()) continue;
+            String namespace = ingredient.id().getNamespace();
+            String modName = modNames.computeIfAbsent(namespace, id -> {
+                var aliases = JeiSearchPreferences.modAliases(id, tabs.getOrDefault(id, List.of()));
+                modLabels.put(id, SearchModNames.displayName(ingredient.modName(), aliases));
+                return SearchModNames.searchText(ingredient.modName(), aliases);
+            });
             entries.add(new ClientSearch.Entry<>(ingredient, ingredient.name(), List.of(ingredient.id().toString()),
                     JeiSearchPreferences.aliases(ingredient.id().toString(), ingredient.aliases()),
-                    ingredient.modName(), ingredient.tags().stream().map(Object::toString).toList()));
+                    modName, ingredient.tags().stream().map(Object::toString).toList()));
         }
-        SEARCH.replace(entries);
+        modDisplayNames = Map.copyOf(modLabels);
+        var names = new LinkedHashMap<String, String>();
+        for (var entry : entries) for (String tag : entry.tags())
+            names.computeIfAbsent(tag, id -> SearchTagNames.display(id, nextLanguage::getOrDefault));
+        tagDisplayNames = Map.copyOf(names);
+        SEARCH.replace(entries, tagDisplayNames);
         SOURCES.replaceAvailable(entries.stream().map(ClientSearch.Entry::name).toList());
         var byName = new LinkedHashMap<String, JeiSearchBridge.Ingredient>();
         var ambiguous = new java.util.HashSet<String>();
@@ -759,9 +866,18 @@ public final class JeiSearchAssistant {
         }
     }
 
-    private static void drawPreview(GuiGraphicsExtractor graphics, Screen current, UiPreferences preferences, int mouseX, int mouseY) {
+    private static void renderSelectedTooltip(GuiGraphicsExtractor graphics, int tooltipRight) {
+        if (tooltipRight <= 0) return;
+        try {
+            var font = Minecraft.getInstance().font;
+            int tooltipY = y + Math.round((6 + lastSelectedRow * (Math.max(8, font.lineHeight) + 3)) * scale);
+            JeiSearchBridge.renderTooltip(selectedIngredient(), graphics, tooltipRight, tooltipY, tooltipRight);
+        } catch (RuntimeException | LinkageError error) { LOGGER.debug("Could not render selected JEI tooltip", error); }
+    }
+
+    private static boolean drawPreview(GuiGraphicsExtractor graphics, Screen current, UiPreferences preferences, int mouseX, int mouseY, boolean allowTooltip) {
         ensurePreview();
-        if (previewLayout == null || previewLayout.width() <= 0 || previewLayout.height() <= 0) return;
+        if (previewLayout == null || previewLayout.width() <= 0 || previewLayout.height() <= 0) return false;
         var font = Minecraft.getInstance().font;
         var bounds = RecipePreviewBounds.of(previewLayout.outerWidth(), previewLayout.outerHeight(),
                 previewLayout.contentOffsetX(), previewLayout.contentOffsetY(), font.lineHeight);
@@ -769,7 +885,7 @@ public final class JeiSearchAssistant {
         int previewHeight = bounds.height();
         int left = x - previewWidth - 4;
         int top = Math.max(area.y(), Math.min(y, area.y() + area.height() - previewHeight));
-        if (left < area.x() || top + previewHeight > area.y() + area.height()) return;
+        if (left < area.x() || top + previewHeight > area.y() + area.height()) return false;
         if (JeiSearchPreferences.current().glass()) ClientPanels.panel(graphics, left, top, previewWidth, previewHeight);
         else ClientPanels.surface(graphics, new com.dishanhai.sh_better_ui.client.gui.display.GraphicDisplayLayout.Bounds(left, top, previewWidth, previewHeight), null, 0xFF18202C);
         graphics.enableScissor(left + bounds.clipX(), top + bounds.clipY(),
@@ -781,10 +897,11 @@ public final class JeiSearchAssistant {
                 preview.title(), previewIndex + 1, previews.size()) : preview.title();
         graphics.text(font, font.plainSubstrByWidth(title.getString(), previewWidth - 12),
                 left + 6, top + 5, ClientPanels.TEXT);
-        if (mouseX >= left + bounds.clipX() && mouseX < left + bounds.clipX() + bounds.clipWidth()
-                && mouseY >= top + bounds.clipY() && mouseY < top + bounds.clipY() + bounds.clipHeight()) {
-            previewLayout.renderOverlays(graphics, mouseX, mouseY);
-        }
+        boolean hovered = allowTooltip && mouseX >= left + bounds.clipX() && mouseX < left + bounds.clipX() + bounds.clipWidth()
+                && mouseY >= top + bounds.clipY() && mouseY < top + bounds.clipY() + bounds.clipHeight();
+        if (hovered) previewLayout.renderOverlays(graphics, mouseX, mouseY);
+        else if (allowTooltip) renderSelectedTooltip(graphics, left - 4);
+        return true;
     }
 }
 

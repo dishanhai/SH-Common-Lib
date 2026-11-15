@@ -3,6 +3,9 @@ package com.dishanhai.sh_common_lib.compat.jei;
 import com.dishanhai.sh_common_lib.api.ShCommonLib;
 import com.dishanhai.sh_common_lib.client.loading.ClientLoading;
 import com.dishanhai.sh_common_lib.client.loading.ModLoadingStatus;
+import com.dishanhai.sh_common_lib.client.jei.RecipeKeyGuard;
+import com.mojang.blaze3d.platform.InputConstants;
+import mezz.jei.api.recipe.RecipeIngredientRole;
 import mezz.jei.api.registration.IModIngredientRegistration;
 import mezz.jei.api.registration.IRecipeCategoryRegistration;
 import mezz.jei.api.registration.IRecipeRegistration;
@@ -49,6 +52,7 @@ public final class JeiShortcuts implements IModPlugin {
     private static final int MAX_CHAT_LENGTH = 256;
     private static final Pattern DISALLOWED_CHAT_CHARACTERS = Pattern.compile("[\\x00-\\x1F\\x7F\\u00A7]");
     private static volatile IJeiRuntime runtime;
+    private static final RecipeKeyGuard RECIPE_KEY = new RecipeKeyGuard();
 
     /** Client-thread access for the optional search enhancement. */
     public static IJeiRuntime runtime() { return runtime; }
@@ -98,9 +102,42 @@ public final class JeiShortcuts implements IModPlugin {
 
     @Override
     public void onRuntimeUnavailable() {
+        RECIPE_KEY.clear();
         com.dishanhai.sh_common_lib.client.jei.JeiSearchAssistant.runtimeUnavailable();
         runtime = null;
         ModLoadingStatus.clearJei();
+    }
+
+    /** Give JEI's configured recipe keys priority over its focused search field. */
+    public static boolean openHoveredRecipe(Screen screen, int key, int scanCode) {
+        RECIPE_KEY.clear();
+        IJeiRuntime current = runtime;
+        if (current == null || screen != Minecraft.getInstance().screen
+                || !current.getIngredientListOverlay().hasKeyboardFocus()) return false;
+        var input = key == GLFW.GLFW_KEY_UNKNOWN
+                ? InputConstants.Type.SCANCODE.getOrCreate(scanCode) : InputConstants.Type.KEYSYM.getOrCreate(key);
+        var mappings = current.getKeyMappings();
+        RecipeIngredientRole role = mappings.getShowRecipe().isActiveAndMatches(input) ? RecipeIngredientRole.OUTPUT
+                : mappings.getShowUses().isActiveAndMatches(input) ? RecipeIngredientRole.INPUT : null;
+        if (role == null) return false;
+        var hovered = current.getIngredientListOverlay().getIngredientUnderMouse()
+                .or(() -> current.getBookmarkOverlay().getIngredientUnderMouse());
+        if (hovered.isEmpty()) return false;
+        RECIPE_KEY.arm(screen, key, System.nanoTime() / 1_000_000L);
+        showRecipe(current, hovered.get(), role);
+        return true;
+    }
+
+    private static <T> void showRecipe(IJeiRuntime current, ITypedIngredient<T> ingredient, RecipeIngredientRole role) {
+        var focus = current.getJeiHelpers().getFocusFactory().createFocus(role, ingredient);
+        current.getRecipesGui().show(focus);
+    }
+
+    public static boolean suppressRecipeCharacter(Screen screen) {
+        int key = RECIPE_KEY.pendingKey();
+        boolean held = key != GLFW.GLFW_KEY_UNKNOWN
+                && GLFW.glfwGetKey(Minecraft.getInstance().getWindow().handle(), key) == GLFW.GLFW_PRESS;
+        return RECIPE_KEY.take(screen, key, held, System.nanoTime() / 1_000_000L);
     }
 
     public static boolean keyPressed(Screen screen, int key, int modifiers, boolean ownsShortcuts,
@@ -130,7 +167,8 @@ public final class JeiShortcuts implements IModPlugin {
         IJeiRuntime current = runtime;
         Minecraft client = Minecraft.getInstance();
         Screen screen = client.screen;
-        if (current == null || client.player == null || screen == null || elements.isEmpty()) return;
+        if (current == null || client.player == null || screen == null || elements.isEmpty()
+                || !com.dishanhai.sh_common_lib.client.jei.JeiSearchAssistant.helpKeyHeld()) return;
 
         hovered(current, client, screen).ifPresent(typed -> {
             Object ingredient = typed.getIngredient();

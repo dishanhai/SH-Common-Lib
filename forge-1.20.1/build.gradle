@@ -21,6 +21,7 @@ repositories {
     maven { url = 'https://maven.blamejared.com/'; content { includeGroup 'mezz.jei' } }
     maven { url = 'https://maven.latvian.dev/releases/'; content { includeGroup 'dev.latvian.mods' } }
     maven { url = 'https://api.modrinth.com/maven'; content { includeGroup 'maven.modrinth' } }
+    maven { url = 'https://www.cursemaven.com'; content { includeGroup 'curse.maven' } }
 }
 
 dependencies {
@@ -34,9 +35,15 @@ dependencies {
     compileOnly fg.deobf('maven.modrinth:TyCTlI4b:xviLgqVd') // Sophisticated Backpacks 3.26.20
     compileOnly fg.deobf('maven.modrinth:nmoqTijg:FrNTdGKb') // Sophisticated Core 1.5.30
     compileOnly fg.deobf('maven.modrinth:Ce6I4WUE:uxe1WQp4') // Mekanism 10.4.16
+    if (findProperty('appliedMekanisticsJar')) {
+        compileOnly files(property('appliedMekanisticsJar'))
+    } else {
+        compileOnly fg.deobf('curse.maven:applied-mekanistics-574300:7244744') // Applied Mekanistics 1.4.3
+    }
     compileOnly('dev.latvian.mods:kubejs-forge:2001.6.5-build.26') { transitive = false }
     compileOnly('dev.latvian.mods:rhino-forge:2001.2.3-build.10') { transitive = false }
-    compileOnly fg.deobf('mezz.jei:jei-1.20.1-common-api:15.49.0.200')
+    // The optional infinity-cell shortcut reuses JEI's permission-checked give action.
+    compileOnly fg.deobf('mezz.jei:jei-1.20.1-forge:15.49.0.200')
     if (findProperty('ae2Jar')) {
         compileOnly files(property('ae2Jar'))
     } else {
@@ -51,12 +58,16 @@ minecraft {
             workingDirectory file("run/${name}")
             mods { sh_common_lib { source sourceSets.main } }
         }
-        client { arg '-mixin.config=sh_common_lib.loading.mixins.json' }
+        client {
+            arg '-mixin.config=sh_common_lib.loading.mixins.json'
+            arg '-mixin.config=sh_common_lib.jei_ae2.mixins.json'
+            arg '-mixin.config=sh_common_lib.extendedae.mixins.json'
+        }
         server { args '--nogui' }
     }
 }
 
 tasks.named('jar') {
-    manifest.attributes('MixinConfigs': 'sh_common_lib.loading.mixins.json')
+    manifest.attributes('MixinConfigs': 'sh_common_lib.loading.mixins.json,sh_common_lib.jei_ae2.mixins.json,sh_common_lib.extendedae.mixins.json')
     finalizedBy 'reobfJar'
 }

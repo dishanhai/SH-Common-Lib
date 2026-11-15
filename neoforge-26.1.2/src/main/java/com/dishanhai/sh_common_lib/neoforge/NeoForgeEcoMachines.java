@@ -1,7 +1,15 @@
 // Author: dishanhai
 package com.dishanhai.sh_common_lib.neoforge;
 
-/** Neo ECO AE 21.2.17 targets Minecraft 1.21.1; its integration is not loaded on 26.1.2. */
+import com.dishanhai.sh_common_lib.internal.performance.EcoMachineSnapshot;
+import com.dishanhai.sh_common_lib.internal.performance.EcoNetworkDiagnostics;
+import net.minecraft.server.level.ServerPlayer;
+
 final class NeoForgeEcoMachines {
     private NeoForgeEcoMachines() {}
+
+    static EcoMachineSnapshot sample(ServerPlayer player, String dimension, int mask) {
+        return EcoNetworkDiagnostics.machines(NeoForgeEcoHud.connectedGrid(player), dimension, mask,
+                block -> block.getLevel().dimension().identifier().toString());
+    }
 }

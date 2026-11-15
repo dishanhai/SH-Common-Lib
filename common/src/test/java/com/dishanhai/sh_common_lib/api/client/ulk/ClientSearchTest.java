@@ -25,6 +25,11 @@ public final class ClientSearchTest {
         require(!sources.chat().isEmpty(), "same connection preserves session data");
         sources.session(new Object());
         require(sources.chat().isEmpty() && sources.quest().isEmpty(), "connection change clears private sources");
+        var mixed = SearchSources.mix(List.of(new SearchSources.Group("quest", List.of("Iron", "Gold", "Diamond")),
+                new SearchSources.Group("recent", List.of("iron", "Copper", "Tin"))), 2, 4);
+        require(mixed.equals(List.of(new SearchSources.MixedItem("quest", "Iron"),
+                new SearchSources.MixedItem("recent", "Copper"), new SearchSources.MixedItem("quest", "Gold"),
+                new SearchSources.MixedItem("recent", "Tin"))), "mixed sources are fair, capped and deduplicated");
         var index = ClientSearch.index(List.of(
                 new ClientSearch.Entry<>("iron", "Iron Ingot", List.of("minecraft:iron_ingot"), List.of(), "Minecraft", List.of("forge:ingots/iron")),
                 new ClientSearch.Entry<>("gold", "Gold Ingot", List.of("minecraft:gold_ingot"), List.of(), "Minecraft", List.of("forge:ingots/gold")),
@@ -38,6 +43,28 @@ public final class ClientSearchTest {
         require(index.suggest("", 3).isEmpty(), "empty suggestion");
         require(index.suggest("zuanshi", 3).get(0).value().equals("diamond"), "pinyin suggestion");
         require(index.search("ingot", value -> value.equals("gold")).equals(List.of("gold")), "scope");
+        var modNames = SearchModNames.index(List.of(new SearchModNames.Label("example", "示例模组"),
+                new SearchModNames.Label("example", "示例模组"), new SearchModNames.Label("other", "其他")));
+        require(modNames.get("example").equals(List.of("示例模组")), "mod labels grouped and deduplicated");
+        require(SearchModNames.displayName("Example", modNames.get("example")).equals("示例模组"), "localized mod label preferred");
+        var modIndex = ClientSearch.index(List.of(new ClientSearch.Entry<>("sample", "Sample", List.of("example:sample"),
+                List.of(), SearchModNames.searchText("Example", modNames.get("example")), List.of())));
+        require(modIndex.suggest("@示例", 4).get(0).completion().equals("@example"), "localized mod name completes namespace");
+        var tags = new AsyncClientSearch<String>(Runnable::run);
+        tags.replace(List.of(
+                new ClientSearch.Entry<>("iron", "Iron Ingot", List.of("minecraft:iron_ingot"), List.of(), "Minecraft", List.of("forge:ingots/iron")),
+                new ClientSearch.Entry<>("gold", "Gold Ingot", List.of("minecraft:gold_ingot"), List.of(), "Minecraft", List.of("forge:ingots/gold"))),
+                java.util.Map.of("forge:ingots/iron", "锭 · 铁", "forge:ingots/gold", "锭 · 金"));
+        tags.request("#铁锭", 5);
+        require(tags.result().suggestions().get(0).completion().equals("#forge:ingots/iron"), "localized tag completes JEI identifier");
+        tags.request("gold #锭", 5);
+        require(tags.result().suggestions().size() == 1 && tags.result().suggestions().get(0).completion().equals("gold #forge:ingots/gold"),
+                "localized tag respects preceding terms");
+        require(SearchTagNames.display("forge:ingots/iron", key -> key.equals("sh_common_lib.jei.tag.ingots") ? "锭"
+                        : key.equals("sh_common_lib.jei.tag.iron") ? "铁" : key)
+                .equals("锭 · 铁"), "tag display translates path components");
+        hotWords();
+        serverHotWords();
         require(SearchMatch.literal("Iron Ingot", "ing").orElseThrow().equals(new SearchMatch.Range(5, 8)), "literal match span ignores case");
         require(SearchMatch.literal("钻石", "zuanshi").isEmpty(), "phonetic match has no misleading span");
         require(SearchMatch.literal("iron", "").isEmpty(), "empty input has no match span");
@@ -96,5 +123,63 @@ public final class ClientSearchTest {
 
     private static void require(boolean condition, String message) {
         if (!condition) throw new AssertionError(message);
+    }
+
+    private static void hotWords() {
+        var ledger = new com.dishanhai.sh_common_lib.api.ulk.HotWordLedger();
+        var one = java.util.UUID.randomUUID(); var two = java.util.UUID.randomUUID();
+        require(ledger.record(one, "Iron", 10_000), "first hotword accepted");
+        require(!ledger.record(one, "Gold", 11_000), "per-player report rate limited");
+        require(ledger.record(two, "iron", 11_000), "different player can contribute");
+        require(ledger.top(11_001, 5).size() == 1, "case-insensitive aggregation");
+        require(!ledger.record(two, "bad\nword", 20_000), "control characters rejected");
+        require(ledger.allowRequest(one, 10_000) && !ledger.allowRequest(one, 10_001), "requests rate limited");
+        require(ledger.top(30_000_000, 5).isEmpty(), "old hotwords expire");
+        int[] sent = {0, 0};
+        ClientHotWords.install(new ClientHotWords.Transport() {
+            public void request(Object conn) { sent[0]++; }
+            public void report(Object conn, String query) { sent[1]++; }
+        });
+        Object first = new Object(), second = new Object();
+        ClientHotWords.update(first, true, false, 100);
+        ClientHotWords.report("iron", 100);
+        require(sent[0] == 1 && sent[1] == 0, "receive does not enable sharing");
+        ClientHotWords.accept(first, List.of("iron"));
+        ClientHotWords.acceptExternal(first, List.of("gold", "iron"));
+        require(ClientHotWords.words().equals(List.of("iron", "gold")), "external provider merges without duplicates");
+        ClientHotWords.update(second, true, true, 200);
+        ClientHotWords.accept(first, List.of("stale"));
+        ClientHotWords.acceptExternal(first, List.of("stale external"));
+        require(ClientHotWords.words().isEmpty(), "old connection reply ignored");
+        ClientHotWords.report("iron", 200);
+        ClientHotWords.report("gold", 201);
+        require(sent[1] == 1, "explicit sharing is rate limited");
+        ClientHotWords.update(second, false, false, 300);
+        ClientHotWords.accept(second, List.of("late"));
+        require(ClientHotWords.words().isEmpty(), "disabled source drops replies");
+        ClientHotWords.reset();
+    }
+
+    private static void serverHotWords() throws Exception {
+        var directory = java.nio.file.Files.createTempDirectory("ulk-hotwords");
+        var config = directory.resolve("sh_common_lib");
+        try {
+            var player = java.util.UUID.randomUUID(); var server = new Object();
+            com.dishanhai.sh_common_lib.internal.ulk.ServerHotWords.initialize(directory);
+            require(!com.dishanhai.sh_common_lib.internal.ulk.ServerHotWords.enabled(), "server defaults to disabled");
+            java.nio.file.Files.createDirectories(config);
+            java.nio.file.Files.writeString(config.resolve("hotwords-server.properties"), "enabled=true\n");
+            com.dishanhai.sh_common_lib.internal.ulk.ServerHotWords.initialize(directory);
+            com.dishanhai.sh_common_lib.internal.ulk.ServerHotWords.report(server, player, "diamond");
+            require(com.dishanhai.sh_common_lib.internal.ulk.ServerHotWords.top(server, player).orElseThrow().equals(List.of("diamond")),
+                    "enabled server collects and replies");
+            com.dishanhai.sh_common_lib.internal.ulk.ServerHotWords.clear(server);
+            require(com.dishanhai.sh_common_lib.internal.ulk.ServerHotWords.top(server, player).orElseThrow().isEmpty(),
+                    "server shutdown clears session aggregate");
+        } finally {
+            java.nio.file.Files.deleteIfExists(config.resolve("hotwords-server.properties"));
+            java.nio.file.Files.deleteIfExists(config);
+            java.nio.file.Files.deleteIfExists(directory);
+        }
     }
 }

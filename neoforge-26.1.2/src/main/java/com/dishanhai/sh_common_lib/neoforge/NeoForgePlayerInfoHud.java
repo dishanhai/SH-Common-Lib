@@ -37,6 +37,7 @@ final class NeoForgePlayerInfoHud {
         hud.bindPageKeys(previousPage, nextPage);
         hud.bindAe2Request(NeoForgeTickNetwork::requestAe2);
         hud.bindInventoryRequest(NeoForgeTickNetwork::requestInventoryHud);
+        hud.bindEcoMachineRequest(NeoForgeTickNetwork::requestEcoMachines);
         modBus.addListener((RegisterGuiLayersEvent event) -> event.registerAboveAll(
                 Identifier.fromNamespaceAndPath(ShCommonLib.MOD_ID, "player_info"),
                 (graphics, delta) -> hud.render(graphics)));

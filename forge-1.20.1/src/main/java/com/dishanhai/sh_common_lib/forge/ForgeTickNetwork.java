@@ -10,9 +10,13 @@ import com.dishanhai.sh_common_lib.internal.performance.Ae2Snapshot;
 import com.dishanhai.sh_common_lib.internal.performance.ClientAe2Monitor;
 import com.dishanhai.sh_common_lib.internal.performance.InventoryHudSnapshot;
 import com.dishanhai.sh_common_lib.internal.performance.ClientInventoryHudMonitor;
+import com.dishanhai.sh_common_lib.internal.performance.ClientEcoMachineMonitor;
+import com.dishanhai.sh_common_lib.internal.performance.EcoMachineSnapshot;
+import com.dishanhai.sh_common_lib.internal.performance.EcoNetworkDiagnostics;
 import net.minecraft.network.Connection;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
+import net.minecraftforge.fml.ModList;
 import net.minecraftforge.network.NetworkDirection;
 import net.minecraftforge.network.NetworkRegistry;
 import net.minecraftforge.network.simple.SimpleChannel;
@@ -31,10 +35,35 @@ final class ForgeTickNetwork {
     private static final SimpleChannel INVENTORY_HUD = NetworkRegistry.newSimpleChannel(
             new ResourceLocation(ShCommonLib.MOD_ID, "inventory_hud"),
             () -> VERSION, NetworkRegistry.acceptMissingOr(VERSION), NetworkRegistry.acceptMissingOr(VERSION));
+    private static final SimpleChannel ECO_MACHINES = NetworkRegistry.newSimpleChannel(
+            new ResourceLocation(ShCommonLib.MOD_ID, "eco_machines_v1"),
+            () -> VERSION, NetworkRegistry.acceptMissingOr(VERSION), NetworkRegistry.acceptMissingOr(VERSION));
 
     private ForgeTickNetwork() {}
 
     static void register() {
+        ECO_MACHINES.messageBuilder(EcoMachineRequest.class, 0, NetworkDirection.PLAY_TO_SERVER)
+                .encoder((request, buffer) -> buffer.writeVarInt(request.mask()))
+                .decoder(buffer -> new EcoMachineRequest(buffer.readVarInt()))
+                .consumerMainThread((request, supplied) -> {
+                    var context = supplied.get();
+                    var player = context.getSender();
+                    if (player == null || !ECO_MACHINES.isRemotePresent(context.getNetworkManager())
+                            || request.mask() < 1 || request.mask() > 15 || !EcoMachineSnapshot.allow(player)) return;
+                    String dimension = player.level().dimension().location().toString();
+                    var snapshot = new EcoMachineSnapshot(dimension, request.mask(), EcoMachineSnapshot.NOT_INSTALLED, false, java.util.List.of());
+                    if (ecoInstalled()) {
+                        try { snapshot = ForgeEcoHud.machines(player, dimension, request.mask()); }
+                        catch (RuntimeException | LinkageError ignored) {
+                            snapshot = new EcoMachineSnapshot(dimension, request.mask(), EcoMachineSnapshot.ERROR, false, java.util.List.of());
+                        }
+                    }
+                    ECO_MACHINES.sendTo(snapshot, context.getNetworkManager(), NetworkDirection.PLAY_TO_CLIENT);
+                }).add();
+        ECO_MACHINES.messageBuilder(EcoMachineSnapshot.class, 1, NetworkDirection.PLAY_TO_CLIENT)
+                .encoder(EcoMachineSnapshot::encode).decoder(EcoMachineSnapshot::decode)
+                .consumerMainThread((snapshot, context) -> ClientEcoMachineMonitor.INSTANCE.accept(
+                        context.get().getNetworkManager(), snapshot)).add();
         INVENTORY_HUD.messageBuilder(InventoryRequest.class, 0, NetworkDirection.PLAY_TO_SERVER)
                 .encoder((request, buffer) -> buffer.writeVarInt(request.flags()))
                 .decoder(buffer -> new InventoryRequest(buffer.readVarInt()))
@@ -48,8 +77,15 @@ final class ForgeTickNetwork {
                         try { sources = InventoryHudSnapshot.inspect(player); scanned = true; }
                         catch (RuntimeException | LinkageError ignored) { }
                     }
+                    var eco = new EcoNetworkDiagnostics.Network(InventoryHudSnapshot.ECO_NOT_INSTALLED, 0, 0, false);
+                    if ((request.flags() & 2) != 0 && ecoInstalled()) {
+                        try { eco = ForgeEcoHud.sample(player); }
+                        catch (RuntimeException | LinkageError ignored) {
+                            eco = new EcoNetworkDiagnostics.Network(InventoryHudSnapshot.ECO_ERROR, 0, 0, false);
+                        }
+                    }
                     INVENTORY_HUD.sendTo(new InventoryHudSnapshot(player.level().dimension().location().toString(),
-                            request.flags(), scanned, sources, InventoryHudSnapshot.ECO_NOT_INSTALLED, 0, 0, false),
+                            request.flags(), scanned, sources, eco.state(), eco.nodes(), eco.active(), eco.truncated()),
                             context.getNetworkManager(), NetworkDirection.PLAY_TO_CLIENT);
                 }).add();
         INVENTORY_HUD.messageBuilder(InventoryHudSnapshot.class, 1, NetworkDirection.PLAY_TO_CLIENT)
@@ -129,6 +165,16 @@ final class ForgeTickNetwork {
             INVENTORY_HUD.sendTo(new InventoryRequest(flags), connection, NetworkDirection.PLAY_TO_SERVER);
     }
 
+    static void requestEcoMachines(Connection connection, int mask) {
+        if (connection.isConnected() && ECO_MACHINES.isRemotePresent(connection))
+            ECO_MACHINES.sendTo(new EcoMachineRequest(mask), connection, NetworkDirection.PLAY_TO_SERVER);
+    }
+
+    private static boolean ecoInstalled() {
+        var mods = ModList.get();
+        return mods.isLoaded("neoecoae") && mods.isLoaded("ae2");
+    }
+
     private static boolean supported(Connection connection) {
         return connection.isConnected() && CHANNEL.isRemotePresent(connection);
     }
@@ -137,4 +183,5 @@ final class ForgeTickNetwork {
     private enum WeatherRequest { INSTANCE }
     private enum Ae2Request { INSTANCE }
     private record InventoryRequest(int flags) {}
+    private record EcoMachineRequest(int mask) {}
 }

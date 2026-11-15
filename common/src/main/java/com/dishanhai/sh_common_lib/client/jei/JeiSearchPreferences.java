@@ -19,6 +19,7 @@ public final class JeiSearchPreferences {
     private static SearchHistory history;
     private static boolean historyLoaded;
     private static Map<String, List<String>> aliases = Map.of();
+    private static Map<String, List<String>> modAliases = Map.of();
 
     private JeiSearchPreferences() {}
 
@@ -30,6 +31,11 @@ public final class JeiSearchPreferences {
         catch (IOException failure) {
             LOGGER.warn("Could not load JEI search aliases", failure);
             aliases = Map.of();
+        }
+        try { modAliases = SearchAliases.load(directory.resolve("jei-search-mod-names.json")); }
+        catch (IOException failure) {
+            LOGGER.warn("Could not load JEI mod names", failure);
+            modAliases = Map.of();
         }
         try {
             current = JeiSearchSettings.read(file);
@@ -43,6 +49,11 @@ public final class JeiSearchPreferences {
     public static Path directory() { return file == null ? null : file.getParent(); }
     public static List<String> aliases(String id, List<String> existing) {
         return SearchAliases.merge(existing, aliases, id);
+    }
+    public static List<String> modAliases(String id, List<String> existing) {
+        var result = new java.util.ArrayList<>(modAliases.getOrDefault(id, List.of()));
+        for (String value : existing) if (!result.contains(value)) result.add(value);
+        return List.copyOf(result);
     }
 
     public static SearchHistory history() {

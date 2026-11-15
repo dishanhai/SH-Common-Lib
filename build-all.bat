@@ -2,7 +2,7 @@
 setlocal
 
 set "build_result=1"
-pushd "%~dp0forge" || goto directory_error
+pushd "%~dp0forge-1.20.1" || goto directory_error
 echo Building Forge...
 call gradlew.bat build %*
 if errorlevel 1 (

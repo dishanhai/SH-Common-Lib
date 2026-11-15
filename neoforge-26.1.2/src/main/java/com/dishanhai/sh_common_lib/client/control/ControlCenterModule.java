@@ -18,6 +18,8 @@ import com.dishanhai.sh_common_lib.client.hud.PlayerInfoItem;
 import com.dishanhai.sh_common_lib.client.hud.HudGroups;
 import com.dishanhai.sh_common_lib.client.loading.ClientLoading;
 import com.dishanhai.sh_common_lib.client.jei.JeiSearchPreferences;
+import com.dishanhai.sh_common_lib.internal.item.ArtisanConfig;
+import com.dishanhai.sh_common_lib.client.item.ArtisanAppearancePreferences;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.util.Util;
 import com.dishanhai.sh_common_lib.neoforge.NeoForgeKeyMappings;
@@ -83,7 +85,9 @@ public final class ControlCenterModule implements UIModule {
     }
 
     public static Screen create(Screen parent, PlayerInfoHud hud) {
-        var draft = new ControlCenterDraft(hud.settings(), ClientLoading.animation(), ClientLoading.profiling(), JeiSearchPreferences.current());
+        var draft = new ControlCenterDraft(hud.settings(), ClientLoading.animation(), ClientLoading.profiling(),
+                JeiSearchPreferences.current(), ArtisanConfig.profiles(), ArtisanControlSettings.editable(),
+                ArtisanAppearancePreferences.targetColors());
         return new ControlCenterScreen(parent, settings(hud, draft), hud, draft);
     }
 
@@ -136,17 +140,27 @@ public final class ControlCenterModule implements UIModule {
                         () -> AnnouncementAppearance.available() ? null : label("unavailable"),
                         AnnouncementAppearance::open)));
         var jei = new SettingsGroup(label("jei_search"), GraphicIcon.SEARCH, List.of(
+                new SettingsGroup.Toggle(enabled -> label(enabled ? "jei_render_optimization_on" : "jei_render_optimization_off"),
+                        () -> draft.jei().optimizeRendering(), draft::setJeiOptimizeRendering),
+                new SettingsGroup.Toggle(enabled -> label(enabled ? "jei_enabled_on" : "jei_enabled_off"), () -> draft.jei().enabled(), draft::setJeiEnabled),
                 new SettingsGroup.Toggle(enabled -> label(enabled ? "jei_prediction_on" : "jei_prediction_off"), () -> draft.jei().prediction(), draft::setJeiPrediction),
                 new SettingsGroup.Toggle(enabled -> label(enabled ? "jei_history_on" : "jei_history_off"), () -> draft.jei().history(), draft::setJeiHistory),
                 new SettingsGroup.Toggle(enabled -> label(enabled ? "jei_hud_on" : "jei_hud_off"), () -> draft.jei().hud(), draft::setJeiHud),
                 new SettingsGroup.Toggle(enabled -> label(enabled ? "jei_preview_on" : "jei_preview_off"), () -> draft.jei().preview(), draft::setJeiPreview),
                 new SettingsGroup.Toggle(enabled -> label(enabled ? "jei_hints_on" : "jei_hints_off"), () -> draft.jei().hints(), draft::setJeiHints),
+                new SettingsGroup.Toggle(enabled -> label(enabled ? "jei_ae2_orderable_on" : "jei_ae2_orderable_off"),
+                        () -> draft.jei().ae2Orderable(), draft::setJeiAe2Orderable),
                 new SettingsGroup.Toggle(enabled -> label(enabled ? "jei_glass_on" : "jei_glass_off"), () -> draft.jei().glass(), draft::setJeiGlass),
                 new SettingsGroup.Toggle(enabled -> label(enabled ? "jei_random_on" : "jei_random_off"), () -> draft.jei().randomSource(), draft::setJeiRandom),
                 new SettingsGroup.Toggle(enabled -> label(enabled ? "jei_quest_on" : "jei_quest_off"), () -> draft.jei().questSource(), draft::setJeiQuest),
                 new SettingsGroup.Toggle(enabled -> label(enabled ? "jei_chat_on" : "jei_chat_off"), () -> draft.jei().chatSource(), draft::setJeiChat),
-                new SettingsGroup.Page(label("jei_clear_history"), GraphicIcon.RESET, () -> null, ControlCenterModule::clearJeiHistory)));
-        return List.of(playerInfo, loading, jei, announcements, developer);
+                new SettingsGroup.Toggle(enabled -> label(enabled ? "jei_hot_on" : "jei_hot_off"), () -> draft.jei().hotSource(), draft::setJeiHot),
+                new SettingsGroup.Toggle(enabled -> label(enabled ? "jei_hot_share_on" : "jei_hot_share_off"), () -> draft.jei().hotShare(), draft::setJeiHotShare),
+                new SettingsGroup.Page(label("jei_provider"), GraphicIcon.SEARCH,
+                        () -> com.dishanhai.sh_common_lib.client.jei.JeiSearchProvider.installed() ? null : label("jei_provider_unavailable"),
+                        ControlCenterModule::chooseJeiProvider),
+                new SettingsGroup.Page(label("jei_clear_history"), GraphicIcon.RESET, () -> null, ControlCenterModule::clearJeiHistory)), true);
+        return List.of(playerInfo, loading, jei, ArtisanControlSettings.group(draft), announcements, developer);
     }
 
     private static void clearJeiHistory(Screen parent, Supplier<? extends GuiEventListener> focus) {
@@ -160,6 +174,14 @@ public final class ControlCenterModule implements UIModule {
             if (!confirmed || JeiSearchPreferences.clearHistory()) back.run();
             else client.setScreen(new AlertScreen(back, label("jei_clear_failed"), label("jei_clear_failed_detail")));
         }, label("jei_clear_title"), label("jei_clear_detail"), label("jei_clear_action"), CommonComponents.GUI_CANCEL));
+    }
+
+    private static void chooseJeiProvider(Screen parent, Supplier<? extends GuiEventListener> focus) {
+        com.dishanhai.sh_common_lib.client.jei.JeiSearchProvider.open(parent, () -> {
+            Minecraft.getInstance().setScreen(parent);
+            var widget = focus.get();
+            if (widget != null && parent.children().contains(widget)) parent.setFocused(widget);
+        });
     }
 
     private static SettingsGroup.Toggle hudItem(PlayerInfoHud hud, ControlCenterDraft draft, PlayerInfoItem item) {

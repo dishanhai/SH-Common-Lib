@@ -22,6 +22,7 @@ import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.events.GuiEventListener;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.locale.Language;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.multiplayer.PlayerInfo;
 import net.minecraft.client.player.LocalPlayer;
@@ -75,6 +76,8 @@ public final class PlayerInfoHud {
             GLFW.GLFW_KEY_F6, NeoForgeKeyMappings.CATEGORY);
     private PlayerInfoHudSettings settings = PlayerInfoHudSettings.DEFAULT;
     private LocalPlayer sampledPlayer;
+    private Language widthLanguage;
+    private final HudPages.Widths pageWidths = new HudPages.Widths();
     private PlayerInfoHudLayout layout;
     private long nextSample;
     private KeyMapping previousPage, nextPage;
@@ -121,6 +124,7 @@ public final class PlayerInfoHud {
         if (client.player == null || client.level == null) {
             sampledPlayer = null;
             layout = null;
+            pageWidths.clear();
             pageIndex = 0;
             pageCount = 1;
             if (ftb != null) ftb.reset();
@@ -203,7 +207,7 @@ public final class PlayerInfoHud {
                 || client.player == null || client.level == null) return;
 
         var view = sample(client).fit(graphics.guiWidth(), graphics.guiHeight(), graphics.guiHeight(), settings.scalePercent(),
-                client.getWindow().getGuiScale(), pageIndex);
+                client.getWindow().getGuiScale(), pageIndex, pageWidths);
         pageCount = view.pages();
         pageIndex = Math.floorMod(pageIndex, pageCount);
         var placement = view.placement();
@@ -216,6 +220,11 @@ public final class PlayerInfoHud {
     boolean save(PlayerInfoHudSettings updated) {
         try {
             updated.write(settingsFile);
+            if (!settings.visibleItems().equals(updated.visibleItems())
+                    || !settings.visibleGroups().equals(updated.visibleGroups())
+                    || settings.showGroupTitles() != updated.showGroupTitles()) {
+                pageWidths.clear();
+            }
             settings = updated;
             layout = null;
             return true;
@@ -227,6 +236,12 @@ public final class PlayerInfoHud {
 
     private PlayerInfoHudLayout sample(Minecraft client) {
         long now = Util.getMillis();
+        var language = Language.getInstance();
+        if (widthLanguage != language) {
+            widthLanguage = language;
+            pageWidths.clear();
+            layout = null;
+        }
         if (layout != null && sampledPlayer == client.player && now < nextSample) return layout;
         sampledPlayer = client.player;
         nextSample = now + 250;

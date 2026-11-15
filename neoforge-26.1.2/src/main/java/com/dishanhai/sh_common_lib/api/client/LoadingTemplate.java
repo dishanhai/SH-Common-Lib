@@ -16,16 +16,23 @@ public final class LoadingTemplate {
 
     /** Uses the same color-only pipeline as vanilla before the initial shader reload. */
     public static void renderStartupProgress(GuiGraphicsExtractor graphics, float progress) {
+        drawIndicator(graphics, graphics.guiHeight() * 3 / 4, Float.isFinite(progress) ? progress : 0f, 0, true);
+    }
+
+    /** Draws a font-free indicator. A non-finite progress value uses an indeterminate segment. */
+    public static void renderIndicator(GuiGraphicsExtractor graphics, int top, float progress, long elapsedMillis,
+                                       UiPreferences preferences) {
+        drawIndicator(graphics, top, progress, elapsedMillis, preferences.reducedMotion());
+    }
+
+    private static void drawIndicator(GuiGraphicsExtractor graphics, int top, float progress, long elapsedMillis,
+                                      boolean reducedMotion) {
         int width = Math.min(220, graphics.guiWidth() - 16);
-        if (width < 24) return;
+        if (width < 24 || top < 0 || top + 9 > graphics.guiHeight()) return;
         int x = (graphics.guiWidth() - width) / 2;
-        int y = graphics.guiHeight() * 3 / 4;
-        graphics.fill(x, y, x + width, y + 9, 0xFF18202C);
-        graphics.outline(x, y, width, 9, 0xCC8393A7);
-        int length = Math.round((width - 4) * Math.clamp(progress, 0f, 1f));
-        if (length > 0) {
-            graphics.fill(x + 2, y + 2, x + 2 + length, y + 7, ClientPanels.ACCENT);
-        }
+        graphics.fill(x, top, x + width, top + 9, 0xFF18202C);
+        graphics.outline(x, top, width, 9, 0xCC8393A7);
+        drawProgress(graphics, x + 2, top + 2, width - 4, 5, progress, elapsedMillis, reducedMotion);
     }
 
     /**
@@ -46,19 +53,23 @@ public final class LoadingTemplate {
                 ClientPanels.secondaryText(), false);
         int y = top + 36;
         graphics.fill(x + 10, y, x + 10 + track, y + 4, ClientPanels.border());
+        drawProgress(graphics, x + 10, y, track, 4, progress, elapsedMillis, UiPreferences.configured().reducedMotion());
+    }
+
+    private static void drawProgress(GuiGraphicsExtractor graphics, int left, int top, int track, int height,
+                                     float progress, long elapsedMillis, boolean reducedMotion) {
         int length;
         int offset = 0;
         if (Float.isFinite(progress)) {
             length = Math.round(track * Math.clamp(progress, 0f, 1f));
         } else {
             length = Math.max(1, track / 4);
-            double position = UiPreferences.configured().reducedMotion()
-                    ? 0.5 : (1 - Math.cos(elapsedMillis * Math.PI / 800)) / 2;
+            double position = reducedMotion ? 0.5 : (1 - Math.cos(elapsedMillis * Math.PI / 800)) / 2;
             offset = (int) Math.round((track - length) * position);
         }
         if (length > 0) {
-            int start = x + 10 + offset;
-            graphics.fill(start, y, start + length, y + 4, ClientPanels.ACCENT);
+            int start = left + offset;
+            graphics.fill(start, top, start + length, top + height, ClientPanels.ACCENT);
         }
     }
 

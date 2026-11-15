@@ -22,7 +22,9 @@ record SettingsGroup(Component title, GraphicIcon icon, List<Entry> entries, boo
         this(title, icon, entries, false);
     }
 
-    sealed interface Entry permits Toggle, Page, Subgroup {}
+    sealed interface Entry permits Toggle, Page, Subgroup, Heading {}
+
+    record Heading(Component title) implements Entry {}
 
     record Toggle(Function<Boolean, Component> label, BooleanSupplier read, Consumer<Boolean> edit,
                   BooleanSupplier available) implements Entry {

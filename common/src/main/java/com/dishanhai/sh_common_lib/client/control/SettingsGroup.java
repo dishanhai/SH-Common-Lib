@@ -7,11 +7,11 @@ import com.dishanhai.sh_better_ui.client.gui.display.GraphicIcon;
 import com.dishanhai.sh_better_ui.client.gui.scaled.LiquidGlassTheme;
 import com.dishanhai.sh_better_ui.client.gui.scaled.UiButton;
 import com.dishanhai.sh_better_ui.client.gui.scaled.UiSectionBar;
+import com.dishanhai.sh_better_ui.client.gui.scaled.UiSkeleton;
 import com.dishanhai.sh_better_ui.client.gui.scaled.UiStyle;
 import com.dishanhai.sh_better_ui.client.gui.scaled.UiToggleButton;
 import com.dishanhai.sh_better_ui.client.gui.scaled.UiVerticalScrollBar;
 import com.dishanhai.sh_better_ui.kernel.api.layout.SplitActionRow;
-import com.dishanhai.sh_better_ui.kernel.api.layout.ListEntrance;
 import com.dishanhai.sh_better_ui.kernel.api.layout.VerticalScroll;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
@@ -32,7 +32,8 @@ import java.util.function.Supplier;
 
 /** Built-in control center settings, declared in display order by SHCLIB. */
 final class SettingsGroup {
-    sealed interface Entry permits Toggle, Page, Subgroup {}
+    sealed interface Entry permits Toggle, Page, Subgroup, Heading {}
+    record Heading(Component title) implements Entry {}
     record Toggle(Function<Boolean, Component> label, BooleanSupplier read, Consumer<Boolean> edit,
                   BooleanSupplier available) implements Entry {
         Toggle(Function<Boolean, Component> label, BooleanSupplier read, Consumer<Boolean> edit) {
@@ -57,8 +58,8 @@ final class SettingsGroup {
     private final Map<Toggle, UiToggleButton> toggles = new IdentityHashMap<>();
     private final Map<Subgroup, Double> offsets = new IdentityHashMap<>();
     private final List<Placed> placed = new ArrayList<>();
+    private final List<PlacedHeading> headings = new ArrayList<>();
     private final VerticalScroll scroll = new VerticalScroll();
-    private final ListEntrance entrance = new ListEntrance();
     private Subgroup detail;
     private Subgroup returnFocus;
     private UiScreen screen;
@@ -67,6 +68,8 @@ final class SettingsGroup {
     private int firstRow, columns, rowWidth, viewportHeight;
     private double rootOffset;
     private boolean visible;
+    private Runnable beforeDetailChange;
+    private boolean manualRender;
     private GuiEventListener lastFocus;
 
     SettingsGroup(Component title, GraphicIcon icon, List<Entry> entries) { this(title, icon, entries, false); }
@@ -76,37 +79,52 @@ final class SettingsGroup {
         this.twoColumns = twoColumns;
     }
     UiSectionBar.Section section() { return section; }
+
+    void restorePosition(ControlCenterPosition.ListPosition position) {
+        detail = position.resolve(entries);
+        rootOffset = position.rootOffset();
+        if (detail != null) offsets.put(detail, position.detailOffset());
+    }
+
+    ControlCenterPosition.ListPosition position() {
+        return new ControlCenterPosition.ListPosition(detail == null ? -1 : entries.indexOf(detail),
+                rootOffset, detail == null ? 0d : offsets.getOrDefault(detail, 0d));
+    }
+
     int page() { return 0; }
     int pages() { return 1; }
     void changePage(int direction) {}
 
-    void init(UiScreen screen, Font font, Bounds area, Runnable onChange) {
+    void init(UiScreen screen, Font font, Bounds area, Runnable onChange, Runnable beforeDetailChange) {
         this.screen = screen;
         this.area = area;
+        this.beforeDetailChange = beforeDetailChange;
         firstRow = area.y() + font.lineHeight + 4;
         viewportHeight = Math.max(0, area.bottom() - firstRow);
         columns = twoColumns && area.width() >= 164 ? 2 : 1;
         int contentWidth = Math.max(0, area.width() - 12);
         rowWidth = (contentWidth - (columns - 1) * ControlCenterLayout.GAP) / columns;
         var preferences = screen.context().preferences();
+        var rows = SettingsRows.of(entries, columns);
         for (int i = 0; i < entries.size(); i++) {
             Entry entry = entries.get(i);
-            addEntry(entry, null, i, onChange);
+            addEntry(entry, null, rows.slot(i), onChange);
             if (entry instanceof Subgroup subgroup) {
                 var back = new UiButton(0, 0, contentWidth, ControlCenterLayout.ROW, CommonComponents.GUI_BACK,
                         ignored -> leaveDetail(), preferences, false, UiStyle.LIQUID_GLASS);
                 back.setSampleBackground(false);
                 back.setLeadingIcon(GraphicIcon.BACK);
                 back.setTabOrderGroup(1);
-                placed.add(new Placed(screen.addClipped(back, this::rowClip), subgroup, -1, 0));
+                placed.add(new Placed(screen.addClipped(back, this::nativeRowClip), subgroup, -1, 0));
+                var detailRows = SettingsRows.of(subgroup.entries(), columns);
                 for (int child = 0; child < subgroup.entries().size(); child++) {
-                    addEntry(subgroup.entries().get(child), subgroup, child, onChange);
+                    addEntry(subgroup.entries().get(child), subgroup, detailRows.slot(child), onChange);
                 }
             }
         }
-        scrollbar = screen.add(new UiVerticalScrollBar(new Bounds(area.right() - 8, firstRow, 8, viewportHeight),
+        scrollbar = screen.addClipped(new UiVerticalScrollBar(new Bounds(area.right() - 8, firstRow, 8, viewportHeight),
                 ControlCenterModule.label("scrollbar"), scroll, ControlCenterLayout.ROW + ControlCenterLayout.GAP,
-                this::layoutButtons));
+                this::layoutButtons), () -> manualRender ? new Bounds(0, 0, 0, 0) : area);
         scrollbar.setTabOrderGroup(1);
         scrollbar.setSmoothScrolling(() -> screen.context().preferences().reducedMotion());
         resizeScroll();
@@ -114,6 +132,10 @@ final class SettingsGroup {
     }
 
     private void addEntry(Entry entry, Subgroup view, int index, Runnable onChange) {
+        if (entry instanceof Heading heading) {
+            headings.add(new PlacedHeading(heading.title(), view, index));
+            return;
+        }
         var preferences = screen.context().preferences();
         var split = entry instanceof Subgroup ? SplitActionRow.of(rowWidth, ControlCenterLayout.ROW, 2) : null;
         int width = split == null ? rowWidth : split.actionWidth();
@@ -142,7 +164,7 @@ final class SettingsGroup {
         } else throw new IllegalStateException("Unknown settings entry");
         button.setSampleBackground(false);
         button.setTabOrderGroup(1);
-        buttons.put(entry, screen.addClipped(button, this::rowClip));
+        buttons.put(entry, screen.addClipped(button, this::nativeRowClip));
         placed.add(new Placed(button, view, index, 0));
         if (entry instanceof Subgroup group) {
             var arrow = new UiButton(0, 0, split.disclosureWidth(), ControlCenterLayout.ROW,
@@ -152,28 +174,35 @@ final class SettingsGroup {
             arrow.setIcon(GraphicIcon.NEXT);
             arrow.active = group.toggle().available().getAsBoolean();
             arrow.setTabOrderGroup(1);
-            buttons.put(group.toggle(), screen.addClipped(arrow, this::rowClip));
+            buttons.put(group.toggle(), screen.addClipped(arrow, this::nativeRowClip));
             placed.add(new Placed(arrow, view, index, split.disclosureX()));
         }
     }
 
     private void saveOffset() { if (detail == null) rootOffset = scroll.offset(); else offsets.put(detail, scroll.offset()); }
     private void resizeScroll() {
-        int count = detail == null ? entries.size() : detail.entries().size();
-        int rows = (count + columns - 1) / columns + (detail == null ? 0 : 1);
+        var rowsLayout = SettingsRows.of(detail == null ? entries : detail.entries(), columns);
+        int rows = rowsLayout.rowCount() + (detail == null ? 0 : 1);
         scroll.resize(viewportHeight, Math.max(0, rows * (ControlCenterLayout.ROW + ControlCenterLayout.GAP) - ControlCenterLayout.GAP));
         scroll.scrollTo(detail == null ? rootOffset : offsets.getOrDefault(detail, 0d));
         if (scrollbar != null) scrollbar.synchronizeMotion();
     }
     private void enterDetail(Subgroup group) {
-        saveOffset(); detail = group; resizeScroll(); entrance.start(now()); updateButtons();
+        beforeDetailChange.run();
+        saveOffset(); detail = group; resizeScroll(); updateButtons();
         placed.stream().filter(p -> p.view() == group && p.index() == -1).findFirst().ifPresent(p -> screen.setFocused(p.button()));
     }
     boolean leaveDetail() {
         if (detail == null) return false;
+        if (screen != null) beforeDetailChange.run();
         Subgroup previous = detail;
         returnFocus = previous;
-        saveOffset(); detail = null; resizeScroll(); entrance.start(now()); updateButtons();
+        if (scrollbar != null) saveOffset();
+        detail = null;
+        if (scrollbar != null) {
+            resizeScroll();
+            updateButtons();
+        }
         var arrow = buttons.get(previous.toggle());
         if (screen != null && arrow != null && arrow.visible) { screen.setFocused(arrow); returnFocus = null; }
         return true;
@@ -187,7 +216,7 @@ final class SettingsGroup {
         return true;
     }
     boolean scroll(double x, double y, double delta) {
-        return visible && area != null && x >= area.x() && x < area.right() && y >= firstRow && y < area.bottom()
+        return !manualRender && visible && area != null && x >= area.x() && x < area.right() && y >= firstRow && y < area.bottom()
                 && scrollbar.scrollByWheel(delta);
     }
     void syncControls() {
@@ -197,12 +226,18 @@ final class SettingsGroup {
         });
     }
     void setVisible(boolean value) {
-        if (value && !visible) entrance.start(now());
         visible = value;
         updateButtons();
     }
-    private static long now() { return System.nanoTime() / 1_000_000L; }
+
     private Bounds rowClip() { return new Bounds(area.x(), firstRow, Math.max(0, area.width() - 12), viewportHeight); }
+    private Bounds nativeRowClip() { return manualRender ? new Bounds(0, 0, 0, 0) : rowClip(); }
+    void setManualRender(boolean manualRender) { this.manualRender = manualRender; }
+
+    boolean containsFocus(GuiEventListener focus) {
+        return focus != null && (focus == scrollbar || placed.stream().anyMatch(row -> row.button() == focus));
+    }
+
     void advanceMotion() {
         if (!visible || scrollbar == null) return;
         scrollbar.advanceMotion();
@@ -227,11 +262,8 @@ final class SettingsGroup {
         if (area == null) return;
         int offset = (int) Math.round(scroll.offset());
         for (var p : placed) {
-            int row = p.index() < 0 ? 0 : p.index() / columns + (p.view() == null ? 0 : 1);
             int col = p.index() < 0 ? 0 : p.index() % columns;
-            int reveal = screen == null ? 0 : (int) Math.round(entrance.offset(row, now(),
-                    screen.context().preferences().reducedMotion()));
-            int y = firstRow + row * (ControlCenterLayout.ROW + ControlCenterLayout.GAP) - offset + reveal;
+            int y = rowY(p.index(), p.view(), offset);
             p.button().setX(area.x() + col * (rowWidth + ControlCenterLayout.GAP) + p.xOffset());
             p.button().setY(y);
             p.button().visible = visible && p.view() == detail && y < area.bottom()
@@ -239,17 +271,65 @@ final class SettingsGroup {
         }
         if (scrollbar != null) scrollbar.visible = visible && scroll.maxOffset() > 0;
     }
+
+    private int rowY(int slot, Subgroup view, int offset) {
+        int row = slot < 0 ? 0 : slot / columns + (view == null ? 0 : 1);
+        return firstRow + row * (ControlCenterLayout.ROW + ControlCenterLayout.GAP) - offset;
+    }
     private void updateButtons() { layoutButtons(); }
     void clearWidgets() {
-        saveOffset(); buttons.clear(); toggles.clear(); placed.clear(); scrollbar = null; screen = null;
-        visible = false; lastFocus = null;
+        if (scrollbar != null) saveOffset();
+        buttons.clear(); toggles.clear(); placed.clear(); headings.clear(); scrollbar = null; screen = null;
+        beforeDetailChange = null;
+        visible = false; lastFocus = null; manualRender = false;
     }
     void render(GuiGraphics graphics, Font font, Component status) {
         Component heading = status != null ? status : detail == null ? section.label() : detail.title();
         graphics.enableScissor(area.x(), area.y(), area.right(), area.y() + font.lineHeight);
-        graphics.drawString(font, heading, area.x(), area.y(),
-                status == null ? LiquidGlassTheme.accentColor() : LiquidGlassTheme.textColor(), false);
-        graphics.disableScissor();
+        try {
+            graphics.drawString(font, heading, area.x(), area.y(),
+                    status == null ? LiquidGlassTheme.accentColor() : LiquidGlassTheme.textColor(), false);
+        } finally {
+            graphics.disableScissor();
+        }
+        if (headings.isEmpty()) return;
+        var clip = rowClip();
+        graphics.enableScissor(clip.x(), clip.y(), clip.right(), clip.bottom());
+        try {
+            int offset = (int) Math.round(scroll.offset());
+            for (var sectionHeading : headings) {
+                if (sectionHeading.view() != detail) continue;
+                int y = rowY(sectionHeading.slot(), sectionHeading.view(), offset);
+                graphics.drawString(font, sectionHeading.title(), area.x(),
+                        y + (ControlCenterLayout.ROW - font.lineHeight) / 2, LiquidGlassTheme.accentColor(), false);
+            }
+        } finally {
+            graphics.disableScissor();
+        }
+    }
+
+    void renderWidgets(GuiGraphics graphics, float partialTick) {
+        var clip = rowClip();
+        graphics.enableScissor(clip.x(), clip.y(), clip.right(), clip.bottom());
+        try {
+            for (var row : placed) row.button().render(graphics, -1, -1, partialTick);
+        } finally {
+            graphics.disableScissor();
+        }
+        scrollbar.render(graphics, -1, -1, partialTick);
+    }
+
+    void addSkeletonRows(List<UiSkeleton.Block> blocks) {
+        for (var row : placed) {
+            var button = row.button();
+            if (!button.visible) continue;
+            int left = button.getX() + 2, right = button.getX() + button.getWidth() - 2;
+            int top = Math.max(firstRow, button.getY() + 3);
+            int bottom = Math.min(area.bottom(), button.getY() + button.getHeight() - 3);
+            if (right > left && bottom > top) blocks.add(new UiSkeleton.Block(
+                    new Bounds(left, top, right - left, bottom - top), 8f));
+        }
     }
     private record Placed(UiButton button, Subgroup view, int index, int xOffset) {}
+    private record PlacedHeading(Component title, Subgroup view, int slot) {}
 }

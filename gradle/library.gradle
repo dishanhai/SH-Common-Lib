@@ -1,6 +1,6 @@
 // Author: dishanhai
 group = 'com.dishanhai'
-version = '0.3.0'
+version = '0.4.0'
 
 def libraryArtifact = "sh-common-lib-${platform}-${minecraft_version}"
 base { archivesName = libraryArtifact }
@@ -24,6 +24,20 @@ tasks.register('controlCenterDraftTest', JavaExec) {
     description = 'Checks staged control center settings, reset, retry, and HUD editor merging.'
     classpath = sourceSets.controlCenterVerification.runtimeClasspath
     mainClass = 'com.dishanhai.sh_common_lib.client.control.ControlCenterDraftTest'
+}
+
+tasks.register('artisanSettingsTest', JavaExec) {
+    group = 'verification'
+    description = 'Checks independent Artisan enable settings and preservation during edits.'
+    classpath = sourceSets.controlCenterVerification.runtimeClasspath
+    mainClass = 'com.dishanhai.sh_common_lib.internal.item.ArtisanSettingsTest'
+}
+
+tasks.register('cosmicArtisanGestureTest', JavaExec) {
+    group = 'verification'
+    description = 'Checks tap and hold timing and cancellation for the Cosmic Artisan shortcut.'
+    classpath = sourceSets.controlCenterVerification.runtimeClasspath
+    mainClass = 'com.dishanhai.sh_common_lib.client.item.CosmicArtisanGestureTest'
 }
 
 tasks.register('clientSearchTest', JavaExec) {
@@ -100,7 +114,7 @@ tasks.register('inventorySnapshotTest', JavaExec) {
 }
 
 tasks.named('check') {
-    dependsOn tasks.named('controlCenterDraftTest'), tasks.named('clientSearchTest'), tasks.named('searchHistoryTest'), tasks.named('jeiSearchSettingsTest'), tasks.named('searchCompletionUndoTest'), tasks.named('recipePreviewBoundsTest'), tasks.named('searchPagingTest'), tasks.named('inventoryScanTrackerTest'), tasks.named('inventorySnapshotTest')
+    dependsOn tasks.named('cosmicArtisanGestureTest'), tasks.named('artisanSettingsTest'), tasks.named('controlCenterDraftTest'), tasks.named('clientSearchTest'), tasks.named('searchHistoryTest'), tasks.named('jeiSearchSettingsTest'), tasks.named('searchCompletionUndoTest'), tasks.named('recipePreviewBoundsTest'), tasks.named('searchPagingTest'), tasks.named('inventoryScanTrackerTest'), tasks.named('inventorySnapshotTest')
 }
 
 tasks.withType(JavaCompile).configureEach {

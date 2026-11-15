@@ -5,7 +5,13 @@ import com.dishanhai.sh_common_lib.client.hud.PlayerInfoHudSettings;
 import com.dishanhai.sh_common_lib.client.hud.PlayerInfoHudSettingsIoTest;
 import com.dishanhai.sh_common_lib.client.hud.PlayerInfoItem;
 import com.dishanhai.sh_common_lib.client.hud.HudGroups;
+import com.dishanhai.sh_common_lib.client.jei.JeiSearchSettings;
+import com.dishanhai.sh_common_lib.client.item.ArtisanAppearancePreferences;
+import com.dishanhai.sh_common_lib.internal.item.ArtisanSettings;
+import com.dishanhai.sh_common_lib.internal.item.ArtisanSettings.Passives;
+import com.dishanhai.sh_common_lib.internal.item.ArtisanSettings.Profiles;
 
+import java.nio.file.Files;
 import java.util.concurrent.atomic.AtomicReference;
 
 /** Standalone behavioral checks; run with the JDK used by the project. */
@@ -18,28 +24,118 @@ public final class ControlCenterDraftTest {
         groupPreferencesSurviveEditorReturn();
         optionalIntegrationsFollowLoadedMods();
         jeiSettingsAreStagedAndRetryable();
+        artisanSettingsRespectReadOnlyWorldsAndApply();
+        artisanAppearancePersistsOnClient();
         ControlCenterLayoutTest.run();
         PlayerInfoHudSettingsIoTest.run();
         System.out.println("Control center draft checks passed");
     }
 
+    private static void artisanSettingsRespectReadOnlyWorldsAndApply() {
+        var serverSettings = new Profiles(new ArtisanSettings(true, true),
+                new ArtisanSettings(false, true, 1, 2, 4, 8, 500, 12, 1.5, 3),
+                new Passives(false, false, false, false));
+        var remote = new ControlCenterDraft(PlayerInfoHudSettings.DEFAULT, true, false, JeiSearchSettings.DEFAULT,
+                serverSettings, false, true);
+        remote.setArtisan(true, ArtisanSettings.COSMIC_DEFAULT);
+        remote.setArtisanPassives(Passives.DEFAULT);
+        remote.restoreDefaults();
+        check(remote.artisan(false).equals(serverSettings.regular()) && remote.artisan(true).equals(serverSettings.cosmic())
+                        && remote.artisanPassives().equals(serverSettings.passives()),
+                "reset and edits must preserve read-only profiles and passives");
+        remote.setArtisanTargetColors(false);
+        check(!remote.artisanTargetColors() && remote.apply(hud -> true, (a, p) -> true, jei -> true, value -> {
+            throw new AssertionError("read-only world settings were written");
+        }, enabled -> false) == ControlCenterDraft.ApplyResult.PARTIAL && remote.dirty(),
+                "failed client preference save must remain staged while other settings save");
+        check(remote.apply(hud -> true, (a, p) -> true, jei -> true, value -> {
+            throw new AssertionError("read-only world settings were written");
+        }, enabled -> !enabled) == ControlCenterDraft.ApplyResult.SAVED && !remote.dirty(),
+                "the client preference must be editable in read-only worlds");
+        remote.restoreDefaults();
+        check(remote.artisanTargetColors() && remote.artisanPassives().equals(serverSettings.passives()),
+                "reset must restore client colors while preserving remote passives");
+        remote.restoreDefaults();
+        check(!remote.artisanTargetColors() && !remote.dirty(), "undo must restore the client preference");
+
+        var local = new ControlCenterDraft(PlayerInfoHudSettings.DEFAULT, false, false, JeiSearchSettings.DEFAULT,
+                Profiles.DEFAULTS, true, true);
+        var disk = new AtomicReference<>(Profiles.DEFAULTS);
+        local.setArtisanPassives(local.artisanPassives().withFlight(false));
+        check(local.artisanPassives().equals(new Passives(false, true, true, true)), "flight switch must be independent");
+        local.setArtisanPassives(local.artisanPassives().withDamageImmunity(false));
+        check(local.artisanPassives().equals(new Passives(false, false, true, true)), "damage switch must be independent");
+        local.setArtisanPassives(local.artisanPassives().withFullFood(false));
+        check(local.artisanPassives().equals(new Passives(false, false, false, true)), "food switch must be independent");
+        local.setArtisanPassives(local.artisanPassives().withFullSaturation(false));
+        local.setArtisan(false, serverSettings.regular());
+        check(local.artisan(true).equals(ArtisanSettings.COSMIC_DEFAULT), "editing the regular profile must leave cosmic independent");
+        local.setArtisan(true, serverSettings.cosmic());
+        check(disk.get().equals(Profiles.DEFAULTS) && local.dirty(), "Artisan changes must remain staged");
+        check(local.apply(hud -> true, (a, p) -> true, jei -> true, value -> false)
+                == ControlCenterDraft.ApplyResult.FAILED && local.dirty(), "Artisan save can be retried");
+        check(local.apply(hud -> true, (a, p) -> true, jei -> true, value -> { disk.set(value); return true; })
+                == ControlCenterDraft.ApplyResult.SAVED && disk.get().equals(serverSettings) && !local.dirty(),
+                "Apply must persist both independent profiles");
+        local.restoreDefaults();
+        check(local.artisan(false).equals(ArtisanSettings.DEFAULT) && local.artisan(true).equals(ArtisanSettings.COSMIC_DEFAULT)
+                        && local.artisanPassives().equals(Passives.DEFAULT),
+                "reset must restore both profiles' distinct defaults");
+        local.restoreDefaults();
+        check(local.artisan(false).equals(serverSettings.regular()) && local.artisan(true).equals(serverSettings.cosmic())
+                && local.artisanPassives().equals(serverSettings.passives()) && !local.dirty(),
+                "undo must restore the world settings");
+    }
+
+    private static void artisanAppearancePersistsOnClient() throws Exception {
+        var directory = Files.createTempDirectory("shclib-artisan-test");
+        var file = directory.resolve("artisan-client.properties");
+        try {
+            ArtisanAppearancePreferences.initialize(directory);
+            check(ArtisanAppearancePreferences.targetColors(), "missing settings must enable target colors");
+            check(ArtisanAppearancePreferences.save(false), "the target colors preference must save");
+            ArtisanAppearancePreferences.initialize(directory);
+            check(!ArtisanAppearancePreferences.targetColors(), "disabled target colors must survive reload");
+            Files.writeString(file, "targetColors=invalid");
+            ArtisanAppearancePreferences.initialize(directory);
+            check(ArtisanAppearancePreferences.targetColors(), "invalid target colors must use the default");
+        } finally {
+            Files.deleteIfExists(file);
+            Files.delete(directory);
+        }
+    }
+
     private static void jeiSettingsAreStagedAndRetryable() {
         var state = new ControlCenterDraft(PlayerInfoHudSettings.DEFAULT, false, false);
         var disk = new AtomicReference<>(state.jei());
+        state.setJeiAe2Orderable(false);
+        state.setJeiOptimizeRendering(true);
+        state.setJeiEnabled(false);
         state.setJeiPrediction(false);
         state.setJeiRandom(false);
         state.setJeiChat(true);
+        state.setJeiHot(true);
+        state.setJeiHotShare(true);
         state.setJeiGlass(false);
-        check(!state.jei().randomSource() && state.jei().questSource() && state.jei().chatSource(),
+        check(!state.jei().randomSource() && state.jei().questSource() && state.jei().chatSource()
+                        && state.jei().hotSource() && state.jei().hotShare(),
                 "other JEI edits must preserve staged source switches");
-        check(disk.get().prediction() && state.dirty(), "JEI edits must stay staged");
+        check(disk.get().ae2Orderable() && !state.jei().ae2Orderable(), "AE2 badge edits stay staged across other changes");
+        check(!disk.get().optimizeRendering() && state.jei().optimizeRendering(),
+                "rendering optimization stays staged across other JEI edits");
+        check(disk.get().enabled() && !state.jei().enabled() && disk.get().prediction() && state.dirty(), "JEI edits must stay staged");
         check(state.apply(value -> true, (a, p) -> true, value -> false) == ControlCenterDraft.ApplyResult.FAILED,
                 "JEI save failure must be visible");
         check(state.dirty(), "failed JEI save remains staged");
         check(state.apply(value -> true, (a, p) -> true, value -> { disk.set(value); return true; })
-                == ControlCenterDraft.ApplyResult.SAVED && !disk.get().prediction() && !disk.get().glass()
+                == ControlCenterDraft.ApplyResult.SAVED && !disk.get().enabled() && !disk.get().prediction() && !disk.get().glass()
+                && !disk.get().ae2Orderable() && disk.get().optimizeRendering()
                 && !disk.get().randomSource() && disk.get().questSource() && disk.get().chatSource() && !state.dirty(),
                 "JEI settings can be retried");
+        state.restoreDefaults();
+        check(state.dirty() && !state.jei().optimizeRendering(), "restore defaults disables the rendering optimization");
+        state.restoreDefaults();
+        check(!state.dirty() && state.jei().optimizeRendering(), "undoing the reset restores the rendering optimization");
     }
 
     private static void stagedEditsAndUndo() {

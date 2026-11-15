@@ -25,8 +25,13 @@ public final class HudPanel {
     private final TextReadabilityPalette palette = new TextReadabilityPalette();
 
     public HudPanel(Font font, List<Row> rows) {
+        this(font, rows, 0);
+    }
+
+    public HudPanel(Font font, List<Row> rows, int minimumTextWidth) {
         this.rows = List.copyOf(rows);
-        width = TEXT_X + PADDING + rows.stream().mapToInt(row -> font.width(row.text())).max().orElse(0);
+        int textWidth = this.rows.stream().mapToInt(row -> font.width(row.text())).max().orElse(0);
+        width = TEXT_X + PADDING + Math.max(textWidth, minimumTextWidth);
         height = rows.size() * (font.lineHeight + 3) + 2 * PADDING;
     }
 

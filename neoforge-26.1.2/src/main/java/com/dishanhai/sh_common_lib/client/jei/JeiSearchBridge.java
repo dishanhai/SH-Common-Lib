@@ -1,6 +1,7 @@
 // Author: dishanhai
 package com.dishanhai.sh_common_lib.client.jei;
 
+import com.dishanhai.sh_better_ui.client.gui.layout.TooltipBounds;
 import com.dishanhai.sh_common_lib.compat.jei.JeiShortcuts;
 import mezz.jei.api.gui.IRecipeLayoutDrawable;
 import mezz.jei.api.ingredients.IIngredientHelper;
@@ -88,6 +89,42 @@ final class JeiSearchBridge {
         if (backend.runtime.getRecipeManager().createRecipeCategoryLookup().limitFocus(List.of(focus)).get().findAny().isEmpty()) return false;
         backend.runtime.getRecipesGui().show(focus);
         return true;
+    }
+
+    static void renderTooltip(Ingredient ingredient, GuiGraphicsExtractor graphics, int x, int y, int rightBoundary) {
+        if (ingredient.owner() == backend && ingredient.visible()) renderTooltipTyped(ingredient.typed(), graphics, x, y, rightBoundary);
+    }
+
+    private static <T> void renderTooltipTyped(ITypedIngredient<T> typed, GuiGraphicsExtractor graphics, int x, int y, int rightBoundary) {
+        var client = net.minecraft.client.Minecraft.getInstance();
+        var renderer = backend.manager.getIngredientRenderer(typed.getType());
+        var flag = client.options.advancedItemTooltips ? net.minecraft.world.item.TooltipFlag.ADVANCED : net.minecraft.world.item.TooltipFlag.NORMAL;
+        var context = client.level == null ? net.minecraft.world.item.Item.TooltipContext.EMPTY
+                : net.minecraft.world.item.Item.TooltipContext.of(client.level);
+        var lines = renderer.getTooltip(typed.getIngredient(), context, client.player, flag);
+        if (lines.isEmpty()) return;
+        var font = renderer.getFontRenderer(client, typed.getIngredient());
+        if (font == null) font = client.font;
+        var image = typed.getItemStack().flatMap(net.minecraft.world.item.ItemStack::getTooltipImage);
+        var stack = typed.getItemStack().orElse(net.minecraft.world.item.ItemStack.EMPTY);
+        int right = TooltipBounds.rightEdge(graphics.guiWidth(), rightBoundary);
+        int anchorX = Math.min(x, right);
+        var components = net.neoforged.neoforge.client.ClientHooks.gatherTooltipComponents(
+                stack, lines, image, anchorX, right, graphics.guiHeight(), font);
+        if (components.isEmpty()) return;
+        graphics.nextStratum();
+        graphics.enableScissor(0, 0, right, graphics.guiHeight());
+        var pose = graphics.pose();
+        pose.pushMatrix();
+        try {
+            var originalPose = new org.joml.Matrix3x2f(pose);
+            var positioner = TooltipBounds.fitLeftOf(right, 12, factor ->
+                    pose.set(originalPose).scale((float) factor));
+            graphics.tooltip(font, components, anchorX, y, positioner, null, stack);
+        } finally {
+            pose.popMatrix();
+            graphics.disableScissor();
+        }
     }
 
     private static <T> Stream<Recipe> recipes(Backend owner, IRecipeCategory<T> category, List<IFocus<?>> focus) {

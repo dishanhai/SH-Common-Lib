@@ -1,0 +1,8 @@
+{
+  "parent": "minecraft:block/cube_bottom_top",
+  "textures": {
+    "top": "sh_common_lib:block/cosmic_beacon_top",
+    "bottom": "sh_common_lib:block/cosmic_beacon_side",
+    "side": "sh_common_lib:block/cosmic_beacon_side"
+  }
+}

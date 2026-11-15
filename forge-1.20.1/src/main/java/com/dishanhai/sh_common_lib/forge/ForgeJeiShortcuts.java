@@ -2,6 +2,8 @@ package com.dishanhai.sh_common_lib.forge;
 
 import com.dishanhai.sh_common_lib.compat.jei.JeiShortcuts;
 import com.dishanhai.sh_common_lib.client.jei.JeiSearchAssistant;
+import com.dishanhai.sh_common_lib.client.jei.JeiSearchProvider;
+import net.minecraftforge.fml.ModList;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.item.ItemStack;
 import net.minecraftforge.client.event.RenderTooltipEvent;
@@ -18,11 +20,15 @@ final class ForgeJeiShortcuts {
     private ForgeJeiShortcuts() {}
 
     static void register(boolean ownsShortcuts) {
+        ForgeHotWordsNetwork.bindClient();
+        var infinityCells = ModList.get().isLoaded("ae2") ? ForgeJeiInfinityCells.register() : null;
+        JeiSearchProvider.initialize(ModList.get().isLoaded("jeiguess"));
         MinecraftForge.EVENT_BUS.addListener(EventPriority.LOWEST, (ClientChatReceivedEvent event) -> {
             if (!event.isSystem()) JeiSearchAssistant.chatReceived(event.getMessage().getString());
         });
         MinecraftForge.EVENT_BUS.addListener(EventPriority.HIGHEST, (ScreenEvent.KeyPressed.Pre event) -> {
-            if (JeiSearchAssistant.keyPressed(event.getScreen(), event.getKeyCode(), event.getModifiers())
+            if (JeiShortcuts.openHoveredRecipe(event.getScreen(), event.getKeyCode(), event.getScanCode())
+                    || JeiSearchAssistant.keyPressed(event.getScreen(), event.getKeyCode(), event.getModifiers())
                     || JeiShortcuts.keyPressed(event.getScreen(), event.getKeyCode(), event.getModifiers(),
                     ownsShortcuts, DATA_KIND, ForgeJeiShortcuts::serializeData)) {
                 event.setCanceled(true);
@@ -36,21 +42,23 @@ final class ForgeJeiShortcuts {
             if (JeiSearchAssistant.mouseScrolled(event.getScreen(), event.getMouseX(), event.getMouseY(), event.getScrollDelta()))
                 event.setCanceled(true);
         });
-        MinecraftForge.EVENT_BUS.addListener(EventPriority.HIGHEST, (ScreenEvent.CharacterTyped.Pre event) ->
-                JeiSearchAssistant.characterTyped(event.getScreen()));
+        MinecraftForge.EVENT_BUS.addListener(EventPriority.HIGHEST, (ScreenEvent.CharacterTyped.Pre event) -> {
+            if (JeiShortcuts.suppressRecipeCharacter(event.getScreen())) event.setCanceled(true);
+            else JeiSearchAssistant.characterTyped(event.getScreen());
+        });
         MinecraftForge.EVENT_BUS.addListener(EventPriority.HIGHEST, (ScreenEvent.Render.Pre event) ->
                 JeiSearchAssistant.beforeRender(event.getScreen()));
         MinecraftForge.EVENT_BUS.addListener(EventPriority.LOWEST, (ScreenEvent.Render.Post event) ->
                 JeiSearchAssistant.render(event.getScreen(), event.getGuiGraphics(), event.getMouseX(), event.getMouseY()));
         MinecraftForge.EVENT_BUS.addListener((ScreenEvent.Closing event) -> JeiSearchAssistant.close(event.getScreen()));
         MinecraftForge.EVENT_BUS.addListener((TickEvent.ClientTickEvent event) -> {
-            if (event.phase == TickEvent.Phase.END) JeiSearchAssistant.tick();
+            if (event.phase == TickEvent.Phase.END) { JeiSearchProvider.tick(); JeiSearchAssistant.tick(); }
         });
         MinecraftForge.EVENT_BUS.addListener((RenderTooltipEvent.GatherComponents event) ->
                 JeiShortcuts.appendTooltipHints(event.getItemStack(), event.getTooltipElements(),
                         ownsShortcuts, DATA_KIND,
                         ingredient -> ingredient instanceof ItemStack || ingredient instanceof FluidStack,
-                        ingredient -> false));
+                        ingredient -> infinityCells != null && infinityCells.hasHint(ingredient)));
     }
 
     private static String serializeData(Object ingredient) {

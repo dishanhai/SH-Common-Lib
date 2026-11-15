@@ -14,6 +14,10 @@ import java.util.Random;
 
 /** Session-scoped, bounded candidate sources. The host supplies visible names and quest data. */
 public final class SearchSources {
+    public record Group(String id, List<String> entries) {
+        public Group { Objects.requireNonNull(id); entries = List.copyOf(entries); }
+    }
+    public record MixedItem(String source, String text) {}
     private final int capacity;
     private final Random random;
     private record Name(String value, String normalized) {}
@@ -54,6 +58,32 @@ public final class SearchSources {
     public List<String> quest() { return questItems; }
     public List<String> chat() { return List.copyOf(chatItems); }
     public void clearChat() { chatItems.clear(); }
+
+    /** Round-robin sources with per-source quotas and case-insensitive deduplication. */
+    public static List<MixedItem> mix(List<Group> groups, int perSource, int limit) {
+        if (perSource <= 0 || limit <= 0) return List.of();
+        var output = new ArrayList<MixedItem>();
+        var seen = new HashSet<String>();
+        int[] cursors = new int[groups.size()];
+        int[] counts = new int[groups.size()];
+        boolean progressed;
+        do {
+            progressed = false;
+            for (int i = 0; i < groups.size() && output.size() < limit; i++) {
+                var group = groups.get(i);
+                if (counts[i] >= perSource) continue;
+                while (cursors[i] < group.entries().size()) {
+                    String text = group.entries().get(cursors[i]++).strip();
+                    if (text.isEmpty() || !seen.add(text.toLowerCase(Locale.ROOT))) continue;
+                    output.add(new MixedItem(group.id(), text));
+                    counts[i]++;
+                    progressed = true;
+                    break;
+                }
+            }
+        } while (progressed && output.size() < limit);
+        return List.copyOf(output);
+    }
 
     /** Record only known item names in a player message; message contents are never stored. */
     public void acceptChat(String message) {

@@ -41,6 +41,7 @@ public final class ClientLoading {
     public static void initialize(Path configDirectory, boolean hasJei) {
         var directory = configDirectory.resolve("sh_common_lib");
         com.dishanhai.sh_common_lib.client.jei.JeiSearchPreferences.initialize(directory);
+        com.dishanhai.sh_common_lib.client.item.ArtisanAppearancePreferences.initialize(directory);
         settings = new LoadingSettings(directory.resolve("loading.properties"));
         ModLoadingStatus.initialize(hasJei);
         reports = new LoadingReports(directory.resolve("loading_reports"));

@@ -35,6 +35,7 @@ final class ForgePlayerInfoHud {
         hud.bindPageKeys(previousPage, nextPage);
         hud.bindAe2Request(ForgeTickNetwork::requestAe2);
         hud.bindInventoryRequest(ForgeTickNetwork::requestInventoryHud);
+        hud.bindEcoMachineRequest(ForgeTickNetwork::requestEcoMachines);
         ControlCenterModule.bindHud(hud);
         modBus.addListener((RegisterKeyMappingsEvent event) -> {
             event.register(hud.editKey());

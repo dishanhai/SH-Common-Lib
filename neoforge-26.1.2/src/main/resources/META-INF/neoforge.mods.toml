@@ -10,6 +10,12 @@ description="Shared Minecraft mod APIs, items, and blocks."
 [[mixins]]
 config="sh_common_lib.loading.mixins.json"
 
+[[mixins]]
+config="sh_common_lib.jei_ae2.mixins.json"
+
+[[mixins]]
+config="sh_common_lib.extendedae.mixins.json"
+
 [[dependencies.sh_common_lib]]
 modId="neoforge"
 type="required"

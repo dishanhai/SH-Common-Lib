@@ -1,0 +1,7 @@
+{
+  "variants": {
+    "": {
+      "model": "sh_common_lib:block/cosmic_beacon"
+    }
+  }
+}

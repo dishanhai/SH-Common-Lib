@@ -1,5 +1,50 @@
 # 构建经验
 
+- JEI 的素材渲染优化需求须保留原有同屏素材数量和布局。按实际 JEI 版本核对模型提交或图集刷新路径，使用同一素材页对比帧时间。
+- NeoForge 26.1.2 会继承 1.21.1 源码。仅用于旧版 `BakedModel` 渲染的实现需要排除，或在 26.1.2 下提供同路径替换，否则新版编译会尝试解析已移除的类型。
+
+- SHBUI NeoForge 26.1.2 有本端的 `UIApis`，不会继承旧端服务别名。启用 UUK 电脑遥测时应同时声明 `COMPUTER_STATUS` 服务键和 `COMPUTER_STATUS_READ` 能力键，内核注册参数分别使用两者。
+
+- 用 Gradle 临时加入跨版本游戏内回归时，设置 `sourceSets.main.java.destinationDirectory` 可让 ModDev 与 ForgeGradle 同时使用隔离类目录。只改 `compileJava.destinationDirectory` 可能仍让启动器加载项目默认输出。Forge 开发环境加载发布版 AE2 15.4.10 时，还需提供 GuideME 20.1.x 并启用 Mixin 的 SRG 到开发名称映射。
+
+- 世界标签应按相机空间深度、投影矩阵和 GUI 高度换算字高。仅按相机到信标的距离缩放，仍会受视场角、GUI 缩放和斜视影响。信标瞄准按标签锚点的夹角命中，发送传送请求前核对当前选中标记已经高亮，避免不可见目标截获使用键。
+- 将默认开启的百工投影改为主动开启时，旧物品的模式位 30 表示关闭。直接翻转默认值会让曾关闭投影的旧物品反而打开。读取时清除旧位，使用独立的启用标记记录新选择，同时保留其他模式位。
+- JEI 附着于普通背包和工作台时，玩家菜单没有 AE2 的客户端储存仓库。可下单角标要由服务端根据玩家可访问的在线 ME 网络提供合成目标，并随连接、维度及设置变更清除客户端快照。仅验证 ME 终端和样板预览无法覆盖这些页面。
+
+- ExtendedAE 2.2.43 的已编码加工样板详情由 `ContainerPattern` 承载。它从当前样板解码主产物且没有 ME 储存终端的 `Repo`。JEI 样板预览中的角标需要直接读取预览上下文，并在退出后清除；ME 网络的可合成状态仍由终端同步。
+
+- 世界信标的名称与距离应在世界渲染阶段按信标坐标提交。固定在右上角并注册为最高层的 GUI 卡片会盖住小地图的坐标和群系文字。NeoForge 26.1.2 通过世界状态提取和几何提交事件绘制，Forge 1.20.1 与 NeoForge 1.21.1 使用世界渲染阶段事件。
+- 百工物品配置通过快捷键重开时会构造新 Screen。将分组 ID 和页码写入现有客户端偏好，并在新窗口按实际布局夹取页码，可以兼容分组重排和 GUI 缩放。
+
+- JEI NeoForge 19.70.0.469 的发布 JAR 会在 `IngredientListRenderer.renderBatch` 中复用 `this` 和 `GuiGraphics` 的槽位。Mixin 在方法尾部读取这些槽位会触发 `VerifyError`，JEI 捕获后跳过整个 GUI 的创建。应从外层调用的操作数取得绘图参数，并用实际发布 JAR 验证转换后的类。
+
+- 百工·寰宇的 AE2 实测需要把无线接入点背面接到在线网络。接入点默认朝向可能使测试仅有电源与驱动器在线。用 Gradle 初始化脚本临时加入服务端断言时，把测试编译输出放在隔离目录，避免其他构建清理同一个类输出。
+
+- SHBUI 的同版本早期 JAR 可能缺少源码已声明的 `GraphicIcon.AE2_ORDERABLE`。应先构建对应加载器的 SHBUI，再从实际 JAR 核对常量与纹理。旧 JAR 缺少该常量时，SHCLIB 跳过可下单角标绘制。
+- Forge 1.20.1 的 SHBUI 旧包 `sh_better_ui-1.0.11.jar` 与带平台后缀的新包同为 `sh_better_ui` 1.0.11。两份并存时，实例的 `debug.log` 显示 Forge 选中了缺少 `LayeredScreen` 的旧包，导致 SHCLIB 0.4.0 注册百工快捷配置时崩溃。部署时检查实例 `mods` 中实际参与加载的同 mod ID JAR，并确认所选 Forge 包含有该类。
+
+- 0.4.0 跨版本工具事件要以实际依赖为准。NeoForge 26.1.2 将破坏事件迁移到 event.level.block.BreakBlockEvent，熔炼 assemble 只收输入，工具能力收到 ItemInstance。Forge 1.20.1 的 LivingChangeTargetEvent 使用 getNewTarget 和 setNewTarget。连锁任务从各端破坏事件登记，在玩家 tick 执行，可同时避免依赖新版已移除的服务器任务接口和在取消破坏时误触发。
+
+- Git Bash 通过 Unix Gradle wrapper 启动 Windows JVM 时，临时目录可能被解析为 `C:jtmp`。在 Git Bash 中用 `cmd.exe //d //c gradlew.bat` 启动 Windows wrapper，并传入 `TEMP=C:/jtmp TMP=C:/jtmp JAVA_TOOL_OPTIONS=-Djava.io.tmpdir=C:/jtmp` 后，三个 0.4.0 目标均能正常构建。
+
+- 玩家信息 HUD 使用当前页实际显示过的最大文字宽度。用理论最大坐标和所有群系名称预留空间会让正常内容右侧留白过大。宽度应按页记录，翻页时读取目标页的宽度，窗口空间不足时受可用宽度限制。
+
+- 在 Git Bash 中，WindowsApps 目录随 Codex 提供的 `rg` 可能报 `Exec format error`。可用 `git grep` 查已跟踪文件，用 Git Bash 自带的 `grep` 查未提交的上游源码。跨模组自动发现还需核对实际依赖 JAR；NeoForge 1.21.1 的 SHBUI 1.0.11 早期构建含内置 AE2 自动化，第三方模块入口需使用更新的同版本构建。
+
+- `controlCenterDraftTest` 只加载主源码输出和独立验证类，不含游戏运行库。用该任务直接验证客户端配置读写时，存储类应保持纯 JDK 依赖，以免初始化 SLF4J 时出现 `NoClassDefFoundError`。
+
+- 跨 1.20.1、1.21.1 和 26.1.2 共享的数值设置页应使用共同的 `StringWidget` 构造方法；26.1.2 移除了旧版的 `alignLeft` 和 `alignCenter` 链式方法。
+
+- 主控中心动效的参照是对应加载器上的 SHBUI 原生控制面板。旧两端复用标题胶囊、正文形变与帧交接，26.1.2 的原生页即时切换。实现前核对源码和实际依赖 JAR，避免把额外位移、指示条和发光叠在共用控件上。
+
+- 共享控制中心的页面与设置组可能正在同时迁移动效接口。向面板加分类时只改分组和保存入口，重跑构建前核对页面与设置组签名，并确认 NeoForge 26.1.2 的独立页面仍能引用所需的共用动效类。
+
+- 百工状态动画中的粒子只绘制在透明像素上。角色轮廓会遮掉部分预设坐标，应对最终输出的透明度逐帧验重，确保每帧保留预期的光效。
+
+- 生成 Minecraft 物品帧序列时，按实际刀刃像素范围计算高光的位置，并逐帧比较像素与透明轮廓。只检查条带尺寸和索引会漏掉高光移出刀刃后产生的重复帧。
+
+- NeoForge 26.1.2 已移除 `ItemAbilities.DEFAULT_PICKAXE_ACTIONS` 等挖掘能力集合。跨版本工具在 26.1.2 使用原版 `TOOL` 组件和方块标签判断挖掘与掉落，`canPerformAction` 继续声明剥皮、铺路和耕地等交互能力。
+
 - HUD 在空间不足时，逐个尝试保留数据行若每次都新建面板，会重复测量之前所有行的文字；每次刷新数据都会再次触发。行高一致且宽度由最长文字决定时，应缓存每行测量并复用尺寸计算，同时核对缩放边界和原有优先级。
 - NeoForge 26.1.2 的硬件遥测回退路径与旧版本不同：CPU、内存和磁盘原先在调用线程读取。HUD 开启这些项目时，应在后台限频采样并返回缓存，不能只检查旧版本的异步服务。
 - 无线终端的已绑定网络不等于玩家当前可连接的网络。查询 AE2 HUD 数据时应使用终端自己的宿主检查范围和供电，避免只调用 `getLinkedGrid` 就暴露远程网络；扩展终端可能覆盖宿主和量子连接行为。
@@ -74,3 +119,15 @@
 - Gradle 的自定义 `JavaExec` 任务可能使用运行 Gradle 的 Java 17，而项目源码由 Java 21 或 25 工具链编译；应显式设置 `javaLauncher` 为项目工具链，再运行测试。
 
 - 当前 Windows 命令工具即使指定 Git Bash 也可能误触发 WSL 占位程序；可通过 Node 的 `execFile` 显式启动 `C:\Program Files\Git\bin\bash.exe`，继续使用 Git Bash。
+
+- Forge 目录迁移为 `forge-1.20.1` 后，根目录 `build-all.bat` 仍指向旧的 `forge` 会在启动构建前报找不到路径；迁移目录时应同步检查批处理入口。
+
+- 百工转盘的上下槽和两侧槽在矮窗口仍可能同时挤进中心区域。按实际按钮边界验证宽高组合，并在纵向间距不足时把上下槽宽度限制到两侧槽之间，给动效位移也预留边距。
+
+- 百工的 NeoForge 26.1.2 物品类与 1.21.1 的导入列表不同。跨版本加入共同设置回调时，应分别确认版本替换类已导入 FMLCommonSetupEvent，再构建三个目标。
+
+- NeoForge 26.1.2 的 DeferredRegister.Blocks.registerBlock 对显式方块属性接收 Supplier 或 UnaryOperator。共用代码需要在 26.1.2 传属性工厂而不是直接传实例。
+
+- 百工目视传送按玩家当前 yaw/pitch 生成服务端射线。LivingEntity 的 pick 可能沿头部插值角度射线，在玩家刚转身时会指向旧朝向。测试 NeoForge 瞬移时 FakePlayer 的连接会吞掉 teleport，需为测试玩家提供能更新坐标的替代方法；验证受伤则要清除其出生无敌时间。
+- Minecraft 26.1.2 的实体类型标签通过 builtInRegistryHolder().is(tag) 查询。
+- NeoForge 26.1.2 构建使用 1.21.1 的 `NeoForgeJeiOrderableNetwork` 时，`ServerPlayer.canInteractWithBlock(BlockPos, int)` 无法解析；跨版本共享调用前应核对对应版本的实际 API。

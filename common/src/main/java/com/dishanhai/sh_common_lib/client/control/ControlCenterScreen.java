@@ -1,16 +1,31 @@
 // Author: dishanhai
 package com.dishanhai.sh_common_lib.client.control;
 
+import com.dishanhai.sh_better_ui.client.api.ShBetterUiApi;
 import com.dishanhai.sh_better_ui.client.api.UiFrame;
 import com.dishanhai.sh_better_ui.client.api.UiScreen;
+import com.dishanhai.sh_better_ui.client.glass.GuiRect;
 import com.dishanhai.sh_better_ui.client.gui.display.GraphicDisplayLayout.Bounds;
 import com.dishanhai.sh_better_ui.client.gui.display.GraphicIcon;
 import com.dishanhai.sh_better_ui.client.gui.scaled.DarkModeTheme;
+import com.dishanhai.sh_better_ui.client.gui.scaled.FluidMorph;
+import com.dishanhai.sh_better_ui.client.gui.scaled.GuiMotion;
+import com.dishanhai.sh_better_ui.client.gui.scaled.GuiRenderUtil;
+import com.dishanhai.sh_better_ui.client.gui.scaled.InterruptibleAnimation;
 import com.dishanhai.sh_better_ui.client.gui.scaled.LiquidGlassTheme;
 import com.dishanhai.sh_better_ui.client.gui.scaled.RoundedCorners;
 import com.dishanhai.sh_better_ui.client.gui.scaled.UiButton;
+import com.dishanhai.sh_better_ui.client.gui.scaled.PageTransition;
+import com.dishanhai.sh_better_ui.client.gui.scaled.UiCapsuleReveal;
+import com.dishanhai.sh_better_ui.client.gui.scaled.Spring;
+import com.dishanhai.sh_better_ui.client.gui.scaled.UiConfirmation;
+import com.dishanhai.sh_better_ui.client.gui.scaled.UiDotBackground;
+import com.dishanhai.sh_better_ui.client.gui.scaled.UiFrameHandoff;
+import com.dishanhai.sh_better_ui.client.gui.scaled.UiOverlayHost;
+import com.dishanhai.sh_better_ui.client.gui.scaled.UiScreenReturn;
 import com.dishanhai.sh_better_ui.client.gui.scaled.UiScrollableSectionBar;
 import com.dishanhai.sh_better_ui.client.gui.scaled.UiSectionBar;
+import com.dishanhai.sh_better_ui.client.gui.scaled.UiSkeleton;
 import com.dishanhai.sh_better_ui.client.gui.scaled.UiStyle;
 import com.dishanhai.sh_better_ui.client.gui.scaled.UiTheme;
 import com.dishanhai.sh_better_ui.kernel.api.ModuleContext;
@@ -22,6 +37,7 @@ import com.dishanhai.sh_common_lib.client.loading.ClientLoading;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.components.events.GuiEventListener;
 import net.minecraft.client.gui.screens.ConfirmScreen;
@@ -29,6 +45,7 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.CommonComponents;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.FormattedCharSequence;
+import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -38,6 +55,8 @@ import static com.dishanhai.sh_common_lib.client.control.ControlCenterModule.lab
 final class ControlCenterScreen {
     private static final int SETTINGS = 0;
     private static final int OVERVIEW = 1;
+    private static final float BODY_RADIUS = 5f;
+    private static final Bounds HIDDEN = new Bounds(0, 0, 0, 0);
     private static final List<UiSectionBar.Section> SECTIONS = List.of(
             new UiSectionBar.Section(label("settings"), GraphicIcon.SETTINGS),
             new UiSectionBar.Section(label("overview"), GraphicIcon.INFO));
@@ -50,16 +69,30 @@ final class ControlCenterScreen {
     private final PlayerInfoHud hud;
     private final ControlCenterDraft draft;
     private final List<OverviewLine> overview = new ArrayList<>();
+    private final List<AbstractWidget> chrome = new ArrayList<>();
+    private final UiDotBackground background = new UiDotBackground();
+    private final UiFrameHandoff pageHandoff = new UiFrameHandoff();
+    private final InterruptibleAnimation pageMorph = new InterruptibleAnimation(Spring.FLUID_PANEL, 1f);
+    private final InterruptibleAnimation pageOrigin = new InterruptibleAnimation(Spring.INDICATOR);
+    private final UiScreen.WidgetScroll scrollSettings = this::scrollSettings;
+    private UiScreenReturn returning;
+    private UiOverlayHost confirmation;
+    private ReturnGuard returnGuard;
+    private UiCapsuleReveal panel;
+    private boolean panelOnly;
     private ScopeHandle tree;
-    private int selected = SETTINGS;
+    private static ControlCenterPosition lastPosition = ControlCenterPosition.INITIAL;
+    private int selected;
     private int selectedGroup;
     private int overviewPage;
     private int overviewPageSize = 1;
     private ControlCenterLayout layout;
     private Bounds body;
     private UiScrollableSectionBar groupTabs;
+    private List<UiButton> tabButtons = List.of();
     private UiButton previous;
     private UiButton next;
+    private UiButton back;
     private UiButton reset;
     private UiButton apply;
     private Component status;
@@ -74,6 +107,10 @@ final class ControlCenterScreen {
         this.id = id;
         this.hud = hud;
         this.draft = draft;
+        selected = lastPosition.overview() ? OVERVIEW : SETTINGS;
+        selectedGroup = lastPosition.group();
+        overviewPage = lastPosition.overviewPage();
+        this.groups.get(selectedGroup).restorePosition(lastPosition.list());
     }
 
     void init(UiScreen screen) {
@@ -81,18 +118,21 @@ final class ControlCenterScreen {
         if (tree == null || !tree.isOpen()) tree = screens.mount(module, screen, id);
         draft.refreshHud(hud.settings());
         clearSettingsWidgets();
+        chrome.clear();
+        pageHandoff.clear();
+        pageMorph.snapTo(1f);
         var font = Minecraft.getInstance().font;
         var viewport = screen.viewport();
         layout = ControlCenterLayout.of(viewport.width(), viewport.height());
         body = null;
-        previous = next = reset = apply = null;
+        previous = next = back = reset = apply = null;
         var preferences = screen.context().preferences();
         if (!layout.fits()) {
             int backWidth = Math.min(96, Math.max(0, viewport.width() - 8));
             if (backWidth > 0 && viewport.height() >= ControlCenterLayout.ROW + 4) {
-                var back = screen.add(button((viewport.width() - backWidth) / 2,
+                back = screen.add(button((viewport.width() - backWidth) / 2,
                         viewport.height() - ControlCenterLayout.ROW - 4, backWidth, CommonComponents.GUI_BACK,
-                        GraphicIcon.BACK, screen::onClose, screen));
+                        GraphicIcon.BACK, this::requestClose, screen));
                 screen.setFocused(back);
                 restoreBackFocus = false;
             }
@@ -102,10 +142,20 @@ final class ControlCenterScreen {
         int x = layout.contentX();
         int contentWidth = layout.contentWidth();
         body = new Bounds(x - 3, layout.bodyTop(), contentWidth + 6, layout.bodyHeight());
+        if (panel == null) {
+            panel = ShBetterUiApi.motion().capsuleReveal();
+            if (returning == null) returning = new UiScreenReturn(screen);
+            panel.setSkeletonLayout(ignored -> panelSkeleton());
+            panel.startAt(screen.width * 0.5f, layout.top() + 5f);
+        } else {
+            panel.retargetAt(screen.width * 0.5f, layout.top() + 5f);
+        }
+        panelOnly = !preferences.reducedMotion() && panel.active();
         var tabs = new UiSectionBar(x, layout.tabsY(), contentWidth, ControlCenterLayout.ROW,
                 preferences, SECTIONS, selected, this::select);
         tabs.buttons().get(OVERVIEW).setTooltip(Tooltip.create(label("overview.hint")));
-        tabs.buttons().forEach(screen::add);
+        tabButtons = tabs.buttons();
+        tabButtons.forEach(screen::add);
 
         var sections = groups.stream().map(SettingsGroup::section).toList();
         groupTabs = screen.add(new UiScrollableSectionBar(
@@ -113,9 +163,11 @@ final class ControlCenterScreen {
                 preferences, sections, selectedGroup, this::selectGroup));
         groupTabs.focus(selectedGroup);
         var groupArea = new Bounds(x, body.y() + 4, contentWidth, Math.max(0, body.height() - 4));
-        for (SettingsGroup group : groups) group.init(screen, font, groupArea, this::changed);
-        screen.widgetViewport(screen.viewport(), (mouseX, mouseY, horizontal, vertical) ->
-                selected == SETTINGS && groups.get(selectedGroup).scroll(mouseX, mouseY, vertical));
+        for (SettingsGroup group : groups) {
+            group.init(screen, font, groupArea, this::changed,
+                    () -> startPageMorph(groupTabs.buttons().get(selectedGroup)));
+        }
+        updateWidgetViewport(screen);
         prepareOverview(font, groupArea);
 
         previous = screen.add(pageButton(layout.pagePreviousX(), label("previous_page"),
@@ -123,8 +175,8 @@ final class ControlCenterScreen {
         next = screen.add(pageButton(layout.pageNextX(), label("next_page"),
                 GraphicIcon.NEXT, () -> changePage(1), screen));
         int column = (contentWidth - 2 * ControlCenterLayout.GAP) / 3;
-        var back = screen.add(button(x, layout.footerY(), column, CommonComponents.GUI_BACK,
-                GraphicIcon.BACK, screen::onClose, screen));
+        back = screen.add(button(x, layout.footerY(), column, CommonComponents.GUI_BACK,
+                GraphicIcon.BACK, this::requestClose, screen));
         reset = screen.add(button(x + column + ControlCenterLayout.GAP, layout.footerY(), column,
                 label("reset"), GraphicIcon.RESET, this::reset, screen));
         apply = screen.add(button(x + 2 * (column + ControlCenterLayout.GAP), layout.footerY(),
@@ -133,6 +185,8 @@ final class ControlCenterScreen {
         back.setTabOrderGroup(2);
         reset.setTabOrderGroup(2);
         apply.setTabOrderGroup(2);
+        chrome.addAll(tabButtons);
+        chrome.addAll(List.of(groupTabs, previous, next, back, reset, apply));
         refreshActions();
         updateVisibility();
         screen.setFocused(restoreBackFocus ? back : tabs.buttons().get(selected));
@@ -176,11 +230,15 @@ final class ControlCenterScreen {
     private int overviewPages() { return ControlCenterLayout.pages(overview.size(), overviewPageSize); }
 
     private void select(int section) {
+        if (selected == section) return;
+        startPageMorph(tabButtons.get(section));
         selected = section;
         updateVisibility();
     }
 
     private void selectGroup(int index) {
+        if (selectedGroup == index) return;
+        startPageMorph(groupTabs.buttons().get(index));
         selectedGroup = index;
         updateVisibility();
     }
@@ -198,7 +256,8 @@ final class ControlCenterScreen {
 
     private void apply() {
         var result = draft.apply(hud::applySettings, ClientLoading::applySettings,
-                com.dishanhai.sh_common_lib.client.jei.JeiSearchPreferences::save);
+                com.dishanhai.sh_common_lib.client.jei.JeiSearchPreferences::save, ArtisanControlSettings::save,
+                com.dishanhai.sh_common_lib.client.item.ArtisanAppearancePreferences::save);
         status = label(switch (result) {
             case SAVED -> "saved";
             case PARTIAL -> "partially_saved";
@@ -252,19 +311,48 @@ final class ControlCenterScreen {
 
     void render(UiScreen screen, UiFrame frame) {
         var graphics = frame.graphics();
-        var font = Minecraft.getInstance().font;
         if (body == null) {
-            if (screen.width > 8) graphics.drawWordWrap(font, label("too_small"), 4, 4,
+            drawBackdrop(frame, true);
+            if (panel != null && panel.closing()) {
+                panel.finish();
+                return;
+            }
+            if (screen.width > 8) graphics.drawWordWrap(Minecraft.getInstance().font, label("too_small"), 4, 4,
                     screen.width - 8, LiquidGlassTheme.textColor());
             return;
         }
-        if (selected == SETTINGS) groups.get(selectedGroup).advanceMotion();
         var preferences = frame.preferences();
+        var panelBounds = new Bounds(layout.left(), layout.top(), layout.width(), layout.height());
+        if (selected == SETTINGS) groups.get(selectedGroup).advanceMotion();
+        panelOnly = panel.render(graphics, panelBounds, preferences,
+                progress -> returning.renderCrossfade(returnGuard.parent, graphics, frame.partialTick(), preferences,
+                        progress, () -> drawBackdrop(frame, false)),
+                () -> {
+                    drawChrome(frame);
+                    drawBody(frame, true);
+                    for (var widget : chrome) widget.render(graphics, -1, -1, frame.partialTick());
+                });
+        if (owner != screen) return;
+        updateWidgetViewport(screen);
+        if (panelOnly) return;
+        returning.clearHandoff();
+        drawBackdrop(frame, true);
         LiquidGlassTheme.popover(graphics, layout.left(), layout.top(), layout.width(), layout.height(), preferences);
+        drawChrome(frame);
+        drawBody(frame, false);
+    }
+
+    private void drawBackdrop(UiFrame frame, boolean allowPointer) {
+        background.renderThemed(owner, frame.graphics(), owner.width, owner.height, frame.preferences(), allowPointer);
+    }
+
+    private void drawChrome(UiFrame frame) {
+        var graphics = frame.graphics();
+        var font = Minecraft.getInstance().font;
         int titleRight = previous != null && previous.visible ? layout.pagePreviousX() - 4
                 : layout.contentX() + layout.contentWidth();
         graphics.enableScissor(layout.contentX(), layout.top(), titleRight, layout.tabsY());
-        graphics.drawString(font, screen.getTitle(), layout.contentX(), layout.titleY(), LiquidGlassTheme.textColor(), false);
+        graphics.drawString(font, owner.getTitle(), layout.contentX(), layout.titleY(), LiquidGlassTheme.textColor(), false);
         graphics.disableScissor();
         if (previous != null && previous.visible) {
             int page = selected == SETTINGS ? groups.get(selectedGroup).page() : overviewPage;
@@ -274,19 +362,70 @@ final class ControlCenterScreen {
                     + ControlCenterLayout.PAGE_LABEL_WIDTH / 2, layout.pageY() + (layout.pageHeight() - font.lineHeight) / 2,
                     LiquidGlassTheme.textColor());
         }
+    }
+
+    private void drawBody(UiFrame frame, boolean panelTransition) {
+        var graphics = frame.graphics();
+        var preferences = frame.preferences();
+        long now = frame.nowMs();
+        float progress = GuiMotion.clamp01(pageMorph.sample(now, preferences));
+        boolean morphing = progress < 1f;
+        boolean manual = panelTransition || morphing || pageHandoff.active();
+        if (selected == SETTINGS) groups.get(selectedGroup).setManualRender(manual);
         int surface = preferences.highContrast() ? DarkModeTheme.backgroundColor() : DarkModeTheme.surfaceColor();
-        int edge = preferences.highContrast() ? LiquidGlassTheme.textColor() : DarkModeTheme.borderColor();
+        int edge = preferences.highContrast() ? LiquidGlassTheme.textColor() : GuiMotion.lerpColor(
+                0xA0000000 | (LiquidGlassTheme.accentColor() & 0xFFFFFF), DarkModeTheme.borderColor(), progress);
         if (UiTheme.current().hudGlass() && !preferences.highContrast()) {
             surface = surface & 0xFFFFFF | 0x18000000;
             edge = edge & 0xFFFFFF | 0x40000000;
         }
-        RoundedCorners.draw(graphics, body.x(), body.y(), body.width(), body.height(), 5f, 1f, edge, surface);
         graphics.enableScissor(body.x(), body.y(), body.right(), body.bottom());
         try {
-            if (selected == SETTINGS) groups.get(selectedGroup).render(graphics, font, status);
-            else renderOverview(graphics, font);
+            if (!morphing) {
+                RoundedCorners.draw(graphics, body.x(), body.y(), body.width(), body.height(), BODY_RADIUS, 1f, edge, surface);
+                drawPage(frame, manual);
+                return;
+            }
+            var target = new GuiRect(body.x(), body.y(), body.width(), body.height());
+            var seed = FluidMorph.seed(pageOrigin.sample(now, preferences), body.y() + 5f);
+            var shape = FluidMorph.between(seed, target, BODY_RADIUS, progress);
+            var rect = shape.rect();
+            var skeleton = bodySkeleton();
+            float opacity = GuiRenderUtil.easeOut((progress - 0.54f) / 0.44f);
+            RoundedCorners.draw(graphics, body.x(), body.y(), body.width(), body.height(), BODY_RADIUS, 0f, 0, surface);
+            UiSkeleton.draw(graphics, body, skeleton, now, preferences, (1f - opacity) * 0.42f);
+            RoundedCorners.draw(graphics, rect.getX(), rect.getY(), rect.getW(), rect.getH(), shape.radius(), 1f, edge, surface);
+            float inset = shape.radius() * 0.4f * (1f - progress);
+            int left = Math.max(body.x(), Math.round(rect.getX() + inset));
+            int top = Math.max(body.y(), Math.round(rect.getY() + inset));
+            int right = Math.min(body.right(), Math.round(rect.getX() + rect.getW() - inset));
+            int bottom = Math.min(body.bottom(), Math.round(rect.getY() + rect.getH() - inset));
+            if (right <= left || bottom <= top) return;
+            var clip = new Bounds(left, top, right - left, bottom - top);
+            graphics.enableScissor(left, top, right, bottom);
+            try {
+                if (opacity > 0f) {
+                    drawPage(frame, true);
+                    if (opacity < 1f) graphics.fill(left, top, right, bottom,
+                            GuiMotion.lerpColor(surface, surface & 0xFFFFFF, opacity));
+                }
+                if (opacity < 1f) UiSkeleton.draw(graphics, clip, skeleton, now, preferences, 1f - opacity);
+            } finally {
+                graphics.disableScissor();
+            }
         } finally {
             graphics.disableScissor();
+        }
+    }
+
+    private void drawPage(UiFrame frame, boolean manual) {
+        var font = Minecraft.getInstance().font;
+        if (selected == SETTINGS) {
+            var group = groups.get(selectedGroup);
+            group.render(frame.graphics(), font, status);
+            if (manual) group.renderWidgets(frame.graphics(), frame.partialTick());
+        } else {
+            renderOverview(frame.graphics(), font);
         }
     }
 
@@ -304,8 +443,134 @@ final class ControlCenterScreen {
                 body.bottom() - font.lineHeight - 2, LiquidGlassTheme.textColor(), false);
     }
 
+    void foreground(UiScreen screen, UiFrame frame) {
+        if (body != null && !panelOnly) pageHandoff.render(frame.graphics(), frame.preferences());
+    }
+
+    private List<UiSkeleton.Block> bodySkeleton() {
+        var blocks = new ArrayList<UiSkeleton.Block>();
+        blocks.add(new UiSkeleton.Block(new Bounds(layout.contentX(), body.y() + 5, 48, 5)));
+        if (selected == SETTINGS) groups.get(selectedGroup).addSkeletonRows(blocks);
+        else {
+            int lineHeight = Minecraft.getInstance().font.lineHeight;
+            int count = Math.min(overviewPageSize, overview.size() - overviewPage * overviewPageSize);
+            for (int index = 1; index < count; index++) {
+                blocks.add(new UiSkeleton.Block(new Bounds(layout.contentX(), body.y() + 5 + index * lineHeight,
+                        layout.contentWidth() * 2 / 3, 5)));
+            }
+        }
+        return blocks;
+    }
+
+    private List<UiSkeleton.Block> panelSkeleton() {
+        var blocks = bodySkeleton();
+        blocks.add(new UiSkeleton.Block(new Bounds(layout.contentX(), layout.titleY() + 2, 64, 6)));
+        for (var widget : chrome) {
+            if (!widget.visible || widget.getWidth() < 8) continue;
+            blocks.add(new UiSkeleton.Block(new Bounds(widget.getX() + 2, widget.getY() + 3,
+                    widget.getWidth() - 4, widget.getHeight() - 6), 8f));
+        }
+        return blocks;
+    }
+
+    private void updateWidgetViewport(UiScreen screen) {
+        screen.widgetViewport(panelOnly ? HIDDEN : screen.viewport(), scrollSettings);
+    }
+
+    private boolean scrollSettings(double x, double y, double horizontal, double vertical) {
+        return selected == SETTINGS && groups.get(selectedGroup).scroll(x, y, vertical);
+    }
+
+    void captureParent(UiScreen screen) {
+        returning = ShBetterUiApi.motion().screenCrossfade(screen, returnGuard.parent, screen.context().preferences());
+    }
+
+    private void startPageMorph(UiButton source) {
+        var preferences = owner.context().preferences();
+        long now = PageTransition.nowMs();
+        boolean continuing = pageHandoff.active();
+        pageHandoff.capture(body, preferences);
+        float center = source.getX() + source.getWidth() * 0.5f;
+        center = Math.max(body.x() + 16f, Math.min(body.right() - 16f, center));
+        pageMorph.sample(now, preferences);
+        if (preferences.reducedMotion()) {
+            pageOrigin.snapTo(center);
+        } else if (!pageMorph.running() && !continuing) {
+            pageOrigin.snapTo(center);
+            pageMorph.snapTo(0f);
+            pageMorph.setOpen(true, now);
+        } else {
+            pageOrigin.animateTo(center, now);
+        }
+    }
+
+    boolean handleKey(Screen screen, int key, int scanCode) {
+        if (owner != screen || confirmation != null && confirmation.isModalOpen()) return false;
+        if (panel != null && panel.closing()) {
+            if (ControlCenterModule.openKey().matches(key, scanCode) && panel.reopen()) returnGuard.discardAuthorized = false;
+            return true;
+        }
+        if (key == GLFW.GLFW_KEY_ESCAPE) {
+            if (screen.isDragging() && groupTabs != null && groupTabs.cancelDrag()) {
+                screen.setDragging(false);
+                return true;
+            }
+            requestClose();
+            return true;
+        }
+        boolean activation = key == GLFW.GLFW_KEY_ENTER || key == GLFW.GLFW_KEY_KP_ENTER || key == GLFW.GLFW_KEY_SPACE;
+        return activation && (panelOnly || body != null && selected == SETTINGS
+                && groups.get(selectedGroup).containsFocus(screen.getFocused())
+                && (pageHandoff.active() || pageMorph.running()));
+    }
+
+    private void requestClose() {
+        if (owner == null) return;
+        if (panel != null && panel.closing()) return;
+        if (selected == SETTINGS && groups.get(selectedGroup).leaveDetail()) return;
+        if (draft.dirty()) {
+            if (confirmation != null && confirmation.isModalOpen()) return;
+            var preferences = owner.context().preferences();
+            confirmation = new UiOverlayHost(owner, preferences);
+            var prompt = new UiConfirmation.Prompt(label("discard_title"), label("discard_details"),
+                    label("discard_action"), CommonComponents.GUI_CANCEL);
+            if (body == null) confirmation.showDialog(prompt, this::closeToParent);
+            else {
+                panel.finish();
+                confirmation.showDialogFrom(back, prompt, this::closeToParent);
+            }
+        } else closeToParent();
+    }
+
+    private void closeToParent() {
+        var screen = owner;
+        if (screen == null) return;
+        returnGuard.discardAuthorized = true;
+        var preferences = screen.context().preferences();
+        if (body == null || preferences.reducedMotion()) {
+            screen.onClose();
+            return;
+        }
+        panelOnly = true;
+        groupTabs.cancelDrag();
+        screen.setDragging(false);
+        updateWidgetViewport(screen);
+        panel.close(preferences, screen::onClose);
+    }
+
     void removed() {
         clearSettingsWidgets();
+        lastPosition = new ControlCenterPosition(selected == OVERVIEW, selectedGroup, overviewPage,
+                groups.get(selectedGroup).position());
+        chrome.clear();
+        if (confirmation != null) confirmation.ownerClosed();
+        confirmation = null;
+        pageHandoff.clear();
+        if (returning != null) returning.clearHandoff();
+        returning = null;
+        background.reset();
+        panel = null;
+        panelOnly = false;
         owner = null;
         if (tree != null) {
             tree.close();
@@ -323,12 +588,16 @@ final class ControlCenterScreen {
 
     private record OverviewLine(FormattedCharSequence text, boolean heading) {}
 
-    ReturnGuard returnGuard(Screen parent) { return new ReturnGuard(parent); }
+    ReturnGuard returnGuard(Screen parent) {
+        returnGuard = new ReturnGuard(parent);
+        return returnGuard;
+    }
 
     final class ReturnGuard extends Screen {
         private final Screen parent;
         private final GuiEventListener returnFocus;
         private UiScreen controlCenter;
+        private boolean discardAuthorized;
 
         private ReturnGuard(Screen parent) {
             super(label("title"));
@@ -340,6 +609,11 @@ final class ControlCenterScreen {
 
         @Override
         protected void init() {
+            if (discardAuthorized) {
+                discardAuthorized = false;
+                returnToParent();
+                return;
+            }
             if (selected == SETTINGS && groups.get(selectedGroup).leaveDetail()) {
                 minecraft.tell(() -> minecraft.setScreen(controlCenter));
                 return;
