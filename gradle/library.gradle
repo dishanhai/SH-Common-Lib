@@ -15,6 +15,7 @@ sourceSets {
     controlCenterVerification {
         java.srcDir('../common/src/test/java')
         compileClasspath += sourceSets.main.output
+        compileClasspath += sourceSets.main.compileClasspath
         runtimeClasspath += sourceSets.main.output
     }
 }
@@ -78,6 +79,20 @@ tasks.register('recipePreviewBoundsTest', JavaExec) {
     mainClass = 'com.dishanhai.sh_common_lib.client.jei.RecipePreviewBoundsTest'
 }
 
+tasks.register('jeiSearchLayoutTest', JavaExec) {
+    group = 'verification'
+    description = 'Checks readable JEI candidates across AE terminal sizes.'
+    classpath = sourceSets.controlCenterVerification.runtimeClasspath + sourceSets.main.runtimeClasspath
+    mainClass = 'com.dishanhai.sh_common_lib.client.jei.JeiSearchLayoutTest'
+}
+
+tasks.register('searchGiveShortcutTest', JavaExec) {
+    group = 'verification'
+    description = 'Checks JEI give key combinations, stack amounts and cheat-mode gating.'
+    classpath = sourceSets.controlCenterVerification.runtimeClasspath
+    mainClass = 'com.dishanhai.sh_common_lib.client.jei.SearchGiveShortcutTest'
+}
+
 tasks.register('searchPagingTest', JavaExec) {
     group = 'verification'
     description = 'Checks JEI candidate page and selection boundaries.'
@@ -114,7 +129,51 @@ tasks.register('inventorySnapshotTest', JavaExec) {
 }
 
 tasks.named('check') {
-    dependsOn tasks.named('cosmicArtisanGestureTest'), tasks.named('artisanSettingsTest'), tasks.named('controlCenterDraftTest'), tasks.named('clientSearchTest'), tasks.named('searchHistoryTest'), tasks.named('jeiSearchSettingsTest'), tasks.named('searchCompletionUndoTest'), tasks.named('recipePreviewBoundsTest'), tasks.named('searchPagingTest'), tasks.named('inventoryScanTrackerTest'), tasks.named('inventorySnapshotTest')
+    dependsOn 'jeiSearchLayoutTest'
+    dependsOn 'recipeEditorTest', 'recipeImporterTest', 'brewingDefinitionsTest', 'brewingDatapackTest', 'brewingApiTest', 'brewingRuleCacheTest'
+    dependsOn tasks.named('searchGiveShortcutTest'), tasks.named('cosmicArtisanGestureTest'), tasks.named('artisanSettingsTest'), tasks.named('controlCenterDraftTest'), tasks.named('clientSearchTest'), tasks.named('searchHistoryTest'), tasks.named('jeiSearchSettingsTest'), tasks.named('searchCompletionUndoTest'), tasks.named('recipePreviewBoundsTest'), tasks.named('searchPagingTest'), tasks.named('inventoryScanTrackerTest'), tasks.named('inventorySnapshotTest')
+}
+
+tasks.register('recipeEditorTest', JavaExec) {
+    group = 'verification'
+    description = 'Checks versioned recipe JSON, KubeJS and Java exports, drafts and safe file writes.'
+    classpath = sourceSets.controlCenterVerification.runtimeClasspath + sourceSets.main.runtimeClasspath
+    mainClass = 'com.dishanhai.sh_common_lib.api.ulk.recipe.RecipeGeneratorTest'
+}
+
+tasks.register('recipeImporterTest', JavaExec) {
+    group = 'verification'
+    description = 'Checks lossless vanilla JSON import and preservation of unsupported recipe fields.'
+    classpath = sourceSets.controlCenterVerification.runtimeClasspath + sourceSets.main.runtimeClasspath
+    mainClass = 'com.dishanhai.sh_common_lib.api.ulk.recipe.RecipeImporterTest'
+}
+
+tasks.register('brewingDefinitionsTest', JavaExec) {
+    group = 'verification'
+    description = 'Checks brewing config parsing, damaged-file isolation and duplicate identifiers.'
+    classpath = sourceSets.controlCenterVerification.runtimeClasspath + sourceSets.main.runtimeClasspath
+    mainClass = 'com.dishanhai.sh_common_lib.internal.recipe.BrewingDefinitionTest'
+}
+
+tasks.register('brewingDatapackTest', JavaExec) {
+    group = 'verification'
+    description = 'Checks brewing data-pack resource loading, reload replacement and config precedence.'
+    classpath = sourceSets.controlCenterVerification.runtimeClasspath + sourceSets.main.runtimeClasspath
+    mainClass = 'com.dishanhai.sh_common_lib.internal.recipe.BrewingDatapackTest'
+}
+
+tasks.register('brewingApiTest', JavaExec) {
+    group = 'verification'
+    description = 'Checks public brewing registration, replacement, validation and concurrent snapshots.'
+    classpath = sourceSets.controlCenterVerification.runtimeClasspath + sourceSets.main.runtimeClasspath
+    mainClass = 'com.dishanhai.sh_common_lib.api.ulk.recipe.BrewingRecipesTest'
+}
+
+tasks.register('brewingRuleCacheTest', JavaExec) {
+    group = 'verification'
+    description = 'Checks server rule precedence and live registration updates.'
+    classpath = sourceSets.controlCenterVerification.runtimeClasspath + sourceSets.main.runtimeClasspath
+    mainClass = 'com.dishanhai.sh_common_lib.internal.recipe.BrewingRuleCacheTest'
 }
 
 tasks.withType(JavaCompile).configureEach {
