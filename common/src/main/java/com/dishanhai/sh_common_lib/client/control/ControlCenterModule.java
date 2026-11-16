@@ -168,6 +168,9 @@ public final class ControlCenterModule implements UIModule {
         var playerInfo = new SettingsGroup(Component.translatable(playerInfoKey + "editor"), GraphicIcon.MONITOR,
                 hudEntries, true);
         var developer = new SettingsGroup(label("developer"), GraphicIcon.DEVELOPMENT, List.of(
+                new SettingsGroup.Page(com.dishanhai.sh_common_lib.client.recipe.RecipeEditorAccess.title(), GraphicIcon.DEVELOPMENT,
+                        com.dishanhai.sh_common_lib.client.recipe.RecipeEditorAccess::unavailable,
+                        com.dishanhai.sh_common_lib.client.recipe.RecipeEditorAccess::open),
                 new SettingsGroup.Page(label("developer_settings"), GraphicIcon.SETTINGS,
                         () -> null, this::openDeveloperSettings)));
         var loading = new SettingsGroup(label("loading"), GraphicIcon.TICK, List.of(

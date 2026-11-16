@@ -39,6 +39,7 @@ public final class ForgeShCommonLib {
     public ForgeShCommonLib(FMLJavaModLoadingContext context) {
         ForgeArtisanConfig.register(context);
         IEventBus modBus = context.getModEventBus();
+        ForgeRecipeBrewing.register(modBus);
         UnifiedLibKernel.install(new ForgeUlkPlatform());
         BLOCKS.register(modBus);
         BEACON_ITEMS.register(modBus);

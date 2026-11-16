@@ -1,0 +1,35 @@
+// Author: dishanhai
+// Opt-in NeoForge 1.21.1 native client regression. Never included in release builds.
+if (gradle.startParameter.taskNames != ['runClient']) {
+    throw new GradleException('Recipe editor smoke requires only runClient')
+}
+gradle.beforeProject { p ->
+    p.afterEvaluate {
+        if (p.projectDir.name != 'neoforge-1.21.1') {
+            throw new GradleException('Recipe editor smoke targets NeoForge 1.21.1')
+        }
+        def game = new File(p.projectDir, 'build/recipe-editor-smoke')
+        p.sourceSets.main.java.srcDir('src/clientSmoke/java')
+        p.neoForge.runs.named('client').configure {
+            gameDirectory.set(game)
+            systemProperty 'shclib.recipe.smoke', game.absolutePath
+            systemProperty 'shb.music.disabled', 'true'
+            programArgument '--width'
+            programArgument '1680'
+            programArgument '--height'
+            programArgument '960'
+        }
+        p.tasks.named('runClient').configure {
+            doFirst {
+                game.mkdirs()
+                ['success.txt', 'failure.txt'].each { java.nio.file.Files.deleteIfExists(new File(game, it).toPath()) }
+                new File(game, 'options.txt').setText('onboardAccessibility:false\nguiScale:4\nlang:zh_cn\n', 'UTF-8')
+            }
+            doLast {
+                if (!new File(game, 'success.txt').isFile()) {
+                    throw new GradleException("Recipe editor smoke failed; see ${game}/failure.txt and logs/latest.log")
+                }
+            }
+        }
+    }
+}

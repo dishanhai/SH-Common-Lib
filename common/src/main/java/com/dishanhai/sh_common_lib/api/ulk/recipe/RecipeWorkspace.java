@@ -1,0 +1,144 @@
+// Author: dishanhai
+package com.dishanhai.sh_common_lib.api.ulk.recipe;
+
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.AtomicMoveNotSupportedException;
+import java.nio.file.Files;
+import java.nio.file.LinkOption;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
+
+/** Bounded UTF-8 drafts and explicit workspace-relative exports. */
+public final class RecipeWorkspace {
+    private static final long MAX_BYTES = 1024 * 1024;
+    private static final Gson GSON = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
+    private final Path root;
+
+    public RecipeWorkspace(Path root) {
+        this.root = Objects.requireNonNull(root).toAbsolutePath().normalize();
+    }
+
+    public Path save(RecipeDocument doc) throws IOException {
+        return save(doc, true);
+    }
+
+    /** Creates a draft by default in UI flows; replacing another draft requires explicit consent. */
+    public Path save(RecipeDocument doc, boolean overwrite) throws IOException {
+        Path destination = draftPath(doc.id());
+        var json = new JsonObject();
+        json.addProperty("schema", 1);
+        json.addProperty("id", doc.id());
+        json.addProperty("type", doc.type().name());
+        var inputs = new JsonArray();
+        doc.inputs().forEach(inputs::add);
+        json.add("inputs", inputs);
+        json.addProperty("result", doc.result());
+        json.addProperty("count", doc.count());
+        json.addProperty("experience", doc.experience());
+        json.addProperty("cookingTime", doc.cookingTime());
+        json.addProperty("group", doc.group());
+        json.addProperty("rawJson", doc.rawJson());
+        write(destination, GSON.toJson(json) + "\n", overwrite);
+        return destination;
+    }
+
+    public RecipeDocument load(String id) throws IOException {
+        Path file = draftPath(id);
+        checkLinks(file);
+        if (Files.size(file) > MAX_BYTES) throw new IOException("Draft too large");
+        try {
+            JsonObject json = JsonParser.parseString(Files.readString(file, StandardCharsets.UTF_8)).getAsJsonObject();
+            if (json.get("schema").getAsInt() != 1 || !id.equals(json.get("id").getAsString())) throw new IOException("Invalid draft schema or ID");
+            var inputs = new ArrayList<String>();
+            json.getAsJsonArray("inputs").forEach(value -> inputs.add(value.getAsString()));
+            return new RecipeDocument(id, RecipeType.valueOf(json.get("type").getAsString()), inputs,
+                    json.get("result").getAsString(), json.get("count").getAsInt(), json.get("experience").getAsFloat(),
+                    json.get("cookingTime").getAsInt(), json.get("group").getAsString(), json.get("rawJson").getAsString());
+        } catch (RuntimeException exception) {
+            throw new IOException("Invalid draft", exception);
+        }
+    }
+
+    public List<String> list() throws IOException {
+        Path drafts = resolve("drafts");
+        if (!Files.isDirectory(drafts, LinkOption.NOFOLLOW_LINKS)) return List.of();
+        checkLinks(drafts);
+        var ids = new ArrayList<String>();
+        try (var paths = Files.walk(drafts)) {
+            paths.filter(path -> Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS))
+                    .filter(path -> path.getFileName().toString().endsWith(".json"))
+                    .forEach(path -> {
+                        String relative = drafts.relativize(path).toString().replace('\\', '/');
+                        int separator = relative.indexOf('/');
+                        if (separator > 0) {
+                            String id = relative.substring(0, separator) + ":" + relative.substring(separator + 1, relative.length() - 5);
+                            if (RecipeGenerator.validId(id)) ids.add(id);
+                        }
+                    });
+        }
+        ids.sort(String::compareTo);
+        return List.copyOf(ids);
+    }
+
+    public Path export(RecipeArtifact artifact, boolean overwrite) throws IOException {
+        Objects.requireNonNull(artifact);
+        Path file = resolve(artifact.relativePath());
+        write(file, artifact.content(), overwrite);
+        return file;
+    }
+
+    private Path draftPath(String id) {
+        if (!RecipeGenerator.validId(id)) throw new IllegalArgumentException("Invalid recipe ID");
+        String[] parts = id.split(":", 2);
+        return resolve("drafts/" + parts[0] + "/" + parts[1] + ".json");
+    }
+
+    private Path resolve(String relative) {
+        Objects.requireNonNull(relative);
+        Path part = Path.of(relative);
+        if (part.isAbsolute() || relative.isEmpty() || relative.indexOf('\\') >= 0 || relative.indexOf(':') >= 0) {
+            throw new IllegalArgumentException("Invalid workspace path");
+        }
+        Path path = root.resolve(part).normalize();
+        if (!path.startsWith(root) || path.equals(root)) throw new IllegalArgumentException("Path outside workspace");
+        return path;
+    }
+
+    private void checkLinks(Path path) throws IOException {
+        Path current = root;
+        if (Files.isSymbolicLink(current)) throw new IOException("Workspace root is a link");
+        for (Path part : root.relativize(path)) {
+            current = current.resolve(part);
+            if (Files.isSymbolicLink(current)) throw new IOException("Workspace path contains a link");
+        }
+    }
+
+    private void write(Path path, String value, boolean overwrite) throws IOException {
+        byte[] bytes = Objects.requireNonNull(value).getBytes(StandardCharsets.UTF_8);
+        if (bytes.length > MAX_BYTES) throw new IOException("Document too large");
+        checkLinks(path);
+        Files.createDirectories(path.getParent());
+        checkLinks(path);
+        Path temp = Files.createTempFile(path.getParent(), ".recipe-", ".tmp");
+        try {
+            Files.write(temp, bytes);
+            if (overwrite) {
+                try { Files.move(temp, path, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING); }
+                catch (AtomicMoveNotSupportedException exception) { Files.move(temp, path, StandardCopyOption.REPLACE_EXISTING); }
+            } else {
+                Files.move(temp, path);
+            }
+        } finally {
+            Files.deleteIfExists(temp);
+        }
+    }
+}

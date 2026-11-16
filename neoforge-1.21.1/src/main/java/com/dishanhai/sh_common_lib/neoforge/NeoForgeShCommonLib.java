@@ -40,6 +40,7 @@ public final class NeoForgeShCommonLib {
 
     public NeoForgeShCommonLib(IEventBus modBus, ModContainer container) {
         NeoForgeArtisanConfig.register(container);
+        NeoForgeRecipeBrewing.register();
         UnifiedLibKernel.install(new NeoForgeUlkPlatform());
         BLOCKS.register(modBus);
         BEACON_ITEMS.register(modBus);
