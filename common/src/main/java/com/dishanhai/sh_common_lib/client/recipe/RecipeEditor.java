@@ -161,6 +161,9 @@ public final class RecipeEditor {
                 UiWorkbench.preferences(owner), this::openSlot, i -> setSlot(i, ""), this::moveSlot));
         inputs.setSlotNames(names);
         inputs.setAllowDrag(document.type() == RecipeType.SHAPED || document.type() == RecipeType.SHAPELESS);
+        if (document.type() == RecipeType.SHAPED || document.type() == RecipeType.SHAPELESS) {
+            button(owner, x, y + 52 + gridHeight, width, 20, text("fill_sequence"), this::openSequence);
+        }
         if (document.type() != RecipeType.SMITHING_TRIM || target == RecipeTarget.NEOFORGE_26_1_2) {
             int oy = y + 46;
             output = owner.add(new UiIngredientSlots(Minecraft.getInstance().font,
@@ -393,6 +396,21 @@ public final class RecipeEditor {
             return;
         }
         openSlotManual(slot);
+    }
+
+    private void openSequence() {
+        UiWorkbench.selectItemSequence(screen, text("fill_sequence"), () -> inputs, inputCount(), stacks -> {
+            var values = new ArrayList<>(document.inputs());
+            for (int i = 0; i < stacks.size(); i++) {
+                var stack = stacks.get(i);
+                String id = icons.entrySet().stream().filter(entry -> entry.getValue().getItem() == stack.getItem())
+                        .map(Map.Entry::getKey).findFirst().orElse("");
+                if (!id.isEmpty()) values.set(i, id);
+            }
+            change(new RecipeDocument(document.id(), document.type(), values, document.result(), document.count(),
+                    document.experience(), document.cookingTime(), document.group(), document.rawJson()));
+            refresh();
+        });
     }
 
     private void openSlotManual(int slot) {

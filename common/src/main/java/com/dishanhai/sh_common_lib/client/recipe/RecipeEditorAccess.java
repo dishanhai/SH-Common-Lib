@@ -14,6 +14,9 @@ public final class RecipeEditorAccess {
         try {
             var loader = RecipeEditorAccess.class.getClassLoader();
             Class.forName("com.dishanhai.sh_better_ui.client.api.UiWorkbench", false, loader).getMethod("textColor");
+            Class.forName("com.dishanhai.sh_better_ui.client.api.UiWorkbench", false, loader)
+                    .getMethod("selectItemSequence", Class.forName("com.dishanhai.sh_better_ui.client.api.UiScreen", false, loader),
+                            Component.class, Supplier.class, int.class, java.util.function.Consumer.class);
             Class.forName("com.dishanhai.sh_better_ui.client.gui.scaled.UiIngredientSlots", false, loader)
                     .getMethod("setAllowDrag", boolean.class);
             Class.forName("com.dishanhai.sh_better_ui.client.gui.scaled.UiCodeEditor", false, loader);

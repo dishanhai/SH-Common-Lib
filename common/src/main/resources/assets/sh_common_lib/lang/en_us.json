@@ -696,6 +696,7 @@
   "screen.sh_common_lib.recipe_editor.overwrite": "Overwrite the exported file?",
   "screen.sh_common_lib.recipe_editor.overwrite_hint": "This replaces %s. Cancel to keep the existing file.",
   "screen.sh_common_lib.recipe_editor.select_item": "Choose item",
+  "screen.sh_common_lib.recipe_editor.fill_sequence": "Fill ingredients",
   "screen.sh_common_lib.recipe_editor.ingredient_id": "Item ID or #item tag",
   "screen.sh_common_lib.recipe_editor.potion_id": "Potion ID",
   "screen.sh_common_lib.recipe_editor.ingredient_hint": "Only the item ID is selected. Tags start with #. Use custom JSON for NBT or components.",
