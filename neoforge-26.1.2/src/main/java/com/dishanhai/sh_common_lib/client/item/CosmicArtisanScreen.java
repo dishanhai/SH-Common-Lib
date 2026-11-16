@@ -3,13 +3,18 @@ package com.dishanhai.sh_common_lib.client.item;
 
 import com.dishanhai.sh_better_ui.client.api.ShBetterUiApi;
 import com.dishanhai.sh_better_ui.client.glass.LiquidGlassSurface;
+import com.dishanhai.sh_better_ui.client.gui.display.GraphicDisplayLayout.Bounds;
+import com.dishanhai.sh_better_ui.client.gui.display.GraphicIcon;
 import com.dishanhai.sh_better_ui.client.gui.scaled.InterruptibleAnimation;
 import com.dishanhai.sh_better_ui.client.gui.scaled.PointerDrag;
 import com.dishanhai.sh_better_ui.client.gui.scaled.RoundedCorners;
 import com.dishanhai.sh_better_ui.client.gui.scaled.Spring;
 import com.dishanhai.sh_better_ui.client.gui.scaled.UiButton;
 import com.dishanhai.sh_better_ui.client.gui.scaled.UiPreferences;
+import com.dishanhai.sh_better_ui.client.gui.scaled.UiScrollableSectionBar;
+import com.dishanhai.sh_better_ui.client.gui.scaled.UiSectionBar;
 import com.dishanhai.sh_better_ui.client.gui.scaled.UiStyle;
+import com.dishanhai.sh_better_ui.client.gui.scaled.UiToggleButton;
 import com.dishanhai.sh_better_ui.client.gui.text.UiHudRichText;
 import com.dishanhai.sh_better_ui.kernel.api.screen.LayeredScreen;
 import com.dishanhai.sh_better_ui.kernel.api.text.TextReadabilityPalette;
@@ -40,18 +45,18 @@ public final class CosmicArtisanScreen extends LayeredScreen {
     private static final int ROW = 24;
     private static final int CLOSE_WIDTH = 44;
     private static final List<Group> DEFAULT_GROUPS = List.of(
-            new Group("tools", List.of(Mode.SILK_TOUCH, Mode.FORTUNE)),
-            new Group("combat", List.of(Mode.HOSTILE_FRIENDLY, Mode.FORCE_KILL, Mode.BEHEADING, Mode.CAPTURE, Mode.AREA_DAMAGE,
+            new Group("tools", GraphicIcon.TOOL, List.of(Mode.SILK_TOUCH, Mode.FORTUNE)),
+            new Group("combat", GraphicIcon.CRITICAL_WARNING, List.of(Mode.HOSTILE_FRIENDLY, Mode.FORCE_KILL, Mode.BEHEADING, Mode.CAPTURE, Mode.AREA_DAMAGE,
                     Mode.KILL_AURA, Mode.PROTECTION_LIST)),
-            new Group("auxiliary", List.of(Mode.TIME_ACCELERATION, Mode.ENTITY_ACCELERATION, Mode.PLAYER_PROTECTION,
+            new Group("auxiliary", GraphicIcon.SETTINGS, List.of(Mode.TIME_ACCELERATION, Mode.ENTITY_ACCELERATION, Mode.PLAYER_PROTECTION,
                     Mode.ADVANCED_STEALTH, Mode.MAGNET, Mode.AUTO_CLICK)),
-            new Group("travel", List.of(Mode.TELEPORT, Mode.BEACON_HUD)),
-            new Group("mining", List.of(Mode.CONSTRUCTION_WAND, Mode.ANGEL_CORE, Mode.DESTRUCTION_CORE,
+            new Group("travel", GraphicIcon.GOAL, List.of(Mode.TELEPORT, Mode.BEACON_HUD)),
+            new Group("mining", GraphicIcon.BLOCK, List.of(Mode.CONSTRUCTION_WAND, Mode.ANGEL_CORE, Mode.DESTRUCTION_CORE,
                     Mode.CHAIN_MINING, Mode.FORCE_MINING, Mode.AUTO_SMELT, Mode.AE_STORAGE_PRIORITY, Mode.AE_LINK, Mode.WRENCH_TAG)),
-            new Group("vanilla", List.of(Mode.HOE_PRIORITY, Mode.CROP_HARVEST, Mode.SHEARS, Mode.FLINT_AND_STEEL,
+            new Group("vanilla", GraphicIcon.MINECRAFT, List.of(Mode.HOE_PRIORITY, Mode.CROP_HARVEST, Mode.SHEARS, Mode.FLINT_AND_STEEL,
                     Mode.RIPEN, Mode.FORCE_GROW)));
 
-    private static final Group QUICK_GROUP = new Group("quick", List.of(
+    private static final Group QUICK_GROUP = new Group("quick", GraphicIcon.QUICK, List.of(
             Mode.FORCE_KILL, Mode.SILK_TOUCH, Mode.FORTUNE, Mode.CHAIN_MINING, Mode.AUTO_SMELT, Mode.MAGNET));
     private static final int WHEEL_CAPACITY = 6;
     private static final List<WheelSlot> WHEEL_SLOTS = List.of(
@@ -68,10 +73,16 @@ public final class CosmicArtisanScreen extends LayeredScreen {
     private BossPolicy bossPolicy = BossPolicy.NEUTRAL;
     private final EnumMap<BossPolicy, UiButton> bossButtons = new EnumMap<>(BossPolicy.class);
     private final EnumMap<Mode, UiButton> buttons = new EnumMap<>(Mode.class);
+    private final EnumMap<Mode, UiToggleButton> toggles = new EnumMap<>(Mode.class);
     private final List<UiButton> navigation = new ArrayList<>();
     private final Map<UiButton, Integer> buttonPositions = new LinkedHashMap<>();
+    private final List<UiButton> configPageButtons = new ArrayList<>();
     private final InterruptibleAnimation appearance =
             new InterruptibleAnimation(new Spring.Preset(0.24, 0.95, 0.001F, 0.001F));
+    private final InterruptibleAnimation pageAppearance =
+            new InterruptibleAnimation(new Spring.Preset(0.24, 0.95, 0.001F, 0.001F), 1.0F);
+    private UiScrollableSectionBar groupTabs;
+    private UiButton layoutButton;
     private final PointerDrag groupDrag = new PointerDrag();
     private final TextReadabilityPalette textPalette = new TextReadabilityPalette();
     private List<Group> undoOrder = List.of();
@@ -99,6 +110,8 @@ public final class CosmicArtisanScreen extends LayeredScreen {
     private int contentWidth;
     private int offset;
     private float opacity;
+    private int pageOffset;
+    private float pageOpacity;
     private int wheelCenterY;
 
     CosmicArtisanScreen(ToIntFunction<ItemStack> read, Consumer<Mode> toggle, boolean aeAvailable, boolean wheel,
@@ -129,11 +142,13 @@ public final class CosmicArtisanScreen extends LayeredScreen {
         cancelDrag();
         flags = minecraft.player == null ? 0 : read.applyAsInt(minecraft.player.getMainHandItem());
         bossPolicy = minecraft.player == null ? BossPolicy.NEUTRAL : readBossPolicy.apply(minecraft.player.getMainHandItem());
-        buttons.clear();
-        bossButtons.clear();
-        beaconDestinations = null;
+        clearOptions();
+        cancelTabDrag();
+        groupTabs = null;
         navigation.clear();
         buttonPositions.clear();
+        configPageButtons.clear();
+        pageAppearance.snapTo(1.0F);
         if (wheel) layoutWheel();
         else layoutConfig();
         if (!entered) {
@@ -157,29 +172,48 @@ public final class CosmicArtisanScreen extends LayeredScreen {
         contentX = sidebar ? navX + navWidth + 10 : navX;
         contentY = sidebar ? navY : navY + BUTTON_HEIGHT + 6;
         contentWidth = left + panelWidth - 8 - contentX;
-        int footer = top + panelHeight - BUTTON_HEIGHT - 8;
-
         addButton(left + panelWidth - CLOSE_WIDTH - 8, top + 7, CLOSE_WIDTH, label("close"), this::onClose);
+        if (!sidebar && !editing && contentWidth >= GraphicIcon.PIXELS) {
+            var sections = groups.stream()
+                    .map(group -> new UiSectionBar.Section(label(group.name()), group.icon())).toList();
+            groupTabs = addRenderableWidget(ShBetterUiApi.controls().jellySectionBar(
+                    new Bounds(navX, navY, contentWidth, BUTTON_HEIGHT), UiPreferences.configured(),
+                    sections, activeGroup, this::selectGroup));
+        } else {
+            layoutGroupButtons();
+        }
+        int footer = top + panelHeight - BUTTON_HEIGHT - 8;
+        layoutButton = addButton(left + 8, footer, 82, label(editing ? "confirm_layout" : "edit_layout"), () -> {
+            editing = !editing;
+            rebuildWidgets();
+            setFocused(layoutButton);
+        });
+        layoutButton.setLeadingIcon(editing ? GraphicIcon.SAVE : GraphicIcon.EDIT);
+        if (editing) {
+            var undo = addButton(left + panelWidth - 72, footer, 64, label("undo_layout"), this::undoLayout);
+            undo.setLeadingIcon(GraphicIcon.UNDO);
+            undo.active = !undoOrder.isEmpty();
+            addRenderableOnly((graphics, x, y, tick) -> renderDraggedGroup(graphics));
+        } else {
+            layoutConfigPage();
+        }
+    }
+
+    private void layoutGroupButtons() {
         for (int i = 0; i < groups.size(); i++) {
             int index = i;
             var title = label(groups.get(i).name());
             var group = addButton(groupX(i), groupY(i), navButtonWidth,
                     editing ? label("drag_group", title) : title, () -> selectGroup(index));
             if (editing) group.setPreview(UiHudRichText.prepare(label("drag_group_hint", title)));
+            else if (sidebar) group.setLeadingIcon(groups.get(i).icon());
             group.setSelected(i == activeGroup);
             navigation.add(group);
         }
-        addButton(left + 8, footer, 82, label(editing ? "confirm_layout" : "edit_layout"), () -> {
-            editing = !editing;
-            rebuildWidgets();
-        });
-        if (editing) {
-            addButton(left + panelWidth - 72, footer, 64, label("undo_layout"), this::undoLayout).active =
-                    !undoOrder.isEmpty();
-            addRenderableOnly((graphics, x, y, tick) -> renderDraggedGroup(graphics));
-            return;
-        }
+    }
 
+    private void layoutConfigPage() {
+        int footer = top + panelHeight - BUTTON_HEIGHT - 8;
         int columns = contentWidth >= 258 ? 2 : 1;
         int firstRow = contentY + 19;
         int capacity = columns * Math.max(1, (footer - firstRow - 3) / ROW);
@@ -191,12 +225,19 @@ public final class CosmicArtisanScreen extends LayeredScreen {
         int slot = (contentWidth + 4) / columns;
         for (int i = first; i < Math.min(first + capacity, options); i++) {
             int cell = i - first;
-            addOption(selected, i, contentX + cell % columns * slot, firstRow + cell / columns * ROW, slot - 4);
+            configPageButtons.add(addOption(selected, i,
+                    contentX + cell % columns * slot, firstRow + cell / columns * ROW, slot - 4));
         }
         if (pages > 1) {
             int right = left + panelWidth - 8;
-            addButton(right - 100, footer, 26, label("previous_page"), () -> changePage(-1)).active = page > 0;
-            addButton(right - 26, footer, 26, label("next_page"), () -> changePage(1)).active = page + 1 < pages;
+            var previous = addButton(right - 100, footer, 26, label("previous_page_label"), () -> changePage(-1));
+            var next = addButton(right - 26, footer, 26, label("next_page_label"), () -> changePage(1));
+            previous.setIcon(GraphicIcon.PREVIOUS);
+            next.setIcon(GraphicIcon.NEXT);
+            previous.active = page > 0;
+            next.active = page + 1 < pages;
+            configPageButtons.add(previous);
+            configPageButtons.add(next);
             pageCount = pages;
         } else {
             pageCount = 0;
@@ -259,44 +300,95 @@ public final class CosmicArtisanScreen extends LayeredScreen {
     private UiButton addButton(int x, int y, int buttonWidth, Component title, Runnable action) {
         var button = new UiButton(x, y, buttonWidth, BUTTON_HEIGHT, UiHudRichText.prepare(title),
                 ignored -> action.run(), UiPreferences.configured(), false, UiStyle.LIQUID_GLASS);
+        return registerButton(button, y);
+    }
+
+    private UiButton registerButton(UiButton button, int y) {
         button.setSampleBackground(false);
+        button.setY(y + offset);
         buttonPositions.put(button, y);
         return addRenderableWidget(button);
     }
 
-    private void addOption(Group group, int index, int x, int y, int buttonWidth) {
-        if (index < group.modes().size()) addMode(group.modes().get(index), x, y, buttonWidth);
-        else if (group.name().equals("travel")) {
+    private UiButton addOption(Group group, int index, int x, int y, int buttonWidth) {
+        if (index < group.modes().size()) return addMode(group.modes().get(index), x, y, buttonWidth);
+        if (group.name().equals("travel")) {
             beaconDestinations = addButton(x, y, buttonWidth, label("beacon_destinations"),
                     () -> BeaconClient.openDestinations(wheel ? null : this));
-        } else {
-            var policy = index == group.modes().size() ? BossPolicy.FRIENDLY : BossPolicy.HOSTILE;
-            var button = addButton(x, y, buttonWidth, bossLabel(policy), () -> toggleBossPolicy.accept(policy));
-            bossButtons.put(policy, button);
-            updateBossButton(policy, button);
+            setFunctionPreview(beaconDestinations, label("beacon_destinations"), label("beacon_destinations_hint"));
+            if (!wheel) beaconDestinations.setLeadingIcon(GraphicIcon.GOAL);
+            return beaconDestinations;
         }
+        var policy = index == group.modes().size() ? BossPolicy.FRIENDLY : BossPolicy.HOSTILE;
+        var button = addButton(x, y, buttonWidth, bossLabel(policy), () -> toggleBossPolicy.accept(policy));
+        bossButtons.put(policy, button);
+        updateBossButton(policy, button);
+        return button;
     }
 
-    private void addMode(Mode mode, int x, int y, int buttonWidth) {
-        var button = addButton(x, y, buttonWidth, modeLabel(mode), () -> toggle.accept(mode));
+    private UiButton addMode(Mode mode, int x, int y, int buttonWidth) {
+        UiButton button;
+        if (wheel) {
+            button = addButton(x, y, buttonWidth, modeLabel(mode), () -> toggle.accept(mode));
+        } else {
+            var control = ShBetterUiApi.controls().toggle(new Bounds(x, y, buttonWidth, BUTTON_HEIGHT),
+                    mode.enabled(flags), UiPreferences.configured(), UiStyle.LIQUID_GLASS,
+                    enabled -> UiHudRichText.prepare(message(mode, enabled)), ignored -> toggle.accept(mode));
+            if (mode == Mode.HOE_PRIORITY) control.setIcons(GraphicIcon.SWITCH, GraphicIcon.SWITCH);
+            else control.setIcons(GraphicIcon.ENABLE, GraphicIcon.DISABLE);
+            toggles.put(mode, control);
+            button = registerButton(control.button(), y);
+        }
         updateModeButton(mode, button);
         buttons.put(mode, button);
+        return button;
     }
 
     private void selectGroup(int index) {
         if (activeGroup == index) return;
         activeGroup = index;
         page = 0;
-        rebuildWidgets();
-        setFocused(navigation.get(index));
+        if (wheel || editing) {
+            rebuildWidgets();
+        } else {
+            changeConfigPage();
+        }
+        if (groupTabs != null) {
+            groupTabs.focus(index);
+            setFocused(groupTabs);
+        } else {
+            setFocused(navigation.get(index));
+        }
     }
 
     private void changePage(int direction) {
         page += direction;
-        rebuildWidgets();
+        if (wheel) rebuildWidgets();
+        else changeConfigPage();
         if (beaconDestinations != null && buttons.isEmpty()) setFocused(beaconDestinations);
         else if (!buttons.isEmpty()) setFocused(buttons.values().iterator().next());
         else if (!bossButtons.isEmpty()) setFocused(bossButtons.values().iterator().next());
+    }
+
+    private void changeConfigPage() {
+        for (var button : configPageButtons) {
+            if (getFocused() == button) setFocused(null);
+            removeWidget(button);
+            buttonPositions.remove(button);
+        }
+        configPageButtons.clear();
+        clearOptions();
+        for (int i = 0; i < navigation.size(); i++) navigation.get(i).setSelected(i == activeGroup);
+        layoutConfigPage();
+        pageAppearance.snapTo(0.55F);
+        pageAppearance.blendTo(1.0F, now(), 0, 160, InterruptibleAnimation.BlendCurve.SMOOTHSTEP);
+    }
+
+    private void clearOptions() {
+        buttons.clear();
+        toggles.clear();
+        bossButtons.clear();
+        beaconDestinations = null;
     }
 
     private void moveGroup(int from, int to) {
@@ -394,6 +486,7 @@ public final class CosmicArtisanScreen extends LayeredScreen {
     }
 
     private boolean layoutKey(int key, int modifiers) {
+        if (key == GLFW.GLFW_KEY_ESCAPE && cancelTabDrag()) return true;
         if (groupDrag.active()) {
             if (key == GLFW.GLFW_KEY_ESCAPE) cancelDrag();
             return true;
@@ -430,6 +523,7 @@ public final class CosmicArtisanScreen extends LayeredScreen {
     @Override
     public void removed() {
         cancelDrag();
+        cancelTabDrag();
         if (!wheel) ArtisanAppearancePreferences.rememberConfigPosition(groups.get(activeGroup).name(), page);
         super.removed();
     }
@@ -445,7 +539,7 @@ public final class CosmicArtisanScreen extends LayeredScreen {
             if (!result.contains(group)) result.add(group);
         }
         if (!aeAvailable) {
-            result.replaceAll(group -> new Group(group.name(), group.modes().stream()
+            result.replaceAll(group -> new Group(group.name(), group.icon(), group.modes().stream()
                     .filter(mode -> mode != Mode.AE_STORAGE_PRIORITY && mode != Mode.AE_LINK).toList()));
         }
         return result;
@@ -453,7 +547,10 @@ public final class CosmicArtisanScreen extends LayeredScreen {
 
     @Override
     public void tick() {
-        if (!minecraft.isWindowActive()) cancelDrag();
+        if (!minecraft.isWindowActive()) {
+            cancelDrag();
+            cancelTabDrag();
+        }
         if (minecraft.player == null || !CosmicArtisanModes.isActive(minecraft.player.getMainHandItem())) {
             onClose();
             return;
@@ -475,18 +572,25 @@ public final class CosmicArtisanScreen extends LayeredScreen {
 
     private void updateBossButton(BossPolicy policy, UiButton button) {
         button.active = Mode.HOSTILE_FRIENDLY.enabled(flags);
-        button.setMessage(UiHudRichText.prepare(bossLabel(policy)));
+        Component status = bossLabel(policy);
+        button.setMessage(UiHudRichText.prepare(status));
         button.setSelected(policy == bossPolicy && button.active);
-        button.setPreview(UiHudRichText.prepare(label("boss_policy_hint")));
+        setFunctionPreview(button, status, label(policy == BossPolicy.FRIENDLY ? "boss_friendly_hint" : "boss_hostile_hint"));
     }
 
     private void updateModeButton(Mode mode, UiButton button) {
-        button.setMessage(UiHudRichText.prepare(modeLabel(mode)));
-        button.setSelected(mode.enabled(flags));
-        Component hint = hint(mode);
-        var status = message(mode).copy();
-        if (hint != null) status.append("\n").append(hint);
-        button.setPreview(UiHudRichText.prepare(status));
+        var control = toggles.get(mode);
+        if (control != null) {
+            control.setValue(mode.enabled(flags));
+        } else {
+            button.setMessage(UiHudRichText.prepare(modeLabel(mode)));
+            button.setSelected(mode.enabled(flags));
+        }
+        setFunctionPreview(button, message(mode), Component.translatable(mode.translationKey() + "_hint"));
+    }
+
+    private static void setFunctionPreview(UiButton button, Component status, Component hint) {
+        button.setPreview(UiHudRichText.prepare(status.copy().append("\n").append(hint)));
     }
 
     private Component modeLabel(Mode mode) {
@@ -496,12 +600,23 @@ public final class CosmicArtisanScreen extends LayeredScreen {
     @Override
     protected void renderBackdrop(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
         var preferences = UiPreferences.configured();
-        opacity = appearance.sample(now(), preferences);
+        long frameTime = now();
+        opacity = appearance.sample(frameTime, preferences);
         offset = Math.round((1.0F - opacity) * 10);
+        pageOpacity = pageAppearance.sample(frameTime, preferences);
+        pageOffset = Math.round((1.0F - pageOpacity) * 9);
+        if (groupTabs != null) {
+            groupTabs.setY(navY + offset);
+            groupTabs.setPreferences(preferences);
+        }
         for (var entry : buttonPositions.entrySet()) {
             var button = entry.getKey();
             button.setY(entry.getValue() + offset);
             button.setAlpha(opacity);
+        }
+        for (var button : configPageButtons) {
+            button.setY(buttonPositions.get(button) + offset + pageOffset);
+            button.setAlpha(opacity * pageOpacity);
         }
         if (groupDrag.active()) {
             for (int i = 0; i < navigation.size(); i++) {
@@ -559,11 +674,12 @@ public final class CosmicArtisanScreen extends LayeredScreen {
             }
             return;
         }
-        drawRich(graphics, label(groups.get(activeGroup).name()), contentX + 2, contentY + 3 + offset, text,
+        int pageText = withAlpha(text, pageOpacity);
+        drawRich(graphics, label(groups.get(activeGroup).name()), contentX + 2, contentY + 3 + offset + pageOffset, pageText,
                 preferences, false);
         if (pageCount > 1) {
             drawRich(graphics, label("page", page + 1, pageCount),
-                    left + panelWidth - 58, top + panelHeight - 22 + offset, text, preferences, true);
+                    left + panelWidth - 58, top + panelHeight - 22 + offset + pageOffset, pageText, preferences, true);
         }
     }
 
@@ -596,23 +712,19 @@ public final class CosmicArtisanScreen extends LayeredScreen {
     @Override
     public boolean isPauseScreen() { return false; }
 
-    private static Component hint(Mode mode) {
-        return switch (mode) {
-            case HOSTILE_FRIENDLY -> label("hostile_friendly_hint");
-            case TELEPORT -> label("teleport_hint");
-            case AE_LINK -> label("ae_link_hint");
-            case AUTO_CLICK -> label("auto_click_hint");
-            case PROTECTION_LIST -> label("protection_list_hint");
-            case CONSTRUCTION_WAND, ANGEL_CORE -> label("construction_hint");
-            case DESTRUCTION_CORE -> label("destruction_hint");
-            case FORCE_GROW -> label("force_grow_hint");
-            default -> null;
-        };
+    private Component message(Mode mode) {
+        return message(mode, mode.enabled(flags));
     }
 
-    private Component message(Mode mode) {
-        if (mode == Mode.HOE_PRIORITY) return label(mode.enabled(flags) ? "hoe_priority" : "shovel_priority");
-        return label(mode.enabled(flags) ? "enabled" : "disabled", Component.translatable(mode.translationKey()));
+    private static Component message(Mode mode, boolean enabled) {
+        if (mode == Mode.HOE_PRIORITY) return label(enabled ? "hoe_priority" : "shovel_priority");
+        return label(enabled ? "enabled" : "disabled", Component.translatable(mode.translationKey()));
+    }
+
+    private boolean cancelTabDrag() {
+        if (groupTabs == null || !groupTabs.cancelDrag()) return false;
+        setDragging(false);
+        return true;
     }
 
     private static int withAlpha(int color, float opacity) {
@@ -626,7 +738,7 @@ public final class CosmicArtisanScreen extends LayeredScreen {
     }
 
     private record WheelSlot(int x, int y) {}
-    private record Group(String name, List<Mode> modes) {
+    private record Group(String name, GraphicIcon icon, List<Mode> modes) {
         int optionCount() { return modes.size() + (name.equals("travel") ? 1 : name.equals("combat") ? 2 : 0); }
     }
 }
