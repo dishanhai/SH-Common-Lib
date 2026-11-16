@@ -6,6 +6,7 @@ import com.dishanhai.sh_common_lib.client.beacon.BeaconWorldRenderer;
 import com.mojang.blaze3d.vertex.BufferBuilder;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.blockentity.BeaconRenderer;
+import net.minecraftforge.client.event.RenderGuiEvent;
 import net.minecraftforge.client.event.RenderLevelStageEvent;
 import net.minecraft.resources.ResourceLocation;
 import com.dishanhai.sh_common_lib.client.item.CosmicArtisanShortcut;
@@ -38,13 +39,15 @@ final class ForgeArtisanClient {
         var buffers = MultiBufferSource.immediate(new BufferBuilder(4096));
         MinecraftForge.EVENT_BUS.addListener((RenderLevelStageEvent event) -> {
             if (event.getStage() != RenderLevelStageEvent.Stage.AFTER_BLOCK_ENTITIES) return;
-            BeaconWorldRenderer.render(event.getPoseStack(), event.getCamera(), event.getProjectionMatrix().m11(),
+            BeaconWorldRenderer.render(event.getPoseStack(), event.getCamera(), event.getProjectionMatrix(),
+                    event.getPoseStack().last().pose(),
                     event.getFrustum(), buffers,
                     (pose, target, time, height, color, radius, glowRadius) -> BeaconRenderer.renderBeaconBeam(
                             pose, target, BeaconRenderer.BEAM_LOCATION, event.getPartialTick(), 1.0F, time, 1,
                             height, new float[]{(color >> 16 & 255) / 255F, (color >> 8 & 255) / 255F,
                                 (color & 255) / 255F}, radius, glowRadius));
         });
+        MinecraftForge.EVENT_BUS.addListener((RenderGuiEvent.Pre event) -> BeaconWorldRenderer.renderHud(event.getGuiGraphics()));
     }
 
     static void registerQuickConfig(IEventBus modBus) {

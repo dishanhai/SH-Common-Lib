@@ -13,6 +13,7 @@ import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.neoforged.neoforge.client.event.InputEvent;
 import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
+import net.neoforged.neoforge.client.event.RegisterGuiLayersEvent;
 import net.neoforged.neoforge.client.settings.KeyConflictContext;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
@@ -31,9 +32,12 @@ import org.jspecify.annotations.Nullable;
 final class NeoForgeArtisanClient {
     private NeoForgeArtisanClient() {}
 
-    static void registerBeaconMarkers() {
+    static void registerBeaconMarkers(IEventBus modBus) {
         NeoForge.EVENT_BUS.addListener(BeaconWorldRenderer::extract);
         NeoForge.EVENT_BUS.addListener(BeaconWorldRenderer::submit);
+        modBus.addListener((RegisterGuiLayersEvent event) -> event.registerBelowAll(
+                Identifier.fromNamespaceAndPath(ShCommonLib.MOD_ID, "beacon_markers"),
+                (graphics, delta) -> BeaconWorldRenderer.renderHud(graphics)));
     }
 
     static void registerQuickConfig(IEventBus modBus) {

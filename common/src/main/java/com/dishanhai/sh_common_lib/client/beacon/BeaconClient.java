@@ -42,7 +42,7 @@ public final class BeaconClient {
             connection = connected;
             level = client.level;
             directory = List.of();
-            BeaconAim.highlight(null);
+            BeaconWorldMarkers.reset();
             nextRequest = 0;
         }
         long now = System.nanoTime() / 1_000_000L;
@@ -89,13 +89,9 @@ public final class BeaconClient {
         return !tool.isEmpty() && Mode.BEACON_HUD.enabled(readFlags.applyAsInt(tool));
     }
 
-    static CosmicBeacon.View aimedBeacon(Minecraft client) {
-        if (!showHud(client) || client.screen != null || client.options.hideGui || directory.isEmpty()
-                || client.getCameraEntity() != client.player) return null;
-        var camera = client.gameRenderer.getMainCamera();
-        if (!camera.isInitialized()) return null;
-        var aim = camera.getLookVector();
-        return BeaconAim.select(client.level.dimension(), directory, camera.getPosition(), new Vec3(aim.x(), aim.y(), aim.z()));
+    static boolean canAim(Minecraft client) {
+        return showHud(client) && client.screen == null && !client.options.hideGui
+                && client.getCameraEntity() == client.player && client.gameRenderer.getMainCamera().isInitialized();
     }
 
     static Component warpHint(Minecraft client) {
@@ -103,9 +99,9 @@ public final class BeaconClient {
     }
 
     public static boolean warpAimed(Minecraft client) {
-        if (!canWarp(client)) return false;
-        var beacon = aimedBeacon(client);
-        return beacon != null && BeaconAim.isHighlighted(beacon) && send(new BeaconPackets.Warp(beacon.point(), beacon.id()));
+        if (!canWarp(client) || !canAim(client)) return false;
+        var beacon = BeaconWorldMarkers.focusedBeacon();
+        return beacon != null && directory.contains(beacon) && send(new BeaconPackets.Warp(beacon.point(), beacon.id()));
     }
 
     private static boolean canWarp(Minecraft client) {

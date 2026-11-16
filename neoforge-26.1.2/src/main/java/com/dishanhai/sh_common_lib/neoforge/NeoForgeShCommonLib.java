@@ -64,7 +64,7 @@ public final class NeoForgeShCommonLib {
         if (FMLEnvironment.getDist().isClient()) {
             modBus.addListener(NeoForgeArtisanClient::registerModel);
             NeoForgeArtisanClient.registerQuickConfig(modBus);
-            NeoForgeArtisanClient.registerBeaconMarkers();
+            NeoForgeArtisanClient.registerBeaconMarkers(modBus);
             NeoForgeLoading.register();
             var announcement = new DefaultAnnouncement(FMLPaths.CONFIGDIR.get());
             NeoForge.EVENT_BUS.addListener((ScreenEvent.Init.Post event) -> announcement.onScreenInit(event.getScreen()));

@@ -7,6 +7,7 @@ import com.dishanhai.sh_better_ui.client.gui.scaled.UiPreferences;
 import com.dishanhai.sh_better_ui.kernel.api.screen.LayeredScreen;
 import com.dishanhai.sh_common_lib.internal.beacon.BeaconPackets;
 import com.dishanhai.sh_common_lib.internal.beacon.CosmicBeacon;
+import net.minecraft.network.chat.Component;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
 
@@ -19,7 +20,7 @@ final class BeaconDestinationScreen extends LayeredScreen {
     private List<CosmicBeacon.View> shown = List.of();
     private int left, top, panelWidth, panelHeight;
     private int page, pages;
-    private boolean unavailable;
+    private Component feedback;
 
     BeaconDestinationScreen(Screen parent) {
         super(text("destinations"));
@@ -29,11 +30,11 @@ final class BeaconDestinationScreen extends LayeredScreen {
     @Override
     protected void init() {
         shown = BeaconClient.directory();
-        int rows = Math.max(1, Math.min(7, (height - 52) / 22));
+        int rows = Math.max(1, Math.min(7, (height - 74) / 22));
         pages = Math.max(1, (shown.size() + rows - 1) / rows);
         page = Math.min(page, pages - 1);
         panelWidth = Math.min(320, width - 12);
-        panelHeight = 52 + rows * 22;
+        panelHeight = 74 + rows * 22;
         left = (width - panelWidth) / 2;
         top = (height - panelHeight) / 2;
         for (int i = 0; i < rows && page * rows + i < shown.size(); i++) {
@@ -41,18 +42,26 @@ final class BeaconDestinationScreen extends LayeredScreen {
             var message = text("destination", BeaconClient.name(beacon), BeaconClient.destination(beacon));
             var button = new UiButton(left + 8, top + 25 + i * 22, panelWidth - 16, 19, message, pressed -> {
                 if (BeaconClient.send(new BeaconPackets.Warp(beacon.point(), beacon.id()))) minecraft.setScreen(null);
-                else unavailable = true;
+                else feedback = text("unavailable");
             });
             var pos = beacon.point().pos();
             button.setPreview(text("location", message, pos.getX(), pos.getY(), pos.getZ()));
             addRenderableWidget(button);
         }
         int y = top + panelHeight - 23;
+        addRenderableWidget(new UiButton(left + 8, y - 22, panelWidth - 16, 18, beamLabel(), button -> {
+            feedback = BeaconBeamPreference.toggle(minecraft) ? null : text("world_beam_save_failed");
+            button.setMessage(beamLabel());
+        }));
         addRenderableWidget(new UiButton(left + 8, y, 56, 18, text("close"), ignored -> onClose()));
         var previous = addRenderableWidget(new UiButton(left + panelWidth - 92, y, 20, 18, text("previous"), ignored -> change(-1)));
         var next = addRenderableWidget(new UiButton(left + panelWidth - 28, y, 20, 18, text("next"), ignored -> change(1)));
         previous.active = page > 0;
         next.active = page + 1 < pages;
+    }
+
+    private Component beamLabel() {
+        return text(BeaconBeamPreference.enabled(minecraft) ? "on" : "off", text("world_beam"));
     }
 
     private void change(int delta) {
@@ -72,7 +81,7 @@ final class BeaconDestinationScreen extends LayeredScreen {
 
     @Override
     protected void renderForeground(GuiGraphicsExtractor graphics, int x, int y, float partialTick) {
-        graphics.centeredText(font, unavailable ? text("unavailable") : title, width / 2, top + 9, 0xFFFFFFFF);
+        graphics.centeredText(font, feedback == null ? title : feedback, width / 2, top + 9, 0xFFFFFFFF);
         if (shown.isEmpty()) graphics.centeredText(font, text("empty"), width / 2, top + 29, 0xFFC3CCD8);
         graphics.centeredText(font, text("pages", page + 1, pages), left + panelWidth - 50,
                 top + panelHeight - 18, 0xFFFFFFFF);

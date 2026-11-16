@@ -1,50 +1,35 @@
 // Author: dishanhai
 package com.dishanhai.sh_common_lib.client.beacon;
 
-import com.dishanhai.sh_common_lib.internal.beacon.CosmicBeacon;
-import net.minecraft.core.BlockPos;
-import net.minecraft.resources.ResourceKey;
-import net.minecraft.world.level.Level;
-import net.minecraft.world.phys.Vec3;
-
-import java.util.List;
-import java.util.UUID;
-
 final class BeaconAim {
     static final double LABEL_HEIGHT = 1.35;
-    private static final double AIM_COSINE = Math.cos(Math.toRadians(4.5));
-    private static UUID highlighted;
+    private static final int PADDING = 8;
+    private static final float MIN_SCALE = 0.5F;
+    private static final double SCALE_START_DISTANCE = 24;
+    private static final double SCALE_END_DISTANCE = 120;
 
     private BeaconAim() {}
 
-    static void highlight(CosmicBeacon.View beacon) {
-        highlighted = beacon == null ? null : beacon.id();
+    static float scale(double distance) {
+        double progress = Math.clamp((distance - SCALE_START_DISTANCE) / (SCALE_END_DISTANCE - SCALE_START_DISTANCE), 0, 1);
+        return (float) (1 - (1 - MIN_SCALE) * progress);
     }
 
-    static boolean isHighlighted(CosmicBeacon.View beacon) {
-        return beacon.id().equals(highlighted);
-    }
-
-    static CosmicBeacon.View select(ResourceKey<Level> dimension, List<CosmicBeacon.View> directory,
-                                   Vec3 origin, Vec3 direction) {
-        CosmicBeacon.View target = null;
-        double bestCosine = AIM_COSINE;
-        double closest = Double.POSITIVE_INFINITY;
-        for (var beacon : directory) {
-            if (!beacon.hud() || !dimension.equals(beacon.point().dimension())) continue;
-            BlockPos pos = beacon.point().pos();
-            double x = pos.getX() + 0.5 - origin.x;
-            double y = pos.getY() + LABEL_HEIGHT - origin.y;
-            double z = pos.getZ() + 0.5 - origin.z;
-            double distance = x * x + y * y + z * z;
-            if (distance == 0.0) continue;
-            double cosine = (x * direction.x + y * direction.y + z * direction.z) / Math.sqrt(distance);
-            if (cosine > bestCosine || cosine == bestCosine && distance < closest) {
-                bestCosine = cosine;
-                closest = distance;
-                target = beacon;
-            }
+    record Bounds(int x, int y, int width, int height, float scale) {
+        boolean hits(int crosshairX, int crosshairY) {
+            int padding = Math.round(PADDING * scale);
+            return crosshairX >= x - padding && crosshairX < x + width + padding
+                    && crosshairY >= y - padding && crosshairY < y + height + padding;
         }
-        return target;
+
+        double score(int crosshairX, int crosshairY) {
+            if (!hits(crosshairX, crosshairY)) return Double.POSITIVE_INFINITY;
+            double dx = crosshairX - (x + width * 0.5);
+            double dy = crosshairY - (y + height * 0.5);
+            double centerDistance = dx * dx + dy * dy;
+            // Rank hits on the glass ahead of hits in its padding.
+            return crosshairX >= x && crosshairX < x + width && crosshairY >= y && crosshairY < y + height
+                    ? centerDistance / (1 + centerDistance) : 1 + centerDistance;
+        }
     }
 }
