@@ -10,12 +10,8 @@ final class JeiSearchLayout {
 
     static PopupArea.Rect candidates(int screenWidth, int screenHeight, int searchX,
                                    PopupArea.Rect host, int desiredWidth, int desiredHeight) {
-        var area = PopupArea.leftOf(screenWidth, screenHeight, searchX, host, MARGIN, desiredWidth, desiredHeight);
-        if (fits(area)) return area;
-
-        // A wide or tall terminal can leave too little space beside and below it.
-        var overlay = PopupArea.leftOf(screenWidth, screenHeight, searchX, null, MARGIN);
-        return fits(overlay) ? overlay : null;
+        var area = PopupArea.fittingLeftOf(screenWidth, screenHeight, searchX, host, MARGIN, desiredWidth, desiredHeight);
+        return fits(area) ? area : null;
     }
 
     private static boolean fits(PopupArea.Rect area) {

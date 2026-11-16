@@ -63,6 +63,7 @@ public final class ClientSearchTest {
         require(SearchTagNames.display("forge:ingots/iron", key -> key.equals("sh_common_lib.jei.tag.ingots") ? "锭"
                         : key.equals("sh_common_lib.jei.tag.iron") ? "铁" : key)
                 .equals("锭 · 铁"), "tag display translates path components");
+        mixedPinyin();
         hotWords();
         serverHotWords();
         require(SearchMatch.literal("Iron Ingot", "ing").orElseThrow().equals(new SearchMatch.Range(5, 8)), "literal match span ignores case");
@@ -123,6 +124,24 @@ public final class ClientSearchTest {
 
     private static void require(boolean condition, String message) {
         if (!condition) throw new AssertionError(message);
+    }
+
+    private static void mixedPinyin() {
+        var flint = new ClientSearch.Entry<>("flint", "打火石", List.of("minecraft:flint_and_steel"),
+                List.of(), "Minecraft", List.of());
+        var index = ClientSearch.index(List.of(flint));
+        var async = new AsyncClientSearch<String>(Runnable::run, true);
+        async.replace(List.of(flint));
+        for (String query : List.of("dah", "dahs", "dahuos", "dhuoshi", "dhs", "dahuoshi")) {
+            require(index.search(query).equals(List.of("flint")), "mixed pinyin search: " + query);
+            async.request(query, 5);
+            require(async.result().suggestions().size() == 1, "mixed pinyin prediction: " + query);
+            var suggestion = async.result().suggestions().getFirst();
+            require(suggestion.completion().equals("打火石") && suggestion.matchRank() == 6,
+                    "mixed pinyin completes original name without typo correction: " + query);
+        }
+        require(index.suggest("@minecraft dahs", 5).getFirst().completion().equals("@minecraft 打火石"),
+                "mixed pinyin prediction keeps the mod filter");
     }
 
     private static void hotWords() {

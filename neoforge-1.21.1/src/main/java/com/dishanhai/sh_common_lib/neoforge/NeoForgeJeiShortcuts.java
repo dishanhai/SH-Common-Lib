@@ -23,6 +23,7 @@ final class NeoForgeJeiShortcuts {
     private NeoForgeJeiShortcuts() {}
 
     static void register() {
+        NeoForgeIngredientGive.install();
         NeoForgeHotWordsNetwork.bindClient();
         JeiSearchProvider.initialize(ModList.get().isLoaded("jeiguess"));
         NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, (ClientChatReceivedEvent event) -> {
@@ -55,6 +56,9 @@ final class NeoForgeJeiShortcuts {
         NeoForge.EVENT_BUS.addListener((ScreenEvent.Closing event) -> JeiSearchAssistant.close(event.getScreen()));
         NeoForge.EVENT_BUS.addListener((ClientTickEvent.Post event) -> { JeiSearchProvider.tick(); JeiSearchAssistant.tick(); });
         var infinityCells = ModList.get().isLoaded("ae2") ? NeoForgeJeiInfinityCells.register() : null;
+        NeoForge.EVENT_BUS.addListener(EventPriority.HIGHEST, (RenderTooltipEvent.Pre event) -> {
+            if (JeiSearchAssistant.beforeTooltip()) event.setCanceled(true);
+        });
         NeoForge.EVENT_BUS.addListener((RenderTooltipEvent.GatherComponents event) ->
                 JeiShortcuts.appendTooltipHints(event.getItemStack(), event.getTooltipElements(), true, DATA_KIND,
                         ingredient -> ingredient instanceof ItemStack || ingredient instanceof FluidStack,

@@ -20,6 +20,7 @@ final class ForgeJeiShortcuts {
     private ForgeJeiShortcuts() {}
 
     static void register(boolean ownsShortcuts) {
+        ForgeIngredientGive.install();
         ForgeHotWordsNetwork.bindClient();
         var infinityCells = ModList.get().isLoaded("ae2") ? ForgeJeiInfinityCells.register() : null;
         JeiSearchProvider.initialize(ModList.get().isLoaded("jeiguess"));
@@ -53,6 +54,9 @@ final class ForgeJeiShortcuts {
         MinecraftForge.EVENT_BUS.addListener((ScreenEvent.Closing event) -> JeiSearchAssistant.close(event.getScreen()));
         MinecraftForge.EVENT_BUS.addListener((TickEvent.ClientTickEvent event) -> {
             if (event.phase == TickEvent.Phase.END) { JeiSearchProvider.tick(); JeiSearchAssistant.tick(); }
+        });
+        MinecraftForge.EVENT_BUS.addListener(EventPriority.HIGHEST, (RenderTooltipEvent.Pre event) -> {
+            if (JeiSearchAssistant.beforeTooltip()) event.setCanceled(true);
         });
         MinecraftForge.EVENT_BUS.addListener((RenderTooltipEvent.GatherComponents event) ->
                 JeiShortcuts.appendTooltipHints(event.getItemStack(), event.getTooltipElements(),

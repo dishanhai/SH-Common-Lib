@@ -1,6 +1,8 @@
 // Author: dishanhai
 package com.dishanhai.sh_common_lib.client.jei;
 
+import com.dishanhai.sh_better_ui.kernel.api.input.GestureFocusRetention;
+
 import com.dishanhai.sh_better_ui.client.gui.scaled.UiPreferences;
 import com.dishanhai.sh_better_ui.client.gui.scaled.UiHudPanel;
 import com.dishanhai.sh_better_ui.client.gui.scaled.PopupMotion;
@@ -8,6 +10,7 @@ import com.dishanhai.sh_better_ui.client.gui.layout.PopupArea;
 import com.dishanhai.sh_common_lib.api.client.ulk.AsyncClientSearch;
 import com.dishanhai.sh_common_lib.client.ClientPanels;
 import com.dishanhai.sh_common_lib.api.client.ulk.ClientSearch;
+import com.dishanhai.sh_common_lib.api.client.ulk.ClientIngredientGive;
 import com.dishanhai.sh_common_lib.api.client.ulk.SearchHistory;
 import com.dishanhai.sh_common_lib.api.client.ulk.SearchMatch;
 import com.dishanhai.sh_common_lib.api.client.ulk.SearchRanking;
@@ -46,6 +49,7 @@ public final class JeiSearchAssistant {
     private static final int MAX_SUGGESTIONS = 500;
     private static final int MAX_PREVIEWS = 128;
     private static final SearchCompletionUndo UNDO = new SearchCompletionUndo();
+    private static final GestureFocusRetention PICK_FOCUS = new GestureFocusRetention();
     private static final PopupMotion MOTION = new PopupMotion();
     private static final SearchPreviewGate PREVIEW_GATE = new SearchPreviewGate(150);
     private static IJeiRuntime failureRuntime;
@@ -94,6 +98,8 @@ public final class JeiSearchAssistant {
     private static int x, y, width, height;
     private static int clipX, clipY, clipWidth, clipHeight;
     private static boolean contentVisible;
+    private static boolean drawingOverlay;
+    private static boolean nativeTooltipVisible;
     private static float scale;
     private static PopupArea.Rect area;
     private static UiHudPanel lastPanel;
@@ -110,11 +116,32 @@ public final class JeiSearchAssistant {
 
     /** Close JEI's own popup only while our matching candidates are shown. */
     public static void beforeRender(Screen current) {
+        nativeTooltipVisible = false;
         if (!available()) return;
         try { beforeRenderUnchecked(current); } catch (RuntimeException | LinkageError error) { fail(error); }
     }
 
+    /** A tooltip belongs either to the foreground search overlay or to the screen beneath it. */
+    public static boolean beforeTooltip() {
+        if (drawingOverlay || !available() || Minecraft.getInstance().screen != screen) return false;
+        try {
+            var box = activeBox();
+            if (box == null || dismissed || !JeiSearchPreferences.current().hud()) return false;
+            // Keep keyboard-selected information stable even when the mouse rests on a native slot.
+            boolean searchOwnsTooltip = itemCount() > 0 && box.getValue().equals(suggestionQuery);
+            if (!searchOwnsTooltip) nativeTooltipVisible = true;
+            return searchOwnsTooltip;
+        } catch (RuntimeException | LinkageError error) {
+            fail(error);
+            return false;
+        }
+    }
+
     private static void beforeRenderUnchecked(Screen current) {
+        if (screen != current) {
+            finish();
+            screen = current;
+        }
         var options = JeiSearchPreferences.current();
         if (!options.prediction() || !options.hud() || current != Minecraft.getInstance().screen) return;
         var box = activeBox();
@@ -143,7 +170,10 @@ public final class JeiSearchAssistant {
 
     public static void render(Screen current, GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
         if (!available()) return;
+        drawingOverlay = true;
+        graphics.nextStratum();
         try { renderUnchecked(current, graphics, mouseX, mouseY); } catch (RuntimeException | LinkageError error) { fail(error); }
+        finally { drawingOverlay = false; }
     }
 
     private static void renderUnchecked(Screen current, GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
@@ -202,6 +232,12 @@ public final class JeiSearchAssistant {
             suggestionQuery = null;
         }
         int itemCount = itemCount();
+        // A native tooltip may already have been painted before the first candidate became ready.
+        if (nativeTooltipVisible) {
+            rowsDrawn = 0;
+            lastPanel = null;
+            return;
+        }
         if (!historyMode && itemCount > 0) drawGhost(graphics, box, query);
         boolean showHelpEntry = options.hints() && (itemCount > 0 || !groups.isEmpty());
         boolean showHints = showHelpEntry && helpExpanded;
@@ -243,6 +279,12 @@ public final class JeiSearchAssistant {
                 Component.translatable("sh_common_lib.jei.search.hints")));
         if (showHints && !historyMode && itemCount > 0) rows.add(new UiHudPanel.Row(UiHudPanel.icon("keyboard"), 0xffd5deeb,
                 Component.translatable("sh_common_lib.jei.search.recipe_hint")));
+        if (showHints && selectedIngredient() != null && ClientIngredientGive.enabled()) {
+            rows.add(new UiHudPanel.Row(UiHudPanel.icon("keyboard"), 0xffd5deeb,
+                    Component.translatable("sh_common_lib.jei.search.give_hint")));
+            if (ClientIngredientGive.infinityCellsAvailable()) rows.add(new UiHudPanel.Row(UiHudPanel.icon("keyboard"), 0xffd5deeb,
+                    Component.translatable("sh_common_lib.jei.search.give_cell_hint")));
+        }
         if (showHints && itemCount > 0) rows.add(new UiHudPanel.Row(UiHudPanel.icon("reset"), 0xffd5deeb,
                 Component.translatable("sh_common_lib.jei.search.undo_hint")));
         if (showHints && (options.history() || historyMode)) rows.add(new UiHudPanel.Row(UiHudPanel.icon("history"), 0xffd5deeb,
@@ -283,12 +325,11 @@ public final class JeiSearchAssistant {
         contentVisible = frame.progress() >= 0.5f;
         if (fw <= 0 || fh <= 0) return;
         panel.drawReveal(graphics, font, preferences, x, y, scale, lastSelectedRow, fx, fy, fw, fh, frame.progress());
-        boolean nativeTooltip = selectedIngredient() != null && JeiShortcuts.hovered(current, mouseX, mouseY).isPresent();
         boolean previewVisible = false;
         if (frame.acceptsInput() && options.preview() && selectedIngredient() != null
                 && PREVIEW_GATE.ready(selectedIngredient().key(), System.nanoTime() / 1_000_000L)) {
             graphics.nextStratum();
-            try { previewVisible = drawPreview(graphics, current, preferences, mouseX, mouseY, !nativeTooltip); }
+            try { previewVisible = drawPreview(graphics, current, preferences, mouseX, mouseY); }
             catch (RuntimeException | LinkageError error) {
                 previewKey = selectedIngredient().key();
                 preview = null;
@@ -299,7 +340,7 @@ public final class JeiSearchAssistant {
             }
         }
         if (frame.acceptsInput() && selectedIngredient() != null
-                && !nativeTooltip && !previewVisible) {
+                && !previewVisible) {
             renderSelectedTooltip(graphics, x - 4);
         }
     }
@@ -343,6 +384,12 @@ public final class JeiSearchAssistant {
         if (hasSelection && historyMode && historyGroup < 3 && options.history() && modifiers == GLFW.GLFW_MOD_SHIFT
                 && key == GLFW.GLFW_KEY_DELETE) {
             removeHistory(selected);
+            return true;
+        }
+        var giveMode = SearchGiveShortcut.mode(key, modifiers);
+        if (giveMode != null && hasSelection && selectedIngredient() != null && ClientIngredientGive.enabled()) {
+            var ingredient = selectedIngredient();
+            if (ingredient.visible()) ClientIngredientGive.request(ingredient.typed().getIngredient(), giveMode);
             return true;
         }
         if (hasSelection && selectedIngredient() != null && modifiers == GLFW.GLFW_MOD_ALT && (key == GLFW.GLFW_KEY_ENTER || key == GLFW.GLFW_KEY_KP_ENTER)) {
@@ -519,10 +566,14 @@ public final class JeiSearchAssistant {
     }
 
     private static boolean mouseClickedUnchecked(Screen current, double mouseX, double mouseY, int button) {
+        if (button != GLFW.GLFW_MOUSE_BUTTON_MIDDLE) PICK_FOCUS.clear();
         var box = activeBox();
         if (box == null || current != screen || (button != 0 && button != 1 && button != 2)
                 || rowsDrawn == 0 || dismissed || !contentVisible
                 || !box.getValue().equals(suggestionQuery) || scale <= 0) return false;
+        // JEI may unfocus its search when a material is picked up. Let it handle the click normally.
+        if (button == GLFW.GLFW_MOUSE_BUTTON_MIDDLE && JeiShortcuts.hovered(current, mouseX, mouseY).isPresent())
+            PICK_FOCUS.begin(current, box);
         if (mouseX < x || mouseX >= x + width || mouseY < y || mouseY >= y + height) return false;
         if (mouseX < clipX || mouseX >= clipX + clipWidth || mouseY < clipY || mouseY >= clipY + clipHeight) return false;
         int localY = (int) ((mouseY - y) / scale) - 6;
@@ -531,6 +582,7 @@ public final class JeiSearchAssistant {
         int item = SearchPaging.start(selected, MAX_ROWS) + row;
         if (button == 2) {
             if (!JeiSearchPreferences.current().history()) return false;
+            PICK_FOCUS.begin(current, box);
             toggleFavorite(item);
         } else if (button == 1) {
             String value = historyMode ? completion(item) : suggestions.get(item).label().startsWith("@")
@@ -626,6 +678,7 @@ public final class JeiSearchAssistant {
     }
 
     private static void finish() {
+        PICK_FOCUS.clear();
         if (wasFocused && !observed.equals(focusInitial)) remember(observed);
         wasFocused = false;
         rowsDrawn = 0;
@@ -753,13 +806,13 @@ public final class JeiSearchAssistant {
 
     private static EditBox activeBox() {
         var runtime = JeiShortcuts.runtime();
-        if (runtime == null) return null;
+        if (runtime == null) { PICK_FOCUS.clear(); return null; }
         var current = runtime.getIngredientListOverlay();
         if (current != overlay) {
+            PICK_FOCUS.clear();
             overlay = current; fieldChecked = false; searchField = null;
             completionMethodChecked = false; hideNativeCompletion = null;
         }
-        if (!current.hasKeyboardFocus()) return null;
         if (!fieldChecked) {
             fieldChecked = true;
             try {
@@ -772,8 +825,15 @@ public final class JeiSearchAssistant {
         if (searchField == null) return null;
         try {
             Object value = searchField.get(current);
-            return value instanceof EditBox box && box.isVisible() ? box : null;
+            if (!(value instanceof EditBox box) || !box.isVisible()) { PICK_FOCUS.clear(); return null; }
+            var client = Minecraft.getInstance();
+            boolean usable = screen == client.screen && client.isWindowActive() && current.isListDisplayed()
+                    && !dismissed && rowsDrawn > 0 && JeiSearchPreferences.current().hud();
+            boolean held = GLFW.glfwGetMouseButton(client.getWindow().handle(), GLFW.GLFW_MOUSE_BUTTON_MIDDLE) == GLFW.GLFW_PRESS;
+            if (PICK_FOCUS.restore(client.screen, box, usable, held)) box.setFocused(true);
+            return current.hasKeyboardFocus() ? box : null;
         } catch (IllegalAccessException error) {
+            PICK_FOCUS.clear();
             searchField = null;
             return null;
         }
@@ -875,7 +935,7 @@ public final class JeiSearchAssistant {
         } catch (RuntimeException | LinkageError error) { LOGGER.debug("Could not render selected JEI tooltip", error); }
     }
 
-    private static boolean drawPreview(GuiGraphicsExtractor graphics, Screen current, UiPreferences preferences, int mouseX, int mouseY, boolean allowTooltip) {
+    private static boolean drawPreview(GuiGraphicsExtractor graphics, Screen current, UiPreferences preferences, int mouseX, int mouseY) {
         ensurePreview();
         if (previewLayout == null || previewLayout.width() <= 0 || previewLayout.height() <= 0) return false;
         var font = Minecraft.getInstance().font;
@@ -884,8 +944,8 @@ public final class JeiSearchAssistant {
         int previewWidth = bounds.width();
         int previewHeight = bounds.height();
         int left = x - previewWidth - 4;
-        int top = Math.max(area.y(), Math.min(y, area.y() + area.height() - previewHeight));
-        if (left < area.x() || top + previewHeight > area.y() + area.height()) return false;
+        int top = Math.max(4, Math.min(y, current.height - 4 - previewHeight));
+        if (left < 4 || top + previewHeight > current.height - 4) return false;
         if (JeiSearchPreferences.current().glass()) ClientPanels.panel(graphics, left, top, previewWidth, previewHeight);
         else ClientPanels.surface(graphics, new com.dishanhai.sh_better_ui.client.gui.display.GraphicDisplayLayout.Bounds(left, top, previewWidth, previewHeight), null, 0xFF18202C);
         graphics.enableScissor(left + bounds.clipX(), top + bounds.clipY(),
@@ -897,10 +957,10 @@ public final class JeiSearchAssistant {
                 preview.title(), previewIndex + 1, previews.size()) : preview.title();
         graphics.text(font, font.plainSubstrByWidth(title.getString(), previewWidth - 12),
                 left + 6, top + 5, ClientPanels.TEXT);
-        boolean hovered = allowTooltip && mouseX >= left + bounds.clipX() && mouseX < left + bounds.clipX() + bounds.clipWidth()
+        boolean hovered = mouseX >= left + bounds.clipX() && mouseX < left + bounds.clipX() + bounds.clipWidth()
                 && mouseY >= top + bounds.clipY() && mouseY < top + bounds.clipY() + bounds.clipHeight();
         if (hovered) previewLayout.renderOverlays(graphics, mouseX, mouseY);
-        else if (allowTooltip) renderSelectedTooltip(graphics, left - 4);
+        else renderSelectedTooltip(graphics, left - 4);
         return true;
     }
 }
