@@ -1,6 +1,14 @@
 # SH-Common-Lib
 
+## 可视化配方编辑器
+
+在 F10 主控中心的“设置 → 开发者 → 配方编辑器”创建配方。支持原版合成、四类烹饪、切石、锻造、药水与瓶型酿造，以及自定义 JSON；可导入 JSON、保存草稿并导出 JSON、KubeJS 或可编译的 Java 资源生成器。界面使用配套 SHBUI 的 UUK 素材槽、工作台和多行代码控件；旧版缺少 API 时会提示更新。
+
+工作区为 `config/sh_common_lib/recipe_editor/`。资源选取采用 GTSH 的来源／网格／已选清单布局，使用 SHBUI 控件、富文本及操作图标。酿造支持实例配置与数据包 JSON、服务端 `/reload`，Java 导出写出资源文件。支持范围、安装方法与验收限制见 [配方编辑器说明](docs/RECIPE_EDITOR.md)；其他模组可使用公开的 [ULK 酿造注册 API](docs/BREWING_API.md)。
+
 玩家資訊 HUD 使用 SHBUI 的文字效果與自適應對比。語言資源中的 HUD 字串可使用 SHBUI 格式標記；測量、截斷和分頁會處理標記後的文字，並跟隨高對比及減少動效設定。HUD 富文字入口與標記格式見 SH-Better-UI 的 `docs/RICH_TEXT_API.md`。
+
+使用本次配套构建的 SH-Better-UI 时，主控中心按钮、提示和 HUD 可在语言文件中使用 `<rich:item=minecraft:diamond>` 或 `<rich:item>minecraft:diamond</rich:item>` 显示内联物品。UUK 的 `UiRichText` 统一处理组件和 `FormattedCharSequence`，物品参与原生测宽、换行与截断；SHCLIB 不包含或重复打包该实现。物品槽固定占宽 10 GUI 像素，非法标记保留原文，未注册 ID 显示屏障。需同时更新对应版本的 SH-Better-UI。
 
 山海的 Minecraft 公用库，用于维护跨模组复用的 API、物品和方块。各版本使用同一个模组 ID `sh_common_lib`，分别构建和安装。
 
@@ -179,6 +187,12 @@ if (entity != null) {
 Forge 1.20.1 同时装有 `gt_shanhai` 时，`Ctrl+A` 仍由本库处理，其余键盘快捷键由 `gt_shanhai` 提供。目标没有可复制数据时，提示栏会反馈，剪贴板保留原内容。
 
 ### JEI 搜索增强
+
+中键拿取 JEI 素材及在候选上中键收藏会保留当前搜索、候选和选择；正常点击其他控件、Esc 或关闭界面仍可退出搜索。需同步更新对应版本 SH-Better-UI。
+
+搜索支持全拼、首字母及连续音节的混合拼音，例如 `dah`、`dahs`、`dhuoshi` 都可预测“打火石”。需更新对应版本的 SH-Better-UI。
+
+开启 JEI 作弊模式后，在搜索候选中选中物品或流体：`Ctrl+Enter` 获取 1 个物品或 1 桶流体，`Ctrl+Shift+Enter` 获取该物品的一组或 16 桶流体，`Ctrl+Shift+Alt+Enter` 获取绑定当前素材的无限盘（需 AE2）。支持主键盘和数字小键盘回车。物品保留 NBT／数据组件；流体使用对应的实装桶，没有可用桶时提示失败。发放进入背包，并由 JEI 服务端授权；无 JEI 服务端时仅提供原版创造模式回退。按 `F1`／`F3` 展开可查看发放按键，普通回车仍用于补全。
 
 在「主控中心 → 设置 → JEI 搜索」开启「素材渲染优化」并点击「应用」。Forge 1.20.1 和 NeoForge 1.21.1 对 JEI 批量绘制的平面生成物品模型只提交朝向屏幕的面，继续使用原有纹理及其动画。NeoForge 26.1.2 让适用的 JEI 动态物品图标复用 Minecraft 的 GUI 物品图集，每个图标以 50 毫秒为间隔错开刷新。JEI 的行列数、分页和滚动均沿用原有设置。开关默认关闭，独立于搜索增强总开关。
 
