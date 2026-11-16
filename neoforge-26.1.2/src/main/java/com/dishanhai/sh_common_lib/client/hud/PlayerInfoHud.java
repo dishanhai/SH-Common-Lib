@@ -1,5 +1,6 @@
 package com.dishanhai.sh_common_lib.client.hud;
 
+import com.dishanhai.sh_better_ui.client.gui.text.UiShortcutKeycaps;
 import com.dishanhai.sh_better_ui.kernel.api.system.ComputerStatusService;
 import com.dishanhai.sh_common_lib.api.client.ComputerStatus;
 import com.dishanhai.sh_common_lib.client.control.ControlCenterModule;
@@ -353,11 +354,11 @@ public final class PlayerInfoHud {
         });
         var shortcuts = List.of(
                 new HudPanel.Row(HudPanel.icon("keyboard"), 0xFFDBE4EF,
-                        line("open_shbui_panel", value(HudRuntimeInfo.shbuiShortcut(client)))),
+                        line("open_shbui_panel", value(HudShortcutHints.shbuiPanel(client)))),
                 new HudPanel.Row(HudPanel.icon("keyboard"), 0xFFDBE4EF,
-                        line("open_control_center", value(HudRuntimeInfo.keyLabel(openKey)))));
-        Component pageKeys = previousPage == null || nextPage == null ? line("page_keys_default")
-                : line("page_keys", HudRuntimeInfo.keyLabel(previousPage), HudRuntimeInfo.keyLabel(nextPage));
+                        line("open_control_center", value(UiShortcutKeycaps.binding(openKey)))));
+        Component pageKeys = line("page_keys", HudShortcutHints.pageKey(previousPage, GLFW.GLFW_KEY_LEFT),
+                HudShortcutHints.pageKey(nextPage, GLFW.GLFW_KEY_RIGHT));
         layout = new PlayerInfoHudLayout(client.font, rows, shortcuts, pageKeys,
                 settings.showGroupTitles(), settings.showGroupSeparators());
         return layout;

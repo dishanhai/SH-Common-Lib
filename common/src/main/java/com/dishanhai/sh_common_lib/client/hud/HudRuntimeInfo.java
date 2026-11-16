@@ -1,8 +1,6 @@
 // Author: dishanhai
 package com.dishanhai.sh_common_lib.client.hud;
 
-import net.minecraft.client.KeyMapping;
-import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 
 import java.lang.reflect.Method;
@@ -15,7 +13,6 @@ import static com.dishanhai.sh_common_lib.client.hud.PlayerInfoHud.LANG;
 import static com.dishanhai.sh_common_lib.client.hud.PlayerInfoItem.*;
 
 public final class HudRuntimeInfo {
-    private static final String SHBUI_PANEL_KEY = "key.sh_better_ui.control_panel";
     private static final String SYSTEM_NAME = detectSystem();
     private final PlayerInfoItem loaderVersionItem;
     private final Supplier<Mods> inspectMods;
@@ -87,17 +84,6 @@ public final class HudRuntimeInfo {
         } catch (SecurityException ignored) {
             return null;
         }
-    }
-
-    static Component shbuiShortcut(Minecraft client) {
-        for (var mapping : client.options.keyMappings) {
-            if (SHBUI_PANEL_KEY.equals(mapping.getName())) return keyLabel(mapping);
-        }
-        return Component.translatable(LANG + "unavailable");
-    }
-
-    static Component keyLabel(KeyMapping mapping) {
-        return mapping.isUnbound() ? Component.translatable(LANG + "key_unbound") : mapping.getTranslatedKeyMessage();
     }
 
     private static Component line(PlayerInfoItem item, Object... arguments) {
