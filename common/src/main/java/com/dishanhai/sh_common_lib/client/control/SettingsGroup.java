@@ -49,6 +49,8 @@ final class SettingsGroup {
                 BiConsumer<Screen, Supplier<? extends GuiEventListener>> open) implements Entry {}
     record Subgroup(Component title, Toggle toggle, List<Entry> entries) implements Entry {
         Subgroup { entries = List.copyOf(entries); }
+        Subgroup(Component title, List<Entry> entries) { this(title, null, entries); }
+        boolean hasToggle() { return toggle != null; }
     }
 
     private final UiSectionBar.Section section;
@@ -137,9 +139,11 @@ final class SettingsGroup {
             return;
         }
         var preferences = screen.context().preferences();
-        var split = entry instanceof Subgroup ? SplitActionRow.of(rowWidth, ControlCenterLayout.ROW, 2) : null;
+        var subgroup = entry instanceof Subgroup group ? group : null;
+        var split = subgroup != null && subgroup.hasToggle()
+                ? SplitActionRow.of(rowWidth, ControlCenterLayout.ROW, 2) : null;
         int width = split == null ? rowWidth : split.actionWidth();
-        Toggle toggle = entry instanceof Toggle value ? value : entry instanceof Subgroup group ? group.toggle() : null;
+        Toggle toggle = entry instanceof Toggle value ? value : subgroup == null ? null : subgroup.toggle();
         UiButton button;
         if (toggle != null) {
             var control = new UiToggleButton(new Bounds(0, 0, width, ControlCenterLayout.ROW),
@@ -161,20 +165,24 @@ final class SettingsGroup {
             button.setLeadingIcon(page.icon());
             button.active = reason == null;
             if (reason != null) button.setPreview(reason);
+        } else if (subgroup != null) {
+            button = new UiButton(0, 0, Math.max(0, area.width() - 12), ControlCenterLayout.ROW,
+                    subgroup.title(), ignored -> enterDetail(subgroup), preferences, false, UiStyle.LIQUID_GLASS);
+            button.setLeadingIcon(GraphicIcon.NEXT);
         } else throw new IllegalStateException("Unknown settings entry");
         button.setSampleBackground(false);
         button.setTabOrderGroup(1);
         buttons.put(entry, screen.addClipped(button, this::nativeRowClip));
         placed.add(new Placed(button, view, index, 0));
-        if (entry instanceof Subgroup group) {
+        if (split != null) {
             var arrow = new UiButton(0, 0, split.disclosureWidth(), ControlCenterLayout.ROW,
-                    Component.translatable("screen.sh_common_lib.control_center.enter_group", group.title()),
-                    ignored -> enterDetail(group), preferences, false, UiStyle.LIQUID_GLASS);
+                    Component.translatable("screen.sh_common_lib.control_center.enter_group", subgroup.title()),
+                    ignored -> enterDetail(subgroup), preferences, false, UiStyle.LIQUID_GLASS);
             arrow.setSampleBackground(false);
             arrow.setIcon(GraphicIcon.NEXT);
-            arrow.active = group.toggle().available().getAsBoolean();
+            arrow.active = subgroup.toggle().available().getAsBoolean();
             arrow.setTabOrderGroup(1);
-            buttons.put(group.toggle(), screen.addClipped(arrow, this::nativeRowClip));
+            buttons.put(subgroup, screen.addClipped(arrow, this::nativeRowClip));
             placed.add(new Placed(arrow, view, index, split.disclosureX()));
         }
     }
@@ -203,16 +211,16 @@ final class SettingsGroup {
             resizeScroll();
             updateButtons();
         }
-        var arrow = buttons.get(previous.toggle());
-        if (screen != null && arrow != null && arrow.visible) { screen.setFocused(arrow); returnFocus = null; }
+        var entry = buttons.get(previous);
+        if (screen != null && entry != null && entry.visible) { screen.setFocused(entry); returnFocus = null; }
         return true;
     }
     boolean restoreFocus() {
         if (screen == null || returnFocus == null) return false;
-        var arrow = buttons.get(returnFocus.toggle());
+        var entry = buttons.get(returnFocus);
         returnFocus = null;
-        if (arrow == null || !arrow.visible) return false;
-        screen.setFocused(arrow);
+        if (entry == null || !entry.visible) return false;
+        screen.setFocused(entry);
         return true;
     }
     boolean scroll(double x, double y, double delta) {

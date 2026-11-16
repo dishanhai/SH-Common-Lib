@@ -29,6 +29,8 @@ import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.components.events.GuiEventListener;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.ConfirmScreen;
+import net.minecraft.client.input.KeyEvent;
+import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.CommonComponents;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.FormattedCharSequence;
@@ -76,6 +78,7 @@ final class ControlCenterScreen extends Screen {
     private int overviewPageSize = 1;
     private UiButton resetButton;
     private UiButton applyButton;
+    private UiScrollableSectionBar tabs;
     private UiScrollableSectionBar groupTabs;
     private boolean paging;
     private int pageCount = 1;
@@ -112,7 +115,7 @@ final class ControlCenterScreen extends Screen {
         lastListFocus = null;
         scrollbar = null;
         toggleButtons.clear();
-        groupTabs = null;
+        cancelDrag();
         resetButton = applyButton = null;
         paging = false;
         statusY = -1;
@@ -132,11 +135,17 @@ final class ControlCenterScreen extends Screen {
         int contentWidth = layout.contentWidth();
         body = new Bounds(x - 3, layout.bodyTop(), contentWidth + 6, layout.bodyHeight());
         var preferences = UiPreferences.configured();
-        var tabs = ShBetterUiApi.controls().sectionBar(new Bounds(x, layout.tabsY(), contentWidth,
-                ControlCenterLayout.ROW), preferences, SECTIONS, overview ? 1 : 0, index -> show(index == 1));
-        tabs.buttons().get(1).setTooltip(Tooltip.create(label("overview.hint")));
-        tabs.buttons().forEach(this::addRenderableWidget);
-        GuiEventListener focus = tabs.buttons().get(overview ? 1 : 0);
+        var tabArea = new Bounds(x, layout.tabsY(), contentWidth, ControlCenterLayout.ROW);
+        if (tabs == null || tabs.getWidth() != contentWidth) {
+            tabs = ShBetterUiApi.controls().jellySectionBar(tabArea, preferences, SECTIONS,
+                    overview ? 1 : 0, index -> show(index == 1));
+            tabs.buttons().get(1).setTooltip(Tooltip.create(label("overview.hint")));
+        } else {
+            tabs.setBounds(tabArea);
+            tabs.setPreferences(preferences);
+        }
+        addRenderableWidget(tabs);
+        GuiEventListener focus = tabs;
         int pages;
         int currentPage;
         if (overview) {
@@ -145,22 +154,16 @@ final class ControlCenterScreen extends Screen {
             overviewPage = Math.min(overviewPage, pages - 1);
             currentPage = overviewPage;
         } else {
-            var sections = groups.stream().map(group -> new UiSectionBar.Section(group.title(), group.icon())).toList();
-            int selected = groups.indexOf(selectedGroup);
-            groupTabs = addRenderableWidget(ShBetterUiApi.controls().scrollableSectionBar(
-                    new Bounds(x, layout.groupsY(), contentWidth, ControlCenterLayout.ROW),
-                    preferences, sections, selected, index -> {
-                        if (selectedGroup == groups.get(index) && detail == null) return;
-                        saveOffset();
-                        selectedGroup = groups.get(index);
-                        detail = null;
-                        rootOffset = 0;
-                        detailOffsets.clear();
-                        entryPage = 0;
-                        status = null;
-                        queueRebuild(FocusTarget.GROUPS);
-                    }));
-            groupTabs.focus(selected);
+            var groupArea = new Bounds(x, layout.groupsY(), contentWidth, ControlCenterLayout.ROW);
+            if (groupTabs == null) {
+                var sections = groups.stream().map(group -> new UiSectionBar.Section(group.title(), group.icon())).toList();
+                groupTabs = ShBetterUiApi.controls().scrollableSectionBar(groupArea, preferences, sections,
+                        groups.indexOf(selectedGroup), this::showGroup).withJellyRadio();
+            } else {
+                groupTabs.setBounds(groupArea);
+                groupTabs.setPreferences(preferences);
+            }
+            addRenderableWidget(groupTabs);
             if (requestedFocus == FocusTarget.GROUPS) focus = groupTabs;
             listTop = body.y() + 4 + font.lineHeight + 4;
             listColumns = selectedGroup.twoColumns() && contentWidth >= 164 ? 2 : 1;
@@ -186,11 +189,12 @@ final class ControlCenterScreen extends Screen {
                     headings.add(new PlacedHeading(heading.title(), slot));
                     continue;
                 }
-                var split = entry instanceof SettingsGroup.Subgroup
+                var subgroup = entry instanceof SettingsGroup.Subgroup group ? group : null;
+                var split = subgroup != null && subgroup.hasToggle()
                         ? SplitActionRow.of(listColumnWidth, ControlCenterLayout.ROW, 2) : null;
                 int entryWidth = split == null ? listColumnWidth : split.actionWidth();
                 var toggle = entry instanceof SettingsGroup.Toggle t ? t
-                        : entry instanceof SettingsGroup.Subgroup g ? g.toggle() : null;
+                        : subgroup == null ? null : subgroup.toggle();
                 if (toggle != null) {
                     var toggleControl = ShBetterUiApi.controls().toggle(
                             new Bounds(x, listTop, entryWidth, ControlCenterLayout.ROW),
@@ -214,15 +218,18 @@ final class ControlCenterScreen extends Screen {
                     if (unavailable != null) control.setTooltip(Tooltip.create(unavailable));
                     placed.add(new Placed(control, slot, 0));
                 }
-                if (entry instanceof SettingsGroup.Subgroup group) {
-                    var arrow = addClippedButton(button(x, listTop, split.disclosureWidth(),
-                            Component.translatable("screen.sh_common_lib.control_center.enter_group", group.title()),
-                            GraphicIcon.NEXT, () -> enterDetail(group)));
-                    arrow.setIcon(GraphicIcon.NEXT);
-                    arrow.active = group.toggle().available().getAsBoolean();
-                    arrow.setTabOrderGroup(1);
-                    placed.add(new Placed(arrow, slot, split.disclosureX()));
-                    if (requestedFocus == FocusTarget.DETAIL_RETURN && returnGroup == group) focus = arrow;
+                if (subgroup != null) {
+                    var title = split == null ? subgroup.title()
+                            : Component.translatable("screen.sh_common_lib.control_center.enter_group", subgroup.title());
+                    var link = addClippedButton(button(x, listTop, split == null ? listWidth : split.disclosureWidth(),
+                            title, GraphicIcon.NEXT, () -> enterDetail(subgroup)));
+                    if (split != null) {
+                        link.setIcon(GraphicIcon.NEXT);
+                        link.active = subgroup.toggle().available().getAsBoolean();
+                    }
+                    link.setTabOrderGroup(1);
+                    placed.add(new Placed(link, slot, split == null ? 0 : split.disclosureX()));
+                    if (requestedFocus == FocusTarget.DETAIL_RETURN && returnGroup == subgroup) focus = link;
                 }
             }
             scrollbar = addRenderableWidget(ShBetterUiApi.controls().verticalScrollBar(
@@ -338,6 +345,18 @@ final class ControlCenterScreen extends Screen {
         minecraft.schedule(minecraft.wrapRunnable(() -> {
             if (minecraft.screen == this) rebuildWidgets();
         }));
+    }
+
+    private void showGroup(int index) {
+        if (selectedGroup == groups.get(index) && detail == null) return;
+        saveOffset();
+        selectedGroup = groups.get(index);
+        detail = null;
+        rootOffset = 0;
+        detailOffsets.clear();
+        entryPage = 0;
+        status = null;
+        queueRebuild(FocusTarget.GROUPS);
     }
 
     private void show(boolean overview) {
@@ -540,6 +559,24 @@ final class ControlCenterScreen extends Screen {
     }
 
     @Override
+    public boolean mouseReleased(MouseButtonEvent event) {
+        if (event.button() == 0 && getFocused() instanceof UiScrollableSectionBar bar && bar.mouseReleased(event)) {
+            setDragging(false);
+            return true;
+        }
+        return super.mouseReleased(event);
+    }
+
+    @Override
+    public boolean keyPressed(KeyEvent event) {
+        if (event.isEscape() && getFocused() instanceof UiScrollableSectionBar bar && bar.cancelDrag()) {
+            setDragging(false);
+            return true;
+        }
+        return super.keyPressed(event);
+    }
+
+    @Override
     public boolean mouseScrolled(double x, double y, double dx, double dy) {
         if (!overview && body != null && scrollbar != null && x >= body.x() && x < body.right()
                 && y >= listTop && y < body.bottom() && scrollbar.scrollByWheel(dy)) return true;
@@ -600,6 +637,7 @@ final class ControlCenterScreen extends Screen {
     }
 
     private void cancelDrag() {
+        if (tabs != null) tabs.cancelDrag();
         if (groupTabs != null) groupTabs.cancelDrag();
         setDragging(false);
     }

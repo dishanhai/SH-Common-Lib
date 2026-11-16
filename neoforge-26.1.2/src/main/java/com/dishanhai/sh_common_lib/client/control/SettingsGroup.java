@@ -40,6 +40,8 @@ record SettingsGroup(Component title, GraphicIcon icon, List<Entry> entries, boo
 
     record Subgroup(Component title, Toggle toggle, List<Entry> entries) implements Entry {
         Subgroup { entries = List.copyOf(entries); }
+        Subgroup(Component title, List<Entry> entries) { this(title, null, entries); }
+        boolean hasToggle() { return toggle != null; }
     }
 
     record Page(Component label, GraphicIcon icon, Supplier<Component> unavailable,

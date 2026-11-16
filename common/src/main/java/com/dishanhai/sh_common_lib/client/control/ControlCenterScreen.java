@@ -89,7 +89,7 @@ final class ControlCenterScreen {
     private ControlCenterLayout layout;
     private Bounds body;
     private UiScrollableSectionBar groupTabs;
-    private List<UiButton> tabButtons = List.of();
+    private UiScrollableSectionBar tabs;
     private UiButton previous;
     private UiButton next;
     private UiButton back;
@@ -151,16 +151,14 @@ final class ControlCenterScreen {
             panel.retargetAt(screen.width * 0.5f, layout.top() + 5f);
         }
         panelOnly = !preferences.reducedMotion() && panel.active();
-        var tabs = new UiSectionBar(x, layout.tabsY(), contentWidth, ControlCenterLayout.ROW,
-                preferences, SECTIONS, selected, this::select);
+        tabs = screen.add(ShBetterUiApi.controls().jellySectionBar(
+                new Bounds(x, layout.tabsY(), contentWidth, ControlCenterLayout.ROW), preferences, SECTIONS, selected, this::select));
         tabs.buttons().get(OVERVIEW).setTooltip(Tooltip.create(label("overview.hint")));
-        tabButtons = tabs.buttons();
-        tabButtons.forEach(screen::add);
 
         var sections = groups.stream().map(SettingsGroup::section).toList();
-        groupTabs = screen.add(new UiScrollableSectionBar(
+        groupTabs = screen.add(ShBetterUiApi.controls().scrollableSectionBar(
                 new Bounds(x, layout.groupsY(), contentWidth, ControlCenterLayout.ROW),
-                preferences, sections, selectedGroup, this::selectGroup));
+                preferences, sections, selectedGroup, this::selectGroup).withJellyRadio());
         groupTabs.focus(selectedGroup);
         var groupArea = new Bounds(x, body.y() + 4, contentWidth, Math.max(0, body.height() - 4));
         for (SettingsGroup group : groups) {
@@ -185,11 +183,10 @@ final class ControlCenterScreen {
         back.setTabOrderGroup(2);
         reset.setTabOrderGroup(2);
         apply.setTabOrderGroup(2);
-        chrome.addAll(tabButtons);
-        chrome.addAll(List.of(groupTabs, previous, next, back, reset, apply));
+        chrome.addAll(List.of(tabs, groupTabs, previous, next, back, reset, apply));
         refreshActions();
         updateVisibility();
-        screen.setFocused(restoreBackFocus ? back : tabs.buttons().get(selected));
+        screen.setFocused(restoreBackFocus ? back : tabs);
         if (!restoreBackFocus && selected == SETTINGS) groups.get(selectedGroup).restoreFocus();
         restoreBackFocus = false;
     }
@@ -231,7 +228,7 @@ final class ControlCenterScreen {
 
     private void select(int section) {
         if (selected == section) return;
-        startPageMorph(tabButtons.get(section));
+        startPageMorph(tabs.buttons().get(section));
         selected = section;
         updateVisibility();
     }
@@ -511,7 +508,8 @@ final class ControlCenterScreen {
             return true;
         }
         if (key == GLFW.GLFW_KEY_ESCAPE) {
-            if (screen.isDragging() && groupTabs != null && groupTabs.cancelDrag()) {
+            if (screen.isDragging() && (tabs != null && tabs.cancelDrag()
+                    || groupTabs != null && groupTabs.cancelDrag())) {
                 screen.setDragging(false);
                 return true;
             }
@@ -552,6 +550,7 @@ final class ControlCenterScreen {
             return;
         }
         panelOnly = true;
+        tabs.cancelDrag();
         groupTabs.cancelDrag();
         screen.setDragging(false);
         updateWidgetViewport(screen);
@@ -579,6 +578,10 @@ final class ControlCenterScreen {
     }
 
     private void clearSettingsWidgets() {
+        if (tabs != null) {
+            tabs.cancelDrag();
+            tabs = null;
+        }
         if (groupTabs != null) {
             groupTabs.cancelDrag();
             groupTabs = null;

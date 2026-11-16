@@ -142,9 +142,11 @@ public final class ControlCenterModule implements UIModule {
                 GraphicIcon.SETTINGS, List.of(new SettingsGroup.Page(Component.translatable("sh_common_lib.announcement.appearance.choose"), GraphicIcon.SETTINGS,
                         () -> AnnouncementAppearance.available() ? null : label("unavailable"),
                         AnnouncementAppearance::open)));
-        var jei = new SettingsGroup(label("jei_search"), GraphicIcon.SEARCH, List.of(
+        var jei = new SettingsGroup.Subgroup(label("jei_extension"), List.of(
+                new SettingsGroup.Heading(label("jei_rendering")),
                 new SettingsGroup.Toggle(enabled -> label(enabled ? "jei_render_optimization_on" : "jei_render_optimization_off"),
                         () -> draft.jei().optimizeRendering(), draft::setJeiOptimizeRendering),
+                new SettingsGroup.Heading(label("jei_search")),
                 new SettingsGroup.Toggle(enabled -> label(enabled ? "jei_enabled_on" : "jei_enabled_off"), () -> draft.jei().enabled(), draft::setJeiEnabled),
                 new SettingsGroup.Toggle(enabled -> label(enabled ? "jei_prediction_on" : "jei_prediction_off"), () -> draft.jei().prediction(), draft::setJeiPrediction),
                 new SettingsGroup.Toggle(enabled -> label(enabled ? "jei_history_on" : "jei_history_off"), () -> draft.jei().history(), draft::setJeiHistory),
@@ -162,8 +164,9 @@ public final class ControlCenterModule implements UIModule {
                 new SettingsGroup.Page(label("jei_provider"), GraphicIcon.SEARCH,
                         () -> com.dishanhai.sh_common_lib.client.jei.JeiSearchProvider.installed() ? null : label("jei_provider_unavailable"),
                         ControlCenterModule::chooseJeiProvider),
-                new SettingsGroup.Page(label("jei_clear_history"), GraphicIcon.RESET, () -> null, ControlCenterModule::clearJeiHistory)), true);
-        return List.of(playerInfo, loading, jei, ArtisanControlSettings.group(draft), announcements, developer);
+                new SettingsGroup.Page(label("jei_clear_history"), GraphicIcon.RESET, () -> null, ControlCenterModule::clearJeiHistory)));
+        var modExtensions = new SettingsGroup(label("mod_extensions"), GraphicIcon.SETTINGS, List.of(jei), true);
+        return List.of(playerInfo, loading, modExtensions, ArtisanControlSettings.group(draft), announcements, developer);
     }
 
     private static void clearJeiHistory(Screen parent, Supplier<? extends GuiEventListener> focus) {
