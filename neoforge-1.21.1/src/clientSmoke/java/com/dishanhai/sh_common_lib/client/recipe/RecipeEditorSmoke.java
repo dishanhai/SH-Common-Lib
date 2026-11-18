@@ -57,6 +57,7 @@ public final class RecipeEditorSmoke {
                 canvas = client.screen;
                 require(canvas.width >= 320 && canvas.height >= 180, "Unexpected viewport");
                 viewports.append(canvas.width).append('x').append(canvas.height).append(" scale=").append(client.getWindow().getGuiScale()).append('\n');
+                assertBounds(canvas);
                 capture(output, "canvas-" + scale);
                 click(canvas, slots(canvas).get(0));
             } else if (step == 2) {
@@ -109,14 +110,21 @@ public final class RecipeEditorSmoke {
                 click(client.screen, button(client.screen, "view.1"));
             } else if (step == 13) {
                 require(fields(client.screen).size() >= 3, "Properties fields did not initialize");
+                assertBounds(client.screen);
                 capture(output, "properties-" + scale);
-                if (scale == 4) {
-                    scale = 3;
+                click(client.screen, button(client.screen, "actions"));
+            } else if (step == 14) {
+                assertBounds(client.screen);
+                require(button(client.screen, "fill_sequence").active, "Sequence action missing from actions page");
+                capture(output, "actions-" + scale);
+                click(client.screen, button(client.screen, "back"));
+                if (scale != 5) {
+                    scale = scale == 4 ? 3 : scale == 3 ? 1 : 5;
                     setScale(client);
                     RecipeEditor.open(client.screen, () -> null, RecipeTarget.NEOFORGE_1_21_1);
                     step = 0;
                 } else {
-                    Files.writeString(Path.of(output, "success.txt"), viewports + "Native slot click, staged/repeated selection, confirm, output quantity/invalid input/cancel, manual tag ID, properties initialized\n");
+                    Files.writeString(Path.of(output, "success.txt"), viewports + "Native slot click, staged/repeated selection, confirm, output quantity/invalid input/cancel, manual tag ID, properties initialized; compact/wide/action bounds at scales 4/3/1/5\n");
                     finished = true;
                     client.stop();
                     return;
@@ -134,6 +142,15 @@ public final class RecipeEditorSmoke {
             } catch (Exception ignored) {}
             failure.printStackTrace();
             client.stop();
+        }
+    }
+
+    private static void assertBounds(Screen screen) {
+        for (var child : screen.children()) if (child instanceof AbstractWidget widget && widget.visible) {
+            require(widget.getX() >= 0 && widget.getY() >= 0
+                    && widget.getX() + widget.getWidth() <= screen.width
+                    && widget.getY() + widget.getHeight() <= screen.height,
+                    "Widget outside viewport: " + widget.getMessage().getString());
         }
     }
 
