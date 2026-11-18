@@ -212,3 +212,11 @@ publishing {
         }
     }
 }
+
+// Responsive editor geometry is shared by every supported loader.
+tasks.register('recipeEditorLayoutTest', JavaExec) {
+    group = 'verification'
+    classpath = sourceSets.controlCenterVerification.runtimeClasspath
+    mainClass = 'com.dishanhai.sh_common_lib.client.recipe.RecipeEditorLayoutTest'
+}
+tasks.named('check') { dependsOn 'recipeEditorLayoutTest' }

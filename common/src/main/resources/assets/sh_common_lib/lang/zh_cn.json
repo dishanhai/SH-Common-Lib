@@ -810,5 +810,6 @@
   "screen.sh_common_lib.recipe_editor.field.input5": "原料 6",
   "screen.sh_common_lib.recipe_editor.field.input6": "原料 7",
   "screen.sh_common_lib.recipe_editor.field.input7": "原料 8",
-  "screen.sh_common_lib.recipe_editor.field.input8": "原料 9"
+  "screen.sh_common_lib.recipe_editor.field.input8": "原料 9",
+  "screen.sh_common_lib.recipe_editor.actions": "操作"
 }
