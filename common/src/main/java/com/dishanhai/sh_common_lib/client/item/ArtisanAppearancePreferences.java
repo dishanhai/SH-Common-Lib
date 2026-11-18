@@ -16,7 +16,8 @@ public final class ArtisanAppearancePreferences {
     private static final String QUICK_GROUPS = "quickGroups";
     private static final String CONFIG_GROUP = "configGroup";
     private static final String CONFIG_PAGE = "configPage";
-    private static final ConfigPosition DEFAULT_POSITION = new ConfigPosition("", 0);
+    private static final String CONFIG_SCROLL = "configScroll";
+    private static final ConfigPosition DEFAULT_POSITION = new ConfigPosition("", 0, 0);
     private static Path file;
     private static boolean targetColors = DEFAULT_TARGET_COLORS;
     private static String quickGroups = "";
@@ -34,7 +35,9 @@ public final class ArtisanAppearancePreferences {
             properties.load(input);
             targetColors = !"false".equalsIgnoreCase(properties.getProperty(TARGET_COLORS, "").trim());
             quickGroups = properties.getProperty(QUICK_GROUPS, "");
-            configPosition = new ConfigPosition(properties.getProperty(CONFIG_GROUP, ""), readConfigPage(properties));
+            configPosition = new ConfigPosition(properties.getProperty(CONFIG_GROUP, ""),
+                    readPosition(properties, CONFIG_SCROLL),
+                    properties.containsKey(CONFIG_SCROLL) ? 0 : readPosition(properties, CONFIG_PAGE));
         } catch (NoSuchFileException ignored) {
             // Preserve the existing animated tool modes on fresh installs.
         } catch (IOException | IllegalArgumentException error) {
@@ -58,16 +61,16 @@ public final class ArtisanAppearancePreferences {
 
     static ConfigPosition configPosition() { return configPosition; }
 
-    static void rememberConfigPosition(String group, int page) {
-        var position = new ConfigPosition(group, page);
+    static void rememberConfigPosition(String group, int scrollOffset) {
+        var position = new ConfigPosition(group, scrollOffset, 0);
         if (position.equals(configPosition)) return;
         configPosition = position;
         save(targetColors, quickGroups);
     }
 
-    private static int readConfigPage(Properties properties) {
+    private static int readPosition(Properties properties, String key) {
         try {
-            return Math.max(0, Integer.parseInt(properties.getProperty(CONFIG_PAGE, "0").trim()));
+            return Math.max(0, Integer.parseInt(properties.getProperty(key, "0").trim()));
         } catch (NumberFormatException ignored) {
             return 0;
         }
@@ -82,7 +85,11 @@ public final class ArtisanAppearancePreferences {
             if (!order.isEmpty()) properties.setProperty(QUICK_GROUPS, order);
             if (!configPosition.group().isEmpty()) {
                 properties.setProperty(CONFIG_GROUP, configPosition.group());
-                properties.setProperty(CONFIG_PAGE, Integer.toString(configPosition.page()));
+                if (configPosition.legacyPage() > 0) {
+                    properties.setProperty(CONFIG_PAGE, Integer.toString(configPosition.legacyPage()));
+                } else {
+                    properties.setProperty(CONFIG_SCROLL, Integer.toString(configPosition.scrollOffset()));
+                }
             }
             Files.createDirectories(file.getParent());
             pending = Files.createTempFile(file.getParent(), "artisan-", ".tmp");
@@ -111,5 +118,5 @@ public final class ArtisanAppearancePreferences {
         }
     }
 
-    record ConfigPosition(String group, int page) {}
+    record ConfigPosition(String group, int scrollOffset, int legacyPage) {}
 }

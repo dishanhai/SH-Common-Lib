@@ -14,7 +14,7 @@
 
 | 构建目录 | Minecraft | 加载器 | JDK | Gradle |
 | --- | --- | --- | --- | --- |
-| `forge/` | 1.20.1 | Forge 47.4.16 | 21 | 8.8 |
+| `forge-1.20.1/` | 1.20.1 | Forge 47.4.16 | 21 | 8.8 |
 | `neoforge-1.21.1/` | 1.21.1 | NeoForge 21.1.251 | 21 | 9.2.1 |
 | `neoforge-26.1.2/` | 26.1.2 | NeoForge 26.1.2.126 | 25 | 9.2.1 |
 
@@ -22,11 +22,11 @@
 
 | 平台 | SH-Better-UI | KotlinForForge |
 | --- | --- | --- |
-| Forge 1.20.1 | 1.0.10 或兼容的 1.x 版本 | 4.12.0～4.x |
-| NeoForge 1.21.1 | 1.0.10 或兼容的 1.x 版本 | 5.10.0～5.x |
-| NeoForge 26.1.2 | 1.0.10-alpha.8 或兼容版本（Minecraft 26.1.2） | 6.2.0 |
+| Forge 1.20.1 | 1.0.12 或兼容的更高 1.x 版本 | 4.12.0～4.x |
+| NeoForge 1.21.1 | 1.0.11 或兼容的更高 1.x 版本 | 5.10.0～5.x |
+| NeoForge 26.1.2 | 1.0.12-alpha.8 或兼容的更高版本（Minecraft 26.1.2） | 6.2.0 |
 
-构建默认从同级 `SH-Better-UI` 源码目录读取 Forge 的 `devJar` 或 NeoForge 的成品 JAR。也可用 `-PshBetterUiJar=<路径>` 指定。Forge 开发运行时的 KotlinForForge 默认来自该目录的 `libs/`，可用 `-PkotlinForForgeJar=<路径>` 指定。游戏内安装各平台的正式 JAR。
+构建默认从同级 `SH-Better-UI` 的对应 `build/libs/` 目录选择本平台最新的本地 JAR。版本按数字排序，支持正式版以及 `alpha`、`beta`、`rc` 预发行版，且须在上表所列最低版本至 2.0.0 之前。Forge 选择开发包，可在 SH-Better-UI 根目录运行 `gradlew.bat devJar` 生成。NeoForge 选择对应 Minecraft 版本的成品包。`-PshBetterUiJar=<路径>` 优先使用指定的 JAR。Forge 开发运行时的 KotlinForForge 默认来自 SH-Better-UI 的 `libs/`，可用 `-PkotlinForForgeJar=<路径>` 指定。游戏内安装各平台的正式 JAR。
 
 构建 Forge 1.20.1 或 NeoForge 1.21.1 时，将 `JAVA_HOME` 设为 Java 21，在对应目录运行：
 

@@ -6,6 +6,56 @@ def libraryArtifact = "sh-common-lib-${platform}-${minecraft_version}"
 base { archivesName = libraryArtifact }
 java { withSourcesJar() }
 
+def forge = platform == 'forge'
+def uiDirectory = file(forge ? '../../SH-Better-UI/build/libs'
+        : "../../SH-Better-UI/neoforge-${minecraft_version}/build/libs")
+def uiPrefix = forge ? 'sh_better_ui-' : "sh_better_ui-neoforge-${minecraft_version}-"
+def uiSuffix = forge ? '-dev.jar' : '.jar'
+def uiMinimum = sh_better_ui_version
+def uiOverride = findProperty('shBetterUiJar')
+
+def uiVersionOrder = { String version ->
+    def match = version =~ /^(\d+)\.(\d+)\.(\d+)(?:-(alpha|beta|rc)(?:\.(\d+))?)?$/
+    if (!match.matches()) {
+        return null
+    }
+    def stage = ['alpha', 'beta', 'rc', 'release'].indexOf(match.group(4) ?: 'release')
+    [match.group(1).toLong(), match.group(2).toLong(), match.group(3).toLong(),
+            stage, (match.group(5) ?: '0').toLong()] as long[]
+}
+
+def findLatestUi = {
+    def minimum = uiVersionOrder(uiMinimum)
+    if (minimum == null) {
+        throw new GradleException("Invalid sh_better_ui_version: ${uiMinimum}")
+    }
+    def candidates = (uiDirectory.listFiles()?.toList() ?: []).findResults { candidate ->
+        def name = candidate.name
+        if (!candidate.isFile() || name.length() <= uiPrefix.length() + uiSuffix.length()
+                || !name.startsWith(uiPrefix) || !name.endsWith(uiSuffix)) {
+            return null
+        }
+        def order = uiVersionOrder(name.substring(uiPrefix.length(), name.length() - uiSuffix.length()))
+        order != null && order[0] == 1 && Arrays.compare(order, minimum) >= 0 ? [file: candidate, order: order] : null
+    }
+    candidates.max { left, right -> Arrays.compare(left.order, right.order) }?.file
+}
+
+def selectedUi = uiOverride ? file(uiOverride) : findLatestUi()
+def uiBuildTask = forge ? 'devJar' : 'build'
+ext.shBetterUiDependency = providers.provider {
+    if (selectedUi == null) {
+        throw new GradleException("Missing SH-Better-UI for Minecraft ${minecraft_version}. Expected ${uiPrefix}<version>${uiSuffix} in ${uiDirectory}, version [${uiMinimum},2.0.0). Run ${uiBuildTask} in the matching SH-Better-UI project or set -PshBetterUiJar.")
+    }
+    if (!selectedUi.isFile()) {
+        throw new GradleException("Missing SH-Better-UI JAR: ${selectedUi}")
+    }
+    selectedUi
+}
+dependencies {
+    implementation files(shBetterUiDependency)
+}
+
 sourceSets.main {
     java.srcDir('../common/src/main/java')
     resources.srcDir('../common/src/main/resources')

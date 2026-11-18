@@ -26,8 +26,6 @@ repositories {
 
 dependencies {
     minecraft "net.minecraftforge:forge:${minecraft_version}-${platform_version}"
-    implementation files(findProperty('shBetterUiJar')
-            ?: "../../SH-Better-UI/build/libs/sh_better_ui-${sh_better_ui_version}-dev.jar")
     runtimeOnly files(findProperty('kotlinForForgeJar')
             ?: '../../SH-Better-UI/libs/kotlinforforge-4.12.0-all.jar')
     // Optional ULK integrations; these mods remain separate runtime dependencies.

@@ -1,6 +1,7 @@
 // Author: dishanhai
 package com.dishanhai.sh_common_lib.client.item;
 
+import com.dishanhai.sh_better_ui.client.api.PlatformUiApi;
 import com.dishanhai.sh_better_ui.client.api.ShBetterUiApi;
 import com.dishanhai.sh_better_ui.client.blur.GlassStyle;
 import com.dishanhai.sh_better_ui.client.glass.GuiRect;
@@ -11,6 +12,7 @@ import com.dishanhai.sh_better_ui.client.gui.text.UiHudRichText;
 import com.dishanhai.sh_better_ui.kernel.api.layout.SettingsPanelLayout;
 import com.dishanhai.sh_better_ui.kernel.api.layout.SettingsPanelLayout.Rect;
 import com.dishanhai.sh_better_ui.kernel.api.layout.RadialMenuLayout;
+import com.dishanhai.sh_better_ui.kernel.api.layout.VerticalScroll;
 import com.dishanhai.sh_better_ui.kernel.api.screen.LayeredScreen;
 import com.dishanhai.sh_common_lib.client.beacon.BeaconClient;
 import com.dishanhai.sh_common_lib.client.item.CosmicArtisanMenu.Group;
@@ -20,6 +22,7 @@ import com.dishanhai.sh_common_lib.internal.item.CosmicArtisanModes.Mode;
 import com.dishanhai.sh_common_lib.internal.item.CosmicArtisanModes.BossPolicy;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractWidget;
+import net.minecraft.client.gui.components.events.GuiEventListener;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.world.item.ItemStack;
@@ -29,6 +32,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.ToIntFunction;
@@ -50,16 +54,21 @@ public final class CosmicArtisanScreen extends LayeredScreen {
     private final Map<Option, Pending> pending = new LinkedHashMap<>();
     private final Map<UiButton, Integer> sorting = new LinkedHashMap<>();
     private final Map<UiButton, Rect> sortBounds = new LinkedHashMap<>();
+    private final Map<AbstractWidget, Integer> settingRows = new LinkedHashMap<>();
+    private final VerticalScroll settingsScroll = new VerticalScroll();
     private final PointerDrag groupDrag = new PointerDrag();
     private final InterruptibleAnimation appearance =
             new InterruptibleAnimation(new Spring.Preset(.24, 1, .001f, .001f), .6f);
     private UiNavigationRail navigation;
     private UiScrollableSectionBar tabs;
     private SettingsPanelLayout layout;
+    private Rect settingsViewport;
+    private UiVerticalScrollBar settingsScrollbar;
+    private ArtisanAppearancePreferences.ConfigPosition initialPosition;
     private RadialMenuLayout radial;
     private Rect wheelArea;
     private List<Group> undoOrder = List.of();
-    private int activeGroup, page, pageCount = 1, editPage, editCapacity;
+    private int activeGroup, wheelPage, pageCount = 1, editPage, editCapacity;
     private int flags, draggedGroup = -1, dropGroup = -1;
     private int sortFocusIndex = -1, pageFocusDirection;
     private BossPolicy bossPolicy = BossPolicy.NEUTRAL;
@@ -79,7 +88,7 @@ public final class CosmicArtisanScreen extends LayeredScreen {
         if (!wheel) {
             var saved = ArtisanAppearancePreferences.configPosition();
             for (int i = 0; i < groups.size(); i++) if (groups.get(i).name().equals(saved.group())) {
-                activeGroup = i; page = saved.page(); break;
+                activeGroup = i; initialPosition = saved; break;
             }
         }
     }
@@ -88,6 +97,7 @@ public final class CosmicArtisanScreen extends LayeredScreen {
         cancelInteractions();
         if (navigation != null) navigation.close();
         navigation = null; tabs = null;
+        settingsViewport = null; settingsScrollbar = null; settingRows.clear();
         switches.clear(); actionButtons.clear(); sorting.clear(); sortBounds.clear();
         readState();
         tiny = width < 180 || height < 180;
@@ -104,22 +114,84 @@ public final class CosmicArtisanScreen extends LayeredScreen {
         if (editing) layoutSorting();
         else {
             layoutNavigation(layout.navigation(), layout.sidebar());
-            int capacity = layout.capacity();
-            var options = group().options();
-            pageCount = Math.max(1, (options.size() + capacity - 1) / capacity);
-            page = Math.min(page, pageCount - 1);
-            for (int i = page * capacity; i < Math.min(options.size(), (page + 1) * capacity); i++) {
-                var rect = layout.row(i - page * capacity);
-                addSetting(options.get(i), rect, i + 1 == Math.min(options.size(), (page + 1) * capacity));
-            }
+            layoutSettingRows();
         }
         var footer = layout.footer();
         button(new Rect(footer.x(), footer.y(), 82, 22), label(editing ? "confirm_layout" : "edit_layout"), () -> {
             editing = !editing; editPage = 0; rebuildWidgets();
         }).setLeadingIcon(editing ? GraphicIcon.SAVE : GraphicIcon.EDIT);
         if (editing) button(new Rect(footer.x() + 88, footer.y(), 58, 22), label("undo_layout"), this::undoLayout).active = !undoOrder.isEmpty();
-        pageButtons(footer.right() - 92, footer.y());
+        if (editing && pageCount > 1) pageButtons(footer.right() - 92, footer.y());
         updateControls();
+    }
+
+    private void layoutSettingRows() {
+        var content = layout.content();
+        var options = group().options();
+        int rowHeight = layout.rowHeight(), top = layout.row(0).y();
+        int listHeight = options.size() * rowHeight;
+        int viewportHeight = Math.min(listHeight, content.bottom() - top);
+        settingsScroll.resize(viewportHeight, listHeight);
+        if (initialPosition != null) {
+            double offset = initialPosition.legacyPage() > 0
+                    ? (double) initialPosition.legacyPage() * layout.capacity() * rowHeight
+                    : initialPosition.scrollOffset();
+            settingsScroll.scrollTo(offset);
+            initialPosition = null;
+        }
+        boolean overflow = settingsScroll.maxOffset() > 0;
+        int rowWidth = content.width() - (overflow ? 12 : 0);
+        settingsViewport = new Rect(content.x(), top, rowWidth, viewportHeight);
+        for (int i = 0; i < options.size(); i++) {
+            addSetting(options.get(i), new Rect(content.x(), top + i * rowHeight, rowWidth, rowHeight),
+                    i == options.size() - 1);
+        }
+        addRenderableOnly((graphics, x, y, partialTick) -> {
+            var area = settingsViewport;
+            graphics.enableScissor(area.x(), area.y(), area.right(), area.bottom());
+            try {
+                boolean inside = overSettings(x, y);
+                for (var widget : settingRows.keySet()) {
+                    widget.render(graphics, inside ? x : -1, inside ? y : -1, partialTick);
+                }
+            } finally {
+                graphics.disableScissor();
+            }
+        });
+        if (overflow) {
+            settingsScrollbar = addRenderableWidget(new UiVerticalScrollBar(
+                    new Bounds(content.right() - 8, top, 8, viewportHeight),
+                    Component.translatable("screen.sh_common_lib.control_center.scrollbar"),
+                    settingsScroll, rowHeight, this::positionSettingRows));
+            settingsScrollbar.setSmoothScrolling(() -> UiPreferences.configured().reducedMotion());
+        }
+        positionSettingRows();
+    }
+
+    private void positionSettingRows() {
+        int offset = (int) Math.round(settingsScroll.offset());
+        settingRows.forEach((widget, top) -> {
+            int y = top - offset;
+            if (widget.getY() == y) return;
+            if (widget instanceof UiSwitchRow row && row.cancelInteraction()) setDragging(false);
+            widget.setY(y);
+            if (widget == getFocused()
+                    && (y >= settingsViewport.bottom() || y + widget.getHeight() <= settingsViewport.y())) {
+                setFocused(settingsScrollbar);
+            }
+        });
+    }
+
+    private void revealFocusedSetting() {
+        if (settingsScrollbar == null || !(getFocused() instanceof AbstractWidget widget)
+                || !settingRows.containsKey(widget)) return;
+        var area = settingsViewport;
+        int y = widget.getY();
+        int adjustment = y < area.y() ? y - area.y() : Math.max(0, y + widget.getHeight() - area.bottom());
+        if (settingsScroll.scrollBy(adjustment)) {
+            settingsScrollbar.synchronizeMotion();
+            positionSettingRows();
+        }
     }
 
     private void layoutNavigation(Rect area, boolean sidebar) {
@@ -141,8 +213,8 @@ public final class CosmicArtisanScreen extends LayeredScreen {
         wheelArea = new Rect(8, 32, width - 16, height - 72);
         int count = group().options().size();
         pageCount = Math.max(1, (count + 5) / 6);
-        page = Math.min(page, pageCount - 1);
-        int first = page * 6, end = Math.min(first + 6, count);
+        wheelPage = Math.min(wheelPage, pageCount - 1);
+        int first = wheelPage * 6, end = Math.min(first + 6, count);
         radial = RadialMenuLayout.of(wheelArea.width(), wheelArea.height(), end - first);
         for (int i = first; i < end; i++) {
             var local = radial.slots().get(i - first);
@@ -160,24 +232,29 @@ public final class CosmicArtisanScreen extends LayeredScreen {
 
     private void addSetting(Option option, Rect rect, boolean last) {
         if (option.toggle()) {
-            var control = addRenderableWidget(new UiSwitchRow(bounds(rect), optionTitle(option), optionHint(option),
+            var control = addSettingRow(new UiSwitchRow(bounds(rect), optionTitle(option), optionHint(option),
                     enabled(option), UiPreferences.configured(), ignored -> activate(option)));
             control.setDivider(!last);
             switches.put(option, control);
         } else {
-            var control = button(new Rect(rect.x() + 4, rect.y() + 4, rect.width() - 8, rect.height() - 8),
-                    optionTitle(option), () -> activate(option));
+            var control = addSettingRow(createButton(new Rect(rect.x() + 4, rect.y() + 4, rect.width() - 8, rect.height() - 8),
+                    optionTitle(option), () -> activate(option)));
             control.setLeadingIcon(option.kind() == CosmicArtisanMenu.Kind.BEACONS ? GraphicIcon.GOAL : GraphicIcon.SETTINGS);
             control.setPreview(UiHudRichText.prepare(optionTitle(option).copy().append("\n").append(optionHint(option))));
             actionButtons.put(option, control);
         }
     }
 
+    private <T extends AbstractWidget> T addSettingRow(T widget) {
+        settingRows.put(widget, widget.getY());
+        return addWidget(widget);
+    }
+
     private void pageButtons(int x, int y) {
         var previous = button(new Rect(x, y, 24, 22), label("previous_page"), () -> changePage(-1));
         var next = button(new Rect(x + 68, y, 24, 22), label("next_page"), () -> changePage(1));
         previous.setIcon(GraphicIcon.PREVIOUS); next.setIcon(GraphicIcon.NEXT);
-        int current = editing ? editPage : page;
+        int current = editing ? editPage : wheelPage;
         previous.active = current > 0; next.active = current + 1 < pageCount;
         if (pageFocusDirection != 0) {
             setFocused(pageFocusDirection > 0 && next.active ? next : previous.active ? previous : next);
@@ -186,23 +263,29 @@ public final class CosmicArtisanScreen extends LayeredScreen {
     }
 
     private UiButton button(Rect rect, Component label, Runnable action) {
+        return addRenderableWidget(createButton(rect, label, action));
+    }
+
+    private UiButton createButton(Rect rect, Component label, Runnable action) {
         var control = ShBetterUiApi.controls().button(bounds(rect), UiHudRichText.prepare(label),
                 ignored -> action.run(), UiPreferences.configured(), false, UiStyle.LIQUID_GLASS);
         control.setSampleBackground(false);
-        return addRenderableWidget(control);
+        return control;
     }
 
     private void selectGroup(int index) {
         if (index == activeGroup) return;
-        activeGroup = index; page = 0; restoreNavigationFocus = true; rememberPosition(); rebuildWidgets();
+        cancelInteractions();
+        activeGroup = index; wheelPage = 0; settingsScroll.scrollTo(0);
+        restoreNavigationFocus = true; rememberPosition(); rebuildWidgets();
     }
     private void changePage(int direction) {
-        int current = editing ? editPage : page;
+        int current = editing ? editPage : wheelPage;
         int next = Math.max(0, Math.min(pageCount - 1, current + direction));
         if (next == current) return;
         cancelInteractions();
         pageFocusDirection = direction;
-        if (editing) editPage = next; else { page = next; rememberPosition(); }
+        if (editing) editPage = next; else wheelPage = next;
         rebuildWidgets();
     }
 
@@ -362,6 +445,11 @@ public final class CosmicArtisanScreen extends LayeredScreen {
     }
     private void cancelInteractions() {
         groupDrag.cancel(); draggedGroup = dropGroup = -1;
+        if (settingsScrollbar != null) {
+            boolean moved = settingsScroll.cancelDrag();
+            settingsScrollbar.synchronizeMotion();
+            if (moved) positionSettingRows();
+        }
         switches.values().forEach(UiSwitchRow::cancelInteraction);
         if (navigation != null) navigation.cancelInteraction();
         if (tabs != null) tabs.cancelDrag();
@@ -370,6 +458,10 @@ public final class CosmicArtisanScreen extends LayeredScreen {
     }
 
     private boolean layoutKey(int key, int modifiers) {
+        if (key == GLFW.GLFW_KEY_ESCAPE && settingsScroll.dragging()) {
+            cancelInteractions();
+            return true;
+        }
         if (key == GLFW.GLFW_KEY_ESCAPE && (groupDrag.active() || editing)) {
             if (groupDrag.active()) cancelInteractions(); else { editing = false; rebuildWidgets(); }
             return true;
@@ -380,11 +472,40 @@ public final class CosmicArtisanScreen extends LayeredScreen {
                 moveGroup(entry.getValue(), entry.getValue() + (key == GLFW.GLFW_KEY_UP ? -1 : 1)); return true;
             }
         }
-        if (key == GLFW.GLFW_KEY_PAGE_UP || key == GLFW.GLFW_KEY_PAGE_DOWN) { changePage(key == GLFW.GLFW_KEY_PAGE_UP ? -1 : 1); return true; }
+        if ((editing || wheel) && (key == GLFW.GLFW_KEY_PAGE_UP || key == GLFW.GLFW_KEY_PAGE_DOWN)) {
+            changePage(key == GLFW.GLFW_KEY_PAGE_UP ? -1 : 1);
+            return true;
+        }
         return false;
     }
 
+    private boolean overSettings(double x, double y) {
+        var area = settingsViewport;
+        return area != null && x >= area.x() && x < area.right() && y >= area.y() && y < area.bottom();
+    }
+
+    @Override public Optional<GuiEventListener> getChildAt(double x, double y) {
+        if (settingsViewport == null || overSettings(x, y)) return super.getChildAt(x, y);
+        for (var child : children()) {
+            if (!settingRows.containsKey(child) && child.isMouseOver(x, y)) return Optional.of(child);
+        }
+        return Optional.empty();
+    }
+
+    @Override public void setFocused(GuiEventListener listener) {
+        if (getFocused() != listener) super.setFocused(listener);
+    }
+
     @Override public boolean mouseClicked(double x, double y, int button) {
+        if (settingsViewport != null) {
+            var target = getChildAt(x, y).orElse(null);
+            if (target == null || !target.mouseClicked(x, y, button)) return false;
+            if (children().contains(target)) {
+                setFocused(target);
+                if (button == 0) setDragging(true);
+            }
+            return true;
+        }
         return pressGroup(x, y, button) || super.mouseClicked(x, y, button);
     }
     @Override public boolean mouseDragged(double x, double y, int button, double dx, double dy) {
@@ -392,11 +513,37 @@ public final class CosmicArtisanScreen extends LayeredScreen {
     }
     @Override public boolean mouseReleased(double x, double y, int button) {
         if (releaseGroup(x, y, button)) return true;
+        if (button == 0 && settingsScroll.endDrag()) { setDragging(false); return true; }
+        if (button == 0 && settingsViewport != null && !overSettings(x, y)) {
+            for (var control : switches.values()) if (control.cancelInteraction()) {
+                setDragging(false);
+                return true;
+            }
+        }
         for (var control : switches.values()) if (control.releasePointer(x, y, button)) { setDragging(false); return true; }
         return super.mouseReleased(x, y, button);
     }
     @Override public boolean keyPressed(int key, int scanCode, int modifiers) {
-        return layoutKey(key, modifiers) || super.keyPressed(key, scanCode, modifiers);
+        if (layoutKey(key, modifiers)) return true;
+        var previousFocus = getFocused();
+        boolean handled = super.keyPressed(key, scanCode, modifiers);
+        if (getFocused() != previousFocus) revealFocusedSetting();
+        return handled;
+    }
+
+    public boolean mouseScrolled(double x, double y, double vertical) {
+        return mouseScrolled(x, y, 0, vertical);
+    }
+
+    public boolean mouseScrolled(double x, double y, double horizontal, double vertical) {
+        if (settingsScrollbar != null && (overSettings(x, y) || settingsScrollbar.isMouseOver(x, y))) {
+            if (settingsScroll.dragging()) return true;
+            if (settingsScrollbar.scrollByWheel(vertical)) {
+                for (var control : switches.values()) if (control.cancelInteraction()) setDragging(false);
+                return true;
+            }
+        }
+        return getChildAt(x, y).map(child -> PlatformUiApi.scrollWidget(child, x, y, horizontal, vertical)).orElse(false);
     }
 
     @Override protected void renderBackdrop(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
@@ -415,10 +562,9 @@ public final class CosmicArtisanScreen extends LayeredScreen {
         }
         paintPanel(graphics, layout.panel(), 14, opacity);
         if (!editing) {
-            var content = layout.content();
-            int rows = Math.min(layout.capacity(), group().options().size() - page * layout.capacity());
-            if (rows > 0) RoundedCorners.draw(graphics, content.x(), content.y() + 22,
-                    content.width(), rows * layout.rowHeight(), 9, preferences.highContrast() ? 1 : 0,
+            var area = settingsViewport;
+            if (area.height() > 0) RoundedCorners.draw(graphics, area.x(), area.y(),
+                    area.width(), area.height(), 9, preferences.highContrast() ? 1 : 0,
                     theme.border(), withAlpha(theme.background(), preferences.highContrast() ? 1 : .32f));
         } else if (groupDrag.active()) renderSorting(graphics);
     }
@@ -464,6 +610,7 @@ public final class CosmicArtisanScreen extends LayeredScreen {
         var theme = UiTheme.current();
         if (tiny) { draw(graphics, label("larger_gui"), 8, 14, Math.max(1, width - 16), theme.text(), 3); return; }
         if (wheel) { renderWheelText(graphics); return; }
+        if (settingsScrollbar != null) settingsScrollbar.advanceMotion();
         var panel = layout.panel(); var content = layout.content();
         draw(graphics, title, panel.x() + 14, panel.y() + 15, panel.width() - 60, theme.text(), 1);
         if (editing) {
@@ -474,11 +621,11 @@ public final class CosmicArtisanScreen extends LayeredScreen {
                     content.width() - 4, theme.secondaryText(theme.text(), .18f), 1);
         }
         var footer = layout.footer();
-        if (pageCount > 1) centered(graphics, label("page", (editing ? editPage : page) + 1, pageCount),
+        if (editing && pageCount > 1) centered(graphics, label("page", editPage + 1, pageCount),
                 footer.right() - 46, footer.y() + 7, 40, theme.text(), 1);
         if (!editing) {
             Component state = !pending.isEmpty() ? label("sync_waiting") : now() < resultUntil ? label(result) : label("instant_save");
-            draw(graphics, state, footer.x() + 90, footer.y() + 7, Math.max(1, footer.width() - 188),
+            draw(graphics, state, footer.x() + 90, footer.y() + 7, Math.max(1, footer.width() - 90),
                     theme.secondaryText(theme.text(), .18f), 1);
         }
     }
@@ -486,7 +633,7 @@ public final class CosmicArtisanScreen extends LayeredScreen {
     private void renderWheelText(GuiGraphics graphics) {
         var theme = UiTheme.current();
         draw(graphics, title, 14, 12, Math.max(20, width - 124), theme.text(), 1);
-        if (pageCount > 1) centered(graphics, label("page", page + 1, pageCount), width - 56, 14, 40, theme.text(), 1);
+        if (pageCount > 1) centered(graphics, label("page", wheelPage + 1, pageCount), width - 56, 14, 40, theme.text(), 1);
         if (radial.compact()) return;
         var center = radial.center();
         int cx = wheelArea.x() + center.x() + center.width() / 2;
@@ -512,11 +659,12 @@ public final class CosmicArtisanScreen extends LayeredScreen {
         }
     }
     private void rememberPosition() {
-        if (!wheel) ArtisanAppearancePreferences.rememberConfigPosition(group().name(), page);
+        if (!wheel && initialPosition == null) {
+            ArtisanAppearancePreferences.rememberConfigPosition(group().name(), (int) Math.round(settingsScroll.offset()));
+        }
     }
-    @Override public void onClose() { rememberPosition(); cancelInteractions(); super.onClose(); }
     @Override public void removed() {
-        cancelInteractions(); if (navigation != null) navigation.close(); super.removed();
+        cancelInteractions(); rememberPosition(); if (navigation != null) navigation.close(); super.removed();
     }
     @Override public boolean isPauseScreen() { return false; }
     private Group group() { return groups.get(activeGroup); }

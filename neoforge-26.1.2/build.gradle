@@ -37,11 +37,9 @@ repositories {
     maven { url = 'https://www.cursemaven.com'; content { includeGroup 'curse.maven' } }
 }
 
-def shBetterUi = file(findProperty('shBetterUiJar')
-        ?: "../../SH-Better-UI/neoforge-${minecraft_version}/build/libs/sh_better_ui-neoforge-${minecraft_version}-${sh_better_ui_version}.jar")
+def uiDependency = shBetterUiDependency
 
 dependencies {
-    implementation files(shBetterUi)
     runtimeOnly "thedarkcolour:kotlinforforge-neoforge:${kff_version}"
     // Optional ULK integrations; these mods remain separate runtime dependencies.
     if (findProperty('mekanismJar')) {
@@ -65,9 +63,7 @@ dependencies {
 
 tasks.named('compileJava') {
     doFirst {
-        if (!shBetterUi.isFile()) {
-            throw new GradleException("Missing SH-Better-UI for Minecraft ${minecraft_version}: ${shBetterUi}. Build that version or set -PshBetterUiJar.")
-        }
+        def shBetterUi = uiDependency.get()
         new java.util.zip.ZipFile(shBetterUi).withCloseable { jar ->
             if (jar.getEntry('META-INF/neoforge.mods.toml') == null
                     || jar.getEntry('com/dishanhai/sh_better_ui/client/api/ControlsApi.class') == null
