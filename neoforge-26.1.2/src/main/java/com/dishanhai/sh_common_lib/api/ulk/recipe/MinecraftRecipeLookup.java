@@ -27,6 +27,12 @@ public final class MinecraftRecipeLookup {
             Identifier id = Identifier.tryParse(name);
             if (id == null) throw new IllegalArgumentException("Invalid registry identifier: " + name);
             return switch (kind) {
+                case FLUID -> registries == null ? presence(BuiltInRegistries.FLUID.getOptional(id).isPresent())
+                        : registries.lookup(Registries.FLUID).map(fluids -> presence(fluids.getOptional(id).isPresent()))
+                                .orElse(RecipeReferences.Presence.UNAVAILABLE);
+                case GT_MACHINE -> registries == null ? presence(BuiltInRegistries.RECIPE_TYPE.getOptional(id).filter(RecipeReferences::isGtMachine).isPresent())
+                        : registries.lookup(Registries.RECIPE_TYPE).map(types -> presence(types.getOptional(id).filter(RecipeReferences::isGtMachine).isPresent()))
+                                .orElse(RecipeReferences.Presence.UNAVAILABLE);
                 case ITEM -> registries == null ? presence(BuiltInRegistries.ITEM.getOptional(id).isPresent())
                         : registries.lookup(Registries.ITEM).map(items -> presence(items.getOptional(id).isPresent()))
                                 .orElse(RecipeReferences.Presence.UNAVAILABLE);

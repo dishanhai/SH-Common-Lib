@@ -47,6 +47,7 @@ public final class RecipeBatchTest {
         var dir = Files.createTempDirectory("recipe-query-");
         try {
             var workspace = new RecipeWorkspace(dir);
+            verifyGenericTarget(new RecipeWorkspace(dir.resolve("edit-targets")));
             expect(workspace.query("", 0, 10).total() == 0, "missing directory");
             for (var id : List.of("z:z", "a:c", "a:a", "a:b")) workspace.save(recipe(id), false);
             var page = workspace.query("a:", 0, 2);
@@ -84,5 +85,37 @@ public final class RecipeBatchTest {
         } finally { Files.delete(invalidRoot); }
         System.out.println("RecipeBatchTest passed");
     }
+    private static void verifyGenericTarget(RecipeWorkspace workspace) throws Exception {
+        var forge = RecipeTarget.FORGE_1_20_1;
+        var client = RecipeTarget.NEOFORGE_1_21_1;
+        String source = "{\"type\":\"gtceu:mixer\",\"futureAddon\":{\"value\":null}}";
+        var machine = new RecipeDocument("example:mixed", RecipeType.GTCEU, RecipeDocument.empty().inputs(),
+                "", 1, 0, 200, "", GtMachineRecipe.empty().toJson());
+        var generic = RecipeImporter.importForEditing(machine, source, client);
+        expect(generic.type() == RecipeType.CUSTOM && generic.rawJson().equals(source), "foreign fallback preserves source");
+        expect(generic.customTarget() == forge && generic.editingTarget(client) == forge, "foreign fallback retains Forge");
+        workspace.save(generic, false);
+        var reopened = workspace.load(generic.id());
+        expect(reopened.equals(generic), "pinned target persists in a draft");
+        expect(RecipeGenerator.generate(reopened, reopened.editingTarget(client), RecipeFormat.JSON).relativePath()
+                .equals("exports/data/example/recipes/mixed.json"), "reopened draft keeps Forge recipes directory");
+        expect(RecipeBatch.prepare(List.of(reopened), client, RecipeFormat.JSON).issues().stream()
+                .anyMatch(issue -> issue.issue().key().equals("target_mismatch")), "batch refuses the wrong game format");
+
+        String nativeJson = "{\"type\":\"minecraft:smelting\",\"ingredient\":{\"item\":\"minecraft:sand\"},\"result\":\"minecraft:glass\"}";
+        var foreignVanilla = RecipeImporter.importForEditing(reopened, nativeJson, client);
+        expect(foreignVanilla.type() == RecipeType.CUSTOM && foreignVanilla.rawJson().equals(nativeJson)
+                && foreignVanilla.customTarget() == forge, "foreign vanilla import retains the selected schema");
+        expect(RecipeImporter.importForEditing(RecipeDocument.empty(), nativeJson, forge).type() == RecipeType.SMELTING,
+                "native import keeps the vanilla canvas");
+
+        var automatic = generic.withCustomTarget(null);
+        workspace.save(automatic);
+        var legacy = workspace.load(automatic.id());
+        expect(legacy.equals(automatic) && legacy.editingTarget(client) == client, "legacy draft without a target follows the client");
+        expect(RecipeGenerator.generate(legacy, client, RecipeFormat.JSON).relativePath().contains("/recipe/"),
+                "unpinned generics generate for the requested version");
+    }
+
     private static void expect(boolean condition, String message) { if (!condition) throw new AssertionError(message); }
 }

@@ -47,6 +47,7 @@ public final class RecipeWorkspace {
         json.addProperty("cookingTime", doc.cookingTime());
         json.addProperty("group", doc.group());
         json.addProperty("rawJson", doc.rawJson());
+        if (doc.customTarget() != null) json.addProperty("customTarget", doc.customTarget().name());
         write(destination, GSON.toJson(json) + "\n", overwrite);
         return destination;
     }
@@ -62,7 +63,8 @@ public final class RecipeWorkspace {
             json.getAsJsonArray("inputs").forEach(value -> inputs.add(value.getAsString()));
             return new RecipeDocument(id, RecipeType.valueOf(json.get("type").getAsString()), inputs,
                     json.get("result").getAsString(), json.get("count").getAsInt(), json.get("experience").getAsFloat(),
-                    json.get("cookingTime").getAsInt(), json.get("group").getAsString(), json.get("rawJson").getAsString());
+                    json.get("cookingTime").getAsInt(), json.get("group").getAsString(), json.get("rawJson").getAsString(),
+                    json.has("customTarget") ? RecipeTarget.valueOf(json.get("customTarget").getAsString()) : null);
         } catch (RuntimeException exception) {
             throw new IOException("Invalid draft", exception);
         }

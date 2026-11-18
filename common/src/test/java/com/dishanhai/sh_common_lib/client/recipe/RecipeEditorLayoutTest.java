@@ -5,7 +5,9 @@ import com.dishanhai.sh_common_lib.client.recipe.RecipeEditorLayout.Rect;
 
 public final class RecipeEditorLayoutTest {
     public static void main(String[] args) {
-        int[][] viewports = {{320,180}, {320,200}, {320,219}, {320,220}, {420,240}, {560,320}, {759,320}, {760,180}, {760,219}, {760,220}, {760,320}, {960,540}, {1280,720}};
+        int[][] viewports = {{320,180}, {320,200}, {320,219}, {320,220}, {420,240}, {519,240}, {520,240},
+                {560,239}, {560,240}, {560,320}, {760,180}, {760,219}, {760,220}, {839,240}, {840,240},
+                {960,540}, {1280,720}, {1680,960}};
         for (int[] size : viewports) {
             var layout = RecipeEditorLayout.compute(size[0], size[1]);
             var viewport = new Rect(0, 0, size[0], size[1]);
@@ -14,18 +16,27 @@ public final class RecipeEditorLayoutTest {
             require(viewport.contains(layout.content()), "content in viewport");
             require(viewport.contains(layout.status()), "status in viewport");
             require(layout.toolbar().bottom() < layout.navigation().y(), "toolbar/navigation separation");
-            require(layout.navigation().bottom() < layout.content().y(), "navigation/content separation");
+            require(!intersects(layout.navigation(), layout.content()), "navigation/content separation");
             require(layout.content().bottom() < layout.status().y(), "content/status separation");
-            require(layout.wide() == (size[0] >= 760), "breakpoint");
-            for (int view = 0; view < 3; view++) require(layout.content().contains(layout.pane(view)), "pane in content");
-            if (layout.wide()) {
-                require(layout.canvas().right() < layout.properties().x(), "canvas/inspector separation");
-                require(layout.properties().right() < layout.result().x(), "inspector/source separation");
-                require(layout.result().width() >= 280, "source readable minimum width");
+            require(layout.sidebar() == (size[0] >= 840 && size[1] >= 240), "sidebar breakpoint");
+            require(layout.split() == (size[0] >= 520 && size[1] >= 240), "live preview breakpoint");
+            require(layout.toolbar().width() <= 916 && layout.content().height() <= 322, "bounded desktop workspace");
+            var controls = layout.navigationControls();
+            require(layout.navigation().contains(controls), "navigation controls inside surface");
+            if (layout.sidebar()) {
+                require(controls.height() >= 23 * 3, "vertical navigation targets");
+                require(controls.bottom() + 36 + 22 <= layout.navigation().bottom(), "sidebar document actions fit");
+            } else require(controls.width() >= 27 * 3 && controls.height() >= 20, "horizontal navigation targets");
+            require(layout.content().contains(layout.editor()), "editor in content");
+            require(layout.content().contains(layout.preview()), "preview in content");
+            require(layout.result(2).equals(layout.content()), "export page uses full width");
+            if (layout.split()) {
+                require(layout.editor().right() < layout.preview().x(), "editor/preview separation");
+                require(layout.preview().width() >= 215, "readable live preview");
             } else {
-                require(layout.canvas().equals(layout.properties()) && layout.canvas().equals(layout.result()), "compact pages share content area");
+                require(layout.editor().equals(layout.content()), "single pane uses available space");
             }
-            var properties = layout.properties();
+            var properties = layout.body(layout.editor());
             boolean compactFields = size[1] < 220;
             RecipeEditorLayout.FieldRow previous = null;
             for (int row = 0; row < 3; row++) {
@@ -49,9 +60,10 @@ public final class RecipeEditorLayoutTest {
                 }
                 previous = previousColumn;
             }
-            var pane = layout.canvas();
-            // A 22px type selector plus 2px separation leaves a usable 58px grid at 320x180.
-            var slotArea = new Rect(pane.x(), pane.y() + 24, pane.width(), pane.height() - 24);
+            var pane = layout.body(layout.editor());
+            var slotArea = RecipeEditorLayout.slotArea(pane, size[1] >= 220);
+            require(pane.contains(slotArea) && slotArea.height() <= 98, "grid stays beside controls on large displays");
+            require(pane.y() + 44 + 20 <= pane.bottom(), "machine inputs and outputs fit");
             for (int count : new int[] {1, 2, 3, 9}) for (boolean output : new boolean[] {false, true}) {
                 var slots = RecipeEditorLayout.slots(slotArea, count, output);
                 require(slotArea.contains(slots.inputs()), "input grid in canvas");

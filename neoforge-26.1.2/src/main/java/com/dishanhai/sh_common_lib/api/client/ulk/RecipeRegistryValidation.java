@@ -10,8 +10,12 @@ public final class RecipeRegistryValidation {
     private RecipeRegistryValidation() {}
 
     public static List<RecipeIssue> validate(RecipeDocument doc) {
+        return validate(doc, RecipeTarget.NEOFORGE_26_1_2);
+    }
+
+    public static List<RecipeIssue> validate(RecipeDocument doc, RecipeTarget target) {
         var level = Minecraft.getInstance().level;
-        return RecipeReferences.validate(doc, RecipeTarget.NEOFORGE_26_1_2,
+        return RecipeReferences.validate(doc, target,
                 level == null ? MinecraftRecipeLookup.builtInOnly() : MinecraftRecipeLookup.of(level.registryAccess()));
     }
 }

@@ -2,6 +2,7 @@
 package com.dishanhai.sh_common_lib.client.recipe;
 
 import com.dishanhai.sh_better_ui.client.api.UiFrame;
+import com.dishanhai.sh_better_ui.client.api.ShBetterUiApi;
 import com.dishanhai.sh_better_ui.client.api.UiWorkbench;
 import com.dishanhai.sh_better_ui.client.gui.scaled.RoundedCorners;
 import com.dishanhai.sh_better_ui.client.gui.scaled.UiTheme;
@@ -13,7 +14,7 @@ import com.dishanhai.sh_better_ui.client.gui.text.UiRichText;
 import com.dishanhai.sh_better_ui.client.gui.scaled.UiButton;
 import com.dishanhai.sh_better_ui.client.gui.scaled.UiHistory;
 import com.dishanhai.sh_better_ui.client.gui.scaled.UiIngredientSlots;
-import com.dishanhai.sh_better_ui.client.gui.scaled.UiCodeEditor;
+import com.dishanhai.sh_better_ui.client.gui.scaled.UiNavigationRail;
 import com.dishanhai.sh_better_ui.client.gui.scaled.UiTextField;
 import com.dishanhai.sh_common_lib.api.ulk.recipe.*;
 import com.dishanhai.sh_common_lib.api.client.ulk.RecipeRegistryValidation;
@@ -50,11 +51,18 @@ public final class RecipeEditor {
     private UiScreen screen;
     private UiIngredientSlots inputs, output;
     private UiButton copy, export, undoButton, redoButton;
+    private UiButton previousPage, nextPage, fixIssue;
+    private UiNavigationRail navigation;
+    private boolean focusNavigation;
     private final java.util.Set<String> invalidNumbers = new java.util.HashSet<>();
     private final Map<String, String> numberText = new HashMap<>();
     private RecipeDocument generatedDocument;
     private RecipeFormat generatedFormat;
     private RecipeArtifact generatedArtifact;
+    private String[] previewLines = {};
+    private List<RecipeIssue> issues = List.of();
+    private final List<CanvasLabel> canvasLabels = new ArrayList<>();
+    private record CanvasLabel(Component label, int x, int y, int width, boolean strong) {}
     private long registryValidationTime;
     private Component status = text("intro");
     private Component validationStatus;
@@ -86,19 +94,19 @@ public final class RecipeEditor {
         catch (ClassNotFoundException ignored) { return false; }
     }
 
-    private static UiScreenBuilder builder(Component title, Screen parent) {
+    static UiScreenBuilder builder(Component title, Screen parent) {
         return UiWorkbench.builder(title, parent).onRender(RecipeEditor::drawBackdrop);
     }
 
-    private static void drawBackdrop(UiScreen owner, UiFrame frame) {
+    static void drawBackdrop(UiScreen owner, UiFrame frame) {
         var theme = UiTheme.current();
-        int background = frame.preferences().highContrast() ? theme.background()
-                : theme.light() ? 0xFFF3F3F5 : 0xFF18181B;
+        int background = frame.preferences().highContrast() ? theme.background() : theme.light() ? 0xFFEDEDF0 : 0xFF151517;
         RoundedCorners.draw(frame.graphics(), 0, 0, owner.width, owner.height, 0, 0, 0, background);
     }
 
     private void open() {
-        screen = builder(text("title"), exitGuard()).onInit(this::init).onRender(this::drawSurfaces).onForeground(this::draw).build();
+        screen = builder(text("title"), exitGuard()).onInit(this::init).onRender(this::drawSurfaces)
+                .onForeground(this::draw).onRemoved(owner -> closeNavigation()).build();
         screen.open();
     }
 
@@ -122,7 +130,7 @@ public final class RecipeEditor {
 
     private void refresh() { open(); }
 
-    private static UiButton button(UiScreen owner, int x, int y, int width, int height, Component label, Runnable action) {
+    static UiButton button(UiScreen owner, int x, int y, int width, int height, Component label, Runnable action) {
         var control = UiWorkbench.button(owner, x, y, width, height, label, action);
         control.setCornerRadius(Math.min(8, height / 2f));
         return control;
@@ -131,32 +139,57 @@ public final class RecipeEditor {
     private void init(UiScreen owner) {
         generatedDocument = null;
         inputs = null; output = null; copy = null; export = null; slotLayout = null;
+        canvasLabels.clear();
         layout = RecipeEditorLayout.compute(owner.width, owner.height);
-        int w = owner.width;
-        button(owner, 8, 8, 42, 24, text("back"), owner::onClose);
-        button(owner, 56, 8, 52, 24, text("drafts"), () -> openDrafts(0));
-        button(owner, 114, 8, 52, 24, text("actions"), this::openActions);
-        var saveButton = button(owner, w - 78, 8, 70, 24, text("save"), this::save);
+        var toolbar = layout.toolbar();
+        int x = toolbar.x(), y = toolbar.y() + (toolbar.height() - 24) / 2, right = toolbar.right();
+        button(owner, x, y, 26, 24, text("back"), owner::onClose).setIcon(GraphicIcon.BACK);
+        if (!layout.sidebar()) {
+            button(owner, x + 30, y, 26, 24, text("drafts"), () -> openDrafts(0)).setIcon(GraphicIcon.FOLDER);
+            button(owner, x + 60, y, 26, 24, text("actions"), this::openActions).setIcon(GraphicIcon.TOOLBAR);
+        }
+        undoButton = button(owner, right - 124, y, 26, 24, text("undo"), () -> restore(false));
+        undoButton.setIcon(GraphicIcon.UNDO);
+        redoButton = button(owner, right - 94, y, 26, 24, text("redo"), () -> restore(true));
+        redoButton.setIcon(GraphicIcon.FORWARD);
+        var saveButton = button(owner, right - 62, y, 62, 24, text("save"), this::save);
+        saveButton.setLeadingIcon(GraphicIcon.SAVE);
         saveButton.setSelected(true);
-        undoButton = button(owner, 8, 40, 38, 22, text("undo"), () -> restore(false));
-        redoButton = button(owner, 50, 40, 38, 22, text("redo"), () -> restore(true));
-        int tabX = 100, tabWidth = Math.max(40, (w - tabX - 8) / 3);
-        for (int i = 0; i < 3; i++) {
-            final int tab = i;
-            var control = button(owner, tabX + i * tabWidth, 40, tabWidth - 3, 22,
-                    text("view." + i), () -> { view = tab; refresh(); });
-            control.setSelected(view == i);
+        closeNavigation();
+        var nav = layout.navigationControls();
+        var orientation = layout.sidebar() ? UiNavigationRail.Orientation.VERTICAL : UiNavigationRail.Orientation.HORIZONTAL;
+        navigation = owner.add(ShBetterUiApi.controls().navigationRail(Minecraft.getInstance().font,
+                new Bounds(nav.x(), nav.y(), nav.width(), nav.height()), text("workspace"),
+                List.of(new UiNavigationRail.Item(text("view.0"), GraphicIcon.RECIPE),
+                        new UiNavigationRail.Item(text("view.1"), GraphicIcon.SETTINGS),
+                        new UiNavigationRail.Item(text("view.2"), GraphicIcon.CODE)),
+                view, orientation, UiWorkbench.preferences(owner), next -> {
+                    view = next;
+                    focusNavigation = true;
+                    refresh();
+                }));
+        if (focusNavigation) { owner.setFocused(navigation); focusNavigation = false; }
+        if (layout.sidebar()) {
+            button(owner, nav.x(), nav.bottom() + 10, nav.width(), 22, text("drafts"), () -> openDrafts(0))
+                    .setLeadingIcon(GraphicIcon.FOLDER);
+            button(owner, nav.x(), nav.bottom() + 36, nav.width(), 22, text("actions"), this::openActions)
+                    .setLeadingIcon(GraphicIcon.TOOLBAR);
         }
-        if (icons.isEmpty()) icons.putAll(UiWorkbench.itemIcons());
-        if (layout.wide() || view == 0) {
-            var area = layout.canvas(); canvas(owner, area.x(), area.y(), area.width());
+        var editor = layout.body(layout.editor());
+        if (view == 0) {
+            if (document.type() != RecipeType.CUSTOM && icons.isEmpty()) icons.putAll(UiWorkbench.itemIcons());
+            canvas(owner, editor.x(), editor.y(), editor.width());
+        } else if (view == 1) {
+            properties(owner, editor.x(), editor.y(), editor.width());
         }
-        if (layout.wide() || view == 1) {
-            var area = layout.properties(); properties(owner, area.x(), area.y(), area.width());
+        if (layout.split() || view == 2) {
+            var area = layout.body(layout.result(view));
+            result(owner, area);
         }
-        if (layout.wide() || view == 2) {
-            var area = layout.result(); result(owner, area.x(), area.y(), area.width());
-        }
+    }
+
+    private void closeNavigation() {
+        if (navigation != null) { navigation.close(); navigation = null; }
     }
 
     /** Secondary document actions stay out of the editing toolbar. */
@@ -177,31 +210,70 @@ public final class RecipeEditor {
 
     private void drawSurfaces(UiScreen owner, UiFrame frame) {
         drawBackdrop(owner, frame);
-        // Native theme colors retain contrast and the player's selected appearance.
-        int edge = (UiWorkbench.secondaryTextColor() & 0xFFFFFF) | 0x38000000;
-        int fill = (UiWorkbench.secondaryTextColor() & 0xFFFFFF) | 0x10000000;
-        RoundedCorners.draw(frame.graphics(), 4, 4, owner.width - 8, 32, 10, 1, edge, fill);
-        {
-            for (var pane : layout.wide() ? List.of(layout.canvas(), layout.properties(), layout.result()) : List.of(layout.content()))
-                RoundedCorners.draw(frame.graphics(), pane.x() - 4, pane.y() - 4,
-                        pane.width() + 8, pane.height() + 8, 10, 1, edge, fill);
+        var theme = UiTheme.current();
+        boolean contrast = frame.preferences().highContrast();
+        int edge = contrast ? theme.text() : 0x20888890;
+        int fill = contrast ? theme.surface() : theme.light() ? 0xFFFCFCFD : 0xFF28282C;
+        int inset = contrast ? theme.background() : theme.light() ? 0xFFF4F4F7 : 0xFF202023;
+        var bar = layout.toolbar();
+        var status = layout.status();
+        RoundedCorners.draw(frame.graphics(), bar.x() - 7, bar.y() - 5, bar.width() + 14,
+                status.bottom() - bar.y() + 7, 12, 1, edge, inset);
+        RoundedCorners.draw(frame.graphics(), bar.x(), bar.bottom() + 3, bar.width(), 1, 0, 0, 0, edge);
+        if (layout.sidebar()) surface(frame, layout.navigation(), 0, inset);
+        if (layout.split() && view != 2) {
+            surface(frame, layout.editor(), edge, fill);
+            surface(frame, layout.preview(), edge, fill);
+        } else {
+            surface(frame, layout.content(), edge, fill);
+        }
+        if (layout.split() || view == 2) {
+            var area = layout.body(layout.result(view));
+            if (generatedArtifact != null) {
+                int height = Math.min(area.height() - 52, previewLines.length * 11 + 6);
+                RoundedCorners.draw(frame.graphics(), area.x() - 2, area.y() + 25, area.width() + 4, height,
+                        5, 0, 0, inset);
+            }
         }
     }
 
+    private static void surface(UiFrame frame, RecipeEditorLayout.Rect area, int edge, int fill) {
+        RoundedCorners.draw(frame.graphics(), area.x() - 4, area.y() - 4,
+                area.width() + 8, area.height() + 8, 9, 1, edge, fill);
+    }
+
+    private boolean structuredRecipe() {
+        return document.type() == RecipeType.CUSTOM || document.type() == RecipeType.GTCEU;
+    }
+
     private void canvas(UiScreen owner, int x, int y, int width) {
-        button(owner, x, y, width, 22, typeLabel(document.type()), this::openTypes);
-        if (document.type() == RecipeType.CUSTOM) {
-            button(owner, x, y + 32, width, 22, text("custom_edit"), this::openCustom);
+        int typeWidth = Math.min(width * 55 / 100, 185);
+        button(owner, x, y, typeWidth, 22, typeLabel(document.type()), this::openTypes).setLeadingIcon(GraphicIcon.RECIPE_TYPE);
+        if (structuredRecipe()) {
+            boolean machine = document.type() == RecipeType.GTCEU;
+            button(owner, x + typeWidth + 5, y, Math.min(148, width - typeWidth - 5), 22,
+                    text(machine ? "gtceu_edit" : "generic_edit"), () -> {
+                if (machine) GtceuRecipeEditor.open(screen, document.rawJson(), icons, this::applyCustom);
+                else GenericRecipeEditor.open(screen, document.rawJson(), this::applyCustom);
+            }).setLeadingIcon(machine ? GraphicIcon.GREGTECH : GraphicIcon.EDIT);
+            var pane = layout.body(layout.editor());
+            if (machine) machineCanvas(owner, pane);
+            else genericCanvas(owner, pane);
             return;
+        }
+        if (document.type() == RecipeType.SHAPED || document.type() == RecipeType.SHAPELESS) {
+            int space = Math.min(136, width - typeWidth - 4);
+            var sequence = button(owner, x + typeWidth + 4, y, space, 22, text("fill_sequence"), this::openSequence);
+            if (space < 75) sequence.setIcon(GraphicIcon.FILL); else sequence.setLeadingIcon(GraphicIcon.FILL);
         }
         int count = inputCount();
         var values = new ArrayList<ItemStack>();
         var names = new ArrayList<Component>();
         for (int i = 0; i < count; i++) { values.add(icon(document.inputs().get(i), isPotion(i))); names.add(slotName(i)); }
         boolean hasOutput = document.type() != RecipeType.SMITHING_TRIM || target == RecipeTarget.NEOFORGE_26_1_2;
-        var pane = layout.canvas();
-        int top = y + (owner.height >= 220 ? 40 : 24);
-        slotLayout = RecipeEditorLayout.slots(new RecipeEditorLayout.Rect(x, top, width, pane.bottom() - top), count, hasOutput);
+        var pane = layout.body(layout.editor());
+        var slotArea = RecipeEditorLayout.slotArea(pane, owner.height >= 220);
+        slotLayout = RecipeEditorLayout.slots(slotArea, count, hasOutput);
         var grid = slotLayout.inputs();
         inputs = owner.add(new UiIngredientSlots(Minecraft.getInstance().font,
                 new Bounds(grid.x(), grid.y(), grid.width(), grid.height()), text("inputs"), slotLayout.columns(), values,
@@ -215,6 +287,80 @@ public final class RecipeEditor {
                     List.of(resultIcon()), UiWorkbench.preferences(owner), i -> openSlot(9), i -> setSlot(9, ""), (a,b) -> {}));
             output.setSlotNames(List.of(slotName(9))); output.setAllowDrag(false);
         }
+        int idY = slotArea.bottom() + 9;
+        if (idY + 32 <= pane.bottom()) {
+            canvasLabels.add(new CanvasLabel(text("field.id"), x, idY, width, false));
+            field(owner, x, idY, width, "id", document.id(), next -> edit(next, document.result(), document.count(),
+                    document.experience(), document.cookingTime(), document.group()));
+            int groupY = idY + 38;
+            if (groupY + 32 <= pane.bottom() && !isPotion(0)
+                    && document.type() != RecipeType.BREWING_CONTAINER && document.type() != RecipeType.SMITHING_TRIM
+                    && document.type() != RecipeType.SMITHING_TRANSFORM) {
+                canvasLabels.add(new CanvasLabel(text("group"), x, groupY, width, false));
+                field(owner, x, groupY, width, "group", document.group(), next -> edit(document.id(), document.result(),
+                        document.count(), document.experience(), document.cookingTime(), next));
+            }
+        }
+    }
+
+    private void genericCanvas(UiScreen owner, RecipeEditorLayout.Rect pane) {
+        int x = pane.x(), y = pane.y() + 30, width = pane.width();
+        try {
+            var tree = RecipeJsonTree.parse(document.rawJson().isBlank() ? "{\"type\":\"\"}" : document.rawJson());
+            var keys = tree.keys(List.of());
+            canvasLabels.add(new CanvasLabel(text("root_fields", keys.size()), x + 2, y, width - 4, false));
+            int rows = Math.min(6, (pane.bottom() - y - 13) / 23);
+            for (int i = 0; i < Math.min(rows, keys.size()); i++) {
+                String key = keys.get(i);
+                var path = List.of(key);
+                String value = tree.isContainer(path) ? (tree.isArray(path) ? "[…]" : "{…}") : tree.value(path);
+                if (value.length() > 100) value = value.substring(0, 99) + "…";
+                button(owner, x, y + 13 + i * 23, width, 21, text("generic.row", key, value),
+                        () -> GenericRecipeEditor.openField(screen, document.rawJson(), key, this::applyCustom))
+                        .setTrailingIcon(GraphicIcon.FORWARD);
+            }
+        } catch (RuntimeException invalidDraft) {
+            canvasLabels.add(new CanvasLabel(text("error.invalid_json"), x, y, width, false));
+        }
+    }
+
+    private void machineCanvas(UiScreen owner, RecipeEditorLayout.Rect pane) {
+        int x = pane.x(), y = pane.y() + 29, width = pane.width();
+        GtMachineRecipe model;
+        try {
+            model = GtMachineRecipe.parse(document.rawJson());
+        } catch (IllegalArgumentException invalidDraft) {
+            canvasLabels.add(new CanvasLabel(text("error.invalid_json"), x, y, width, false));
+            return;
+        }
+        int half = (width - 10) / 2;
+        canvasLabels.add(new CanvasLabel(Component.literal(model.machine()), x + 2, y, half, true));
+        canvasLabels.add(new CanvasLabel(text("gtceu_parameters", model.duration(), model.eut()), x + half + 10, y, half, false));
+        machineLane(owner, x, y + 15, half, pane.bottom(), false, model.itemInputs(), model.fluidInputs());
+        machineLane(owner, x + half + 10, y + 15, half, pane.bottom(), true, model.itemOutputs(), model.fluidOutputs());
+    }
+
+    private void machineLane(UiScreen owner, int x, int y, int width, int bottom, boolean outputLane,
+                             List<GtMachineRecipe.Entry> items, List<GtMachineRecipe.Entry> fluids) {
+        button(owner, x, y, width, 20, text(outputLane ? "gt.outputs" : "gt.inputs"),
+                () -> GtceuRecipeEditor.openLane(screen, document.rawJson(), outputLane, false, -1, icons, this::applyCustom))
+                .setTrailingIcon(GraphicIcon.ADD);
+        int max = Math.min(5, (bottom - y - 24) / 23);
+        for (int i = 0; i < Math.min(max, items.size() + fluids.size()); i++) {
+            boolean fluid = i >= items.size();
+            int row = fluid ? i - items.size() : i;
+            var entry = (fluid ? fluids : items).get(row);
+            String id = entry.id(), shortId = id.substring(id.indexOf(':') + 1);
+            var name = text(fluid ? "flow_fluid" : "flow_item", entry.amount(), id.startsWith("#") ? "#" + shortId : shortId);
+            var label = !fluid && icons.containsKey(id) ? UiRichText.withItem(id, name) : name;
+            var control = button(owner, x, y + 24 + i * 23, width, 21, label,
+                    () -> GtceuRecipeEditor.openLane(screen, document.rawJson(), outputLane, fluid, row, icons, this::applyCustom));
+            control.setPreview(Component.literal(id));
+        }
+        if (max > 0 && items.isEmpty() && fluids.isEmpty())
+            button(owner, x, y + 24, width, 21, text("add_fluid"),
+                    () -> GtceuRecipeEditor.openLane(screen, document.rawJson(), outputLane, true, -1, icons, this::applyCustom))
+                    .setLeadingIcon(GraphicIcon.FILL);
     }
 
     private int inputCount() {
@@ -254,9 +400,20 @@ public final class RecipeEditor {
         int stride = owner.height < 220 ? 26 : 36;
         propertyField(owner, x, y, width, "id", document.id(), value -> edit(value, document.result(), document.count(),
                 document.experience(), document.cookingTime(), document.group()));
+        if (document.type() == RecipeType.CUSTOM) {
+            var selected = document.customTarget();
+            Component choice = selected == null ? text("target.current", targetName(target)) : targetName(selected);
+            button(owner, x, y + stride, width, 22, text("export_target", choice), () -> {
+                var targets = RecipeTarget.values();
+                int next = selected == null ? 0 : selected.ordinal() + 1;
+                change(document.withCustomTarget(next == targets.length ? null : targets[next]));
+                refresh();
+            });
+        }
+        if (structuredRecipe()) return;
         propertyField(owner, x, y + stride, width, "group", document.group(), value -> edit(document.id(), document.result(), document.count(),
                 document.experience(), document.cookingTime(), value));
-        if (document.type() != RecipeType.BREWING && document.type() != RecipeType.SMITHING_TRIM && document.type() != RecipeType.CUSTOM) {
+        if (document.type() != RecipeType.BREWING && document.type() != RecipeType.SMITHING_TRIM) {
             propertyField(owner, x, y + stride * 2, isCooking() ? width / 3 - 3 : width, "count", numberText.getOrDefault("count", Integer.toString(document.count())), value -> {
                 try { int parsed = Integer.parseInt(value); invalidNumbers.remove("count"); status = text("modified"); edit(document.id(), document.result(), parsed, document.experience(), document.cookingTime(), document.group()); }
                 catch (NumberFormatException ignored) { invalidNumbers.add("count"); status = text("invalid_number"); }
@@ -303,54 +460,108 @@ public final class RecipeEditor {
 
     private void edit(String id, String result, int count, float experience, int time, String group) {
         // A valid numeric edit clears only its own pending error in the field callback.
-        change(new RecipeDocument(id, document.type(), document.inputs(), result, count, experience, time, group, document.rawJson()));
+        change(new RecipeDocument(id, document.type(), document.inputs(), result, count, experience, time,
+                group, document.rawJson(), document.customTarget()));
     }
 
     private boolean dirty() { return !document.equals(saved) || !invalidNumbers.isEmpty(); }
 
     private void clearPendingNumbers() { invalidNumbers.clear(); numberText.clear(); }
 
-    private void result(UiScreen owner, int x, int y, int width) {
-        button(owner, x, y, width, 22, text("format", text("format." + format.name().toLowerCase(Locale.ROOT))), () -> {
+    private void result(UiScreen owner, RecipeEditorLayout.Rect area) {
+        int x = area.x(), y = area.y(), width = area.width();
+        boolean compact = width < 410;
+        int actionWidth = compact ? 30 : 78;
+        int formatWidth = width - (actionWidth + 4) * 2;
+        button(owner, x, y, formatWidth, 22, text("format", text("format." + format.name().toLowerCase(Locale.ROOT))), () -> {
             format = RecipeFormat.values()[(format.ordinal() + 1) % RecipeFormat.values().length]; codePage = 0; refresh();
         });
-        int half = (width - 4) / 2;
-        copy = button(owner, x, y + 28, half, 20, text("copy"), () -> {
+        copy = button(owner, x + formatWidth + 4, y, actionWidth, 22, text("copy"), () -> {
             var artifact = artifact();
             if (artifact != null) { Minecraft.getInstance().keyboardHandler.setClipboard(artifact.content()); status = text("copied"); }
         });
-        copy.setLeadingIcon(GraphicIcon.COPY);
-        export = button(owner, x + half + 4, y + 28, width - half - 4, 20, text("export"), () -> export(false));
-        export.setLeadingIcon(GraphicIcon.EXPORT);
-        int third = (width - 8) / 3;
-        button(owner, x, y + 54, third, 18, text("previous"), () -> { codePage = Math.max(0, codePage - 1); });
-        button(owner, x + third + 4, y + 54, third, 18, text("next"), () -> { codePage++; });
-        button(owner, x + (third + 4) * 2, y + 54, third, 18, text("help"), this::help);
+        export = button(owner, area.right() - actionWidth, y, actionWidth, 22, text("export"), () -> export(false));
+        if (compact) { copy.setIcon(GraphicIcon.COPY); export.setIcon(GraphicIcon.EXPORT); }
+        else { copy.setLeadingIcon(GraphicIcon.COPY); export.setLeadingIcon(GraphicIcon.EXPORT); }
+        int bottomRow = area.bottom() - 20;
+        previousPage = button(owner, area.right() - 58, bottomRow, 26, 20, text("previous"), () -> codePage--);
+        previousPage.setIcon(GraphicIcon.PREVIOUS);
+        nextPage = button(owner, area.right() - 28, bottomRow, 26, 20, text("next"), () -> codePage++);
+        nextPage.setIcon(GraphicIcon.NEXT);
+        fixIssue = button(owner, x, bottomRow, Math.min(138, width), 20, text("fix_issue"), this::editIssue);
+        fixIssue.setLeadingIcon(GraphicIcon.EDIT);
+        fixIssue.visible = false;
+    }
+
+    private void editIssue() {
+        String field = issues.isEmpty() ? "" : issues.get(0).field();
+        if (field.equals("id") || field.equals("count") || field.equals("cookingTime") || field.equals("experience")
+                || !invalidNumbers.isEmpty()) {
+            view = 1; refresh(); return;
+        }
+        if (document.type() == RecipeType.GTCEU) {
+            boolean out = field.contains("output") || field.equals("result");
+            if (out || field.contains("input")) {
+                GtceuRecipeEditor.openLane(screen, document.rawJson(), out, field.contains("fluid"),
+                        field.startsWith("gt_") ? 0 : -1, icons, this::applyCustom);
+            } else GtceuRecipeEditor.open(screen, document.rawJson(), icons, this::applyCustom);
+        } else if (document.type() == RecipeType.CUSTOM) {
+            GenericRecipeEditor.open(screen, document.rawJson(), this::applyCustom);
+        } else if (field.equals("result")) {
+            openSlot(9);
+        } else if (field.startsWith("input")) {
+            int index = field.length() == 6 && Character.isDigit(field.charAt(5)) ? field.charAt(5) - '0' : 0;
+            openSlot(index);
+        } else { view = 1; refresh(); }
+    }
+
+    private static Component targetName(RecipeTarget value) {
+        return text("target." + value.name().toLowerCase(Locale.ROOT));
     }
 
     private RecipeArtifact artifact() {
-        if (!invalidNumbers.isEmpty()) { validationStatus = text("invalid_number"); return null; }
+        if (!invalidNumbers.isEmpty()) { generatedDocument = null; validationStatus = text("invalid_number"); return null; }
         long now = System.nanoTime();
-        if (document.equals(generatedDocument) && format == generatedFormat && now < registryValidationTime) return generatedArtifact;
+        boolean same = document.equals(generatedDocument) && format == generatedFormat;
+        var editingTarget = document.editingTarget(target);
+        boolean checkRegistry = target == editingTarget && document.type() != RecipeType.CUSTOM;
+        if (same && (!checkRegistry || now < registryValidationTime)) return generatedArtifact;
+        boolean hadPreview = same && generatedArtifact != null;
         validationStatus = null;
         registryValidationTime = now + 1_000_000_000L;
         generatedDocument = document; generatedFormat = format; generatedArtifact = null;
         try {
-            var issues = new ArrayList<>(RecipeGenerator.validate(document, target, format));
-            if (issues.isEmpty()) issues.addAll(RecipeRegistryValidation.validate(document));
+            issues = new ArrayList<>(RecipeGenerator.validate(document, editingTarget, format));
+            if (issues.isEmpty() && checkRegistry) issues.addAll(RecipeRegistryValidation.validate(document, editingTarget));
             if (!issues.isEmpty()) { var issue = issues.get(0); validationStatus = text("issue", text("field." + issue.field()), text("error." + issue.key())); return null; }
-            generatedArtifact = RecipeGenerator.generate(document, target, format);
+            generatedArtifact = RecipeGenerator.generate(document, editingTarget, format);
+            if (!hadPreview) previewLines = generatedArtifact.content().stripTrailing().split("\n");
             return generatedArtifact;
-        } catch (RuntimeException exception) { validationStatus = text("failed", exception.getMessage()); return null; }
+        } catch (RuntimeException exception) { issues = List.of(); validationStatus = text("failed", exception.getMessage()); return null; }
     }
 
     private void draw(UiScreen owner, UiFrame frame) {
         undoButton.active = undo.canRestore(); redoButton.active = redo.canRestore();
         var artifact = artifact();
         if (copy != null) { copy.active = artifact != null && !busy; export.active = copy.active; }
-        if (owner.width >= 500) line(frame, text("title").copy().withStyle(style -> style.withBold(true)),
-                180, 16, owner.width - 270, UiWorkbench.textColor());
-        if ((layout.wide() || view == 0) && slotLayout != null) {
+        var toolbar = layout.toolbar();
+        int titleX = toolbar.x() + (layout.sidebar() ? 38 : 93);
+        int titleWidth = toolbar.right() - 132 - titleX;
+        if (toolbar.height() >= 32) {
+            var produced = icons.get(document.result());
+            Component name = produced == null ? typeLabel(document.type()) : produced.getHoverName();
+            line(frame, name.copy().withStyle(style -> style.withBold(true)), titleX, toolbar.y() + 4, titleWidth, UiWorkbench.textColor());
+            line(frame, Component.literal(document.id()), titleX, toolbar.y() + 18, titleWidth, UiWorkbench.secondaryTextColor());
+        } else line(frame, Component.literal(document.id()), titleX, toolbar.y() + 8, titleWidth, UiWorkbench.textColor());
+        if (layout.sidebar()) sectionTitle(frame, layout.navigation(), "workspace");
+        if (layout.split()) {
+            if (view != 2) sectionTitle(frame, layout.editor(), "view." + view);
+            sectionTitle(frame, layout.result(view), "view.2");
+        }
+        if (view == 0) for (var label : canvasLabels)
+            line(frame, label.label(), label.x(), label.y(), label.width(),
+                    label.strong() ? UiWorkbench.textColor() : UiWorkbench.secondaryTextColor());
+        if (view == 0 && slotLayout != null) {
             var grid = slotLayout.inputs(); var out = slotLayout.output();
             if (owner.height >= 220) {
                 line(frame, text("inputs"), grid.x(), grid.y() - 12, grid.width(), UiWorkbench.secondaryTextColor());
@@ -362,39 +573,66 @@ public final class RecipeEditor {
                 line(frame, Component.literal("→"), arrow.x(), arrow.y() + arrow.height() / 2 - 4, arrow.width(), UiWorkbench.secondaryTextColor());
             }
         }
-        if (layout.wide() || view == 1) {
-            var pane = layout.properties(); int x = pane.x(), y = pane.y(), width = pane.width();
+        if (view == 1) {
+            var pane = layout.body(layout.editor()); int x = pane.x(), y = pane.y(), width = pane.width();
             int stride = owner.height < 220 ? 26 : 36;
             propertyLabel(owner, frame, x, y, width, "id");
-            propertyLabel(owner, frame, x, y + stride, width, "group");
-            if (document.type() != RecipeType.BREWING && document.type() != RecipeType.SMITHING_TRIM && document.type() != RecipeType.CUSTOM)
+            if (!structuredRecipe()) propertyLabel(owner, frame, x, y + stride, width, "group");
+            if (!structuredRecipe() && document.type() != RecipeType.BREWING && document.type() != RecipeType.SMITHING_TRIM)
                 propertyLabel(owner, frame, x, y + stride * 2, isCooking() ? width / 3 - 3 : width, "count");
             if (isCooking()) {
                 propertyLabel(owner, frame, x + width / 3, y + stride * 2, width / 3 - 3, "time");
                 propertyLabel(owner, frame, x + width * 2 / 3, y + stride * 2, width / 3 - 3, "experience");
             }
         }
-        if ((layout.wide() || view == 2) && artifact != null) {
-            var pane = layout.result(); int x = pane.x(), width = pane.width(), top = pane.y() + (owner.height < 200 ? 72 : 86);
-            var lines = artifact.content().split("\n", -1);
-            int rows = Math.max(1, (pane.bottom() - top) / 11), pages = Math.max(1, (lines.length + rows - 1) / rows);
+        if (layout.split() || view == 2) {
+            var pane = layout.body(layout.result(view));
+            int x = pane.x(), width = pane.width(), top = pane.y() + 28;
+            int rows = Math.max(1, (pane.bottom() - 24 - top) / 11);
+            int pages = artifact == null ? 1 : Math.max(1, (previewLines.length + rows - 1) / rows);
             codePage = Math.max(0, Math.min(codePage, pages - 1));
-            if (owner.height >= 200) line(frame, text("code_page", codePage + 1, pages), x, pane.y() + 74, width, UiWorkbench.accentColor());
-            for (int i = 0; i < rows && codePage * rows + i < lines.length && top + i * 11 + 9 <= pane.bottom(); i++)
-                line(frame, Component.literal(lines[codePage * rows + i]), x, top + i * 11, width, UiWorkbench.textColor());
-        }
-        if ((layout.wide() || view == 2) && artifact == null && validationStatus != null) {
-            var pane = layout.result();
-            line(frame, validationStatus, pane.x(), pane.y() + (owner.height < 200 ? 72 : 86),
-                    pane.width(), UiWorkbench.accentColor());
+            previousPage.active = codePage > 0; nextPage.active = codePage + 1 < pages;
+            previousPage.visible = nextPage.visible = artifact != null && pages > 1;
+            fixIssue.visible = artifact == null && (!invalidNumbers.isEmpty() || !issues.isEmpty()
+                    && !issues.get(0).key().equals("registry_unavailable"));
+            if (fixIssue.visible) {
+                int issueBottom = top + (rows < 3 || issues.isEmpty() || !invalidNumbers.isEmpty() ? 16
+                        : 19 + 11 * Math.min(issues.size(), rows - 2));
+                fixIssue.setY(Math.min(pane.bottom() - 20, issueBottom));
+            }
+            if (artifact != null) {
+                line(frame, text("code_page", codePage + 1, pages), x, pane.bottom() - 14, width - 62, UiWorkbench.secondaryTextColor());
+                int gutter = Math.max(18, Minecraft.getInstance().font.width(Integer.toString(previewLines.length)) + 7);
+                for (int i = 0; i < rows && codePage * rows + i < previewLines.length; i++) {
+                    int index = codePage * rows + i;
+                    line(frame, Component.literal(Integer.toString(index + 1)), x, top + i * 11, gutter, UiWorkbench.secondaryTextColor());
+                    line(frame, Component.literal(previewLines[index]), x + gutter, top + i * 11, width - gutter, UiWorkbench.textColor());
+                }
+            } else if (validationStatus != null) {
+                if (rows < 3 || issues.isEmpty() || !invalidNumbers.isEmpty()) {
+                    line(frame, validationStatus, x, top, width, UiWorkbench.textColor());
+                } else {
+                    line(frame, text("preview_issues").copy().withStyle(style -> style.withBold(true)), x, top, width, UiWorkbench.textColor());
+                    for (int i = 0; i < Math.min(rows - 2, issues.size()); i++) {
+                        var issue = issues.get(i);
+                        line(frame, text("issue", text("field." + issue.field()), text("error." + issue.key())),
+                                x, top + 16 + i * 11, width, UiWorkbench.secondaryTextColor());
+                    }
+                }
+            }
         }
         var footer = layout.status();
         Component feedback = validationStatus != null && (status.equals(text("intro")) || status.equals(text("modified")))
                 ? validationStatus : status;
-        line(frame, feedback, footer.x(), footer.y() + 4, footer.width(), UiWorkbench.accentColor());
+        line(frame, feedback, footer.x() + 3, footer.y() + 4, footer.width() - 6, UiWorkbench.secondaryTextColor());
     }
 
-    private static void line(UiFrame frame, Component text, int x, int y, int width, int color) {
+    private static void sectionTitle(UiFrame frame, RecipeEditorLayout.Rect area, String key) {
+        line(frame, text(key).copy().withStyle(style -> style.withBold(true)),
+                area.x() + 3, area.y() + 4, area.width() - 6, UiWorkbench.textColor());
+    }
+
+    static void line(UiFrame frame, Component text, int x, int y, int width, int color) {
         if (width <= 0 || y < 0) return;
         var font = Minecraft.getInstance().font;
         frame.drawScaledText(font, UiRichText.fit(font, text, width), x, y, color, 1);
@@ -409,7 +647,7 @@ public final class RecipeEditor {
     }
 
     private void syncSlots() {
-        if (inputs != null && document.type() != RecipeType.CUSTOM) {
+        if (inputs != null && !structuredRecipe()) {
             var values = new ArrayList<ItemStack>(); var names = new ArrayList<Component>();
             for (int i = 0; i < inputCount(); i++) { values.add(icon(document.inputs().get(i), isPotion(i))); names.add(slotName(i)); }
             inputs.setItems(values); inputs.setSlotNames(names);
@@ -506,57 +744,54 @@ public final class RecipeEditor {
     private void openTypes() {
         builder(text("type"), screen).onInit(owner -> {
             back(owner);
-            var types = RecipeType.values(); int columns = owner.height < 220 ? 3 : 2;
-            int width = (owner.width - 24 - (columns - 1) * 4) / columns, y = Math.max(38, owner.viewport().y() + 8);
-            for (int i = 0; i < types.length; i++) {
-                var type = types[i];
-                button(owner, 12 + (i % columns) * (width + 4), y + (i / columns) * 26, width, 22, typeLabel(type), () -> {
-                    if (type == document.type()) { refresh(); return; }
-                    Minecraft.getInstance().setScreen(new ConfirmScreen(ok -> {
-                        if (ok) {
-                            clearPendingNumbers();
-                            change(new RecipeDocument(document.id(), type, List.of("", "", "", "", "", "", "", "", ""), "", 1, 0,
-                                    type == RecipeType.BLASTING || type == RecipeType.SMOKING ? 100 : type == RecipeType.CAMPFIRE ? 600 : 200,
-                                    document.group(), ""));
-                        }
-                        refresh();
-                    }, text("type_change"), text("type_change_hint")));
-                });
+            int width = Math.min(560, owner.width - 24), x = (owner.width - width) / 2;
+            int top = Math.max(38, owner.viewport().y() + 8), half = (width - 6) / 2;
+            typeButton(owner, x, top, half, RecipeType.GTCEU).setLeadingIcon(GraphicIcon.GREGTECH);
+            typeButton(owner, x + half + 6, top, half, RecipeType.CUSTOM).setLeadingIcon(GraphicIcon.CODE);
+            int columns = owner.height < 240 ? 3 : 2;
+            int cell = (width - (columns - 1) * 4) / columns;
+            int index = 0;
+            for (var type : RecipeType.values()) {
+                if (type == RecipeType.GTCEU || type == RecipeType.CUSTOM) continue;
+                typeButton(owner, x + index % columns * (cell + 4), top + 32 + index / columns * 26, cell, type);
+                index++;
             }
         }).open();
     }
 
-    private void openCustom() {
-        openCustom(new String[]{document.rawJson()});
+    private UiButton typeButton(UiScreen owner, int x, int y, int width, RecipeType type) {
+        var control = button(owner, x, y, width, 22, typeLabel(type), () -> {
+            if (type == document.type()) { refresh(); return; }
+            if (document.type() == RecipeType.GTCEU && type == RecipeType.CUSTOM) {
+                change(new RecipeDocument(document.id(), type, document.inputs(), "", 1, 0, 200, "",
+                        document.rawJson(), RecipeTarget.FORGE_1_20_1));
+                refresh();
+                return;
+            }
+            Minecraft.getInstance().setScreen(new ConfirmScreen(ok -> {
+                if (ok) {
+                    int time = switch (type) {
+                        case BLASTING, SMOKING -> 100;
+                        case CAMPFIRE -> 600;
+                        default -> 200;
+                    };
+                    var empty = RecipeDocument.empty();
+                    clearPendingNumbers();
+                    change(new RecipeDocument(document.id(), type, empty.inputs(), "", 1, 0, time,
+                            type == RecipeType.GTCEU || type == RecipeType.CUSTOM ? "" : document.group(),
+                            type == RecipeType.GTCEU ? GtMachineRecipe.empty().toJson() : ""));
+                }
+                refresh();
+            }, text("type_change"), text("type_change_hint")));
+        });
+        control.setSelected(type == document.type());
+        return control;
     }
 
     private void applyCustom(String raw) {
         change(new RecipeDocument(document.id(), document.type(), document.inputs(), document.result(), document.count(),
-                document.experience(), document.cookingTime(), document.group(), raw));
+                document.experience(), document.cookingTime(), document.group(), raw, document.customTarget()));
         refresh();
-    }
-
-    private void openCustom(String[] raw) {
-        builder(text("custom_edit"), pendingGuard(() -> !raw[0].equals(document.rawJson()),
-                () -> applyCustom(raw[0]), () -> openCustom(raw))).onInit(owner -> {
-            back(owner);
-            int w = owner.width - 24, y = Math.max(38, owner.viewport().y() + 10);
-            var field = owner.add(new UiCodeEditor(Minecraft.getInstance().font,
-                    new Bounds(12, y, w, Math.max(30, owner.height - y - 82)), text("json"), 1024 * 1024,
-                    UiWorkbench.preferences(owner)));
-            field.setValue(raw[0]); field.setOnChange(value -> raw[0] = value);
-            button(owner, 12, owner.height - 72, w, 20, text("paste_json"), () -> {
-                String pasted = Minecraft.getInstance().keyboardHandler.getClipboard();
-                if (pasted.length() > 1024 * 1024) { status = text("too_large"); return; }
-                field.setValue(pasted); raw[0] = field.getValue();
-            });
-            button(owner, 12, owner.height - 46, w, 20, text("apply"), () -> {
-                applyCustom(raw[0]);
-            });
-        }).onForeground((owner, frame) -> {
-            line(frame, text("custom_hint"), 12, owner.height - 24, owner.width - 24, UiWorkbench.secondaryTextColor());
-            line(frame, status, 12, owner.height - 12, owner.width - 24, UiWorkbench.accentColor());
-        }).open();
     }
 
     private Screen pendingGuard(Supplier<Boolean> changed, Runnable apply, Runnable resume) {
@@ -577,7 +812,7 @@ public final class RecipeEditor {
 
     private void importClipboard() {
         try {
-            var loaded = RecipeImporter.fromJson(document.id(), Minecraft.getInstance().keyboardHandler.getClipboard(), target);
+            var loaded = RecipeImporter.importForEditing(document, Minecraft.getInstance().keyboardHandler.getClipboard(), target);
             clearPendingNumbers(); change(loaded); savedId = null; status = text("imported"); refresh();
         } catch (Exception exception) { status = text("failed", exception.getMessage()); refresh(); }
     }
@@ -655,5 +890,5 @@ public final class RecipeEditor {
 
     private static Component typeLabel(RecipeType type) { return text("type." + type.name().toLowerCase(Locale.ROOT)); }
     private void back(UiScreen owner) { button(owner, 12, 8, Math.min(100, owner.width - 24), 22, text("back"), owner::onClose).setLeadingIcon(GraphicIcon.BACK); }
-    private static Component text(String key, Object... args) { return Component.translatable("screen.sh_common_lib.recipe_editor." + key, args); }
+    static Component text(String key, Object... args) { return Component.translatable("screen.sh_common_lib.recipe_editor." + key, args); }
 }

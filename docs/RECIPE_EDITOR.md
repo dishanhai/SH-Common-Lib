@@ -3,6 +3,8 @@
 
 在 F10 主控中心进入“设置 → 开发者 → 配方编辑器”。需要配套构建的 SH-Better-UI，提供 UUK 素材槽、工作台和多行代码编辑 API。旧 SHBUI 缺少这些能力时，入口显示更新提示，不影响其他主控页面。
 
+![原版合成的编辑画布及实时 JSON 预览](images/recipe-editor/workspace.png)
+
 ## 支持范围
 
 三个版本分别按自己的格式生成配方：Forge 1.20.1、NeoForge 1.21.1、NeoForge 26.1.2。
@@ -16,7 +18,8 @@
 | 锻造纹饰 | 模板、基底和添加材料；26.1.2 另需纹饰图案 ID |
 | 药水酿造 | 基础药水 ID、物品或标签原料、产物药水 ID；保留瓶型 |
 | 药水瓶型转换 | 输入瓶型物品、原料、输出瓶型物品；保留药水数据 |
-| 自定义 / KubeJS | 多行 JSON，使用已安装模组提供的配方序列化器 |
+| GTCEu 机器 | Forge 1.20.1 格式的机器类型、时长、EU/t、多项物品和流体输入输出 |
+| 通用配方 | 任意序列化器的字段表、对象、数组、值和完整 JSON 源码 |
 
 物品选择器仅选取物品注册 ID。需要 NBT、数据组件、多选原料或模组专属属性时，使用自定义 JSON；工具不会把 JEI 物品变体的附加数据隐式写入普通物品槽。26.1.2 选择器使用注册表默认物品形态，旧版本优先使用 SHBUI 提供的 JEI 目录。
 
@@ -30,15 +33,33 @@
 
 有序／无序合成可拖动交换原料。右键或 Delete 清空槽位，Enter 选择，方向键移动槽位焦点；Esc 取消拖放。工具栏提供撤销和重做。输入框保留其原生文字操作，页面历史使用独立按钮。
 
-画布、属性和生成页在较窄窗口中使用页签；较宽窗口同时展示。切换类型会先确认清空原料和加工参数，也可以撤销。离开时可以保存、继续或放弃。保存到另一个已有草稿 ID 前会确认覆盖。
+窗口较窄时可在画布、属性和生成页间切换。空间充足时，生成预览显示在编辑区右侧。切换类型前会显示确认，也可以撤销。离开时可以保存、继续或放弃。另存到已有草稿 ID 需要确认覆盖。
 
 “导入”从剪贴板读取 JSON。已支持且能完整表示的原版／SHCLIB 酿造定义还原为画布，保留原版的 category 和 show_notification 信息；普通配方的未知字段、数据组件、复合原料或第三方类型会保留原文进入自定义编辑。酿造配置含不支持的扩展字段时拒绝导入，保留当前文档和剪贴板原文。工具不执行或反向解析任意 KubeJS JavaScript。
 
 保存草稿可以保留尚未通过配方校验的内容；未能解析的数值需要先修正。复制和导出只允许当前有效文档，不会退回上一个有效结果。
 
+### 编辑 GTCEu 机器配方
+
+从画布的类型选择器选择「GTCEu 机器（Forge 1.20.1）」。例如在 `gtceu:mixer` 中设置时长 200 刻、功率 32 EU/t，分别添加物品或流体输入和输出。物品输入接受注册 ID 和 `#命名空间:标签`，流体量使用 mB。负 EU/t 表示发电。点击「应用」一次提交整页修改，可在工作区一步撤销。
+
+![GTCEu 单页中的机器参数、物品标签和流体输入输出](images/recipe-editor/gtceu.png)
+
+三个客户端都能编写这种配方。导出的数据包使用 Forge 1.20.1 的 `data/<namespace>/recipes/<path>.json`。运行配方的目标实例需要安装相应机器类型和材料所属的模组。GTCEu 1.20.1 的 KubeJS 导出使用 KubeJS 6 的资源事件，将完整 ID 和 64 位能量值写入配方资源。
+
+默认改用专用视图的范围是能完整表示的 `gtceu:*` 机器 JSON。带概率、条件、集成电路或其他扩展数据的配方在通用编辑器打开。跨版本作者模式会把 Forge 目标保存在这份通用草稿中。
+
+### 编辑第三方配方
+
+在「操作 → 导入」粘贴现有配方，或从类型选择器新建「通用配方」。在字段表中直接编辑文本和数值。点击对象或数组的数量可进入下一级。「添加」可建立文本、数字、布尔值、对象、数组或空值。「JSON 源码」可粘贴整份配方，也可用来修复未完成的草稿。
+
+编辑时会保留其他字段、数组顺序和显式 `null`。窗口足够宽时，右栏随字段变化预览当前层级的 JSON。点击「应用」后返回工作区，草稿、撤销、复制和导出使用同一份文档。「属性 → 导出目标」可选择当前客户端或固定版本。固定版本决定资源目录，序列化器所需的具体字段由目标模组定义。
+
+![通用配方的行内字段和 JSON 预览](images/recipe-editor/generic.png)
+
 ## 工作区与安装
 
-默认根目录为实例内 `config/sh_common_lib/recipe_editor/`：
+默认根目录为实例内 `config/sh_common_lib/recipe_editor/`。
 
 | 路径 | 用途 |
 | --- | --- |
@@ -94,6 +115,8 @@ UUK 的 `UiIngredientSlots`、`UiCodeEditor`、`UiWorkbench` 提供通用界面�
 
 ## 验证与限制
 
+2026-11-19 在 NeoForge 1.21.1 隔离客户端通过了原版选料、通用嵌套字段修改与数组插入、GTCEu 双栏编辑、取消、撤销和 JSON 复制。Forge 47.4.16 测试服务端加载了 GTCEu 1.4.4、KubeJS 6 和 Rhino，通过 RecipeManager 按原始 ID 读回数据包、GT 专用脚本和通用 GT 脚本提供的三份机器配方。实测覆盖物品标签、流体量、脚本特殊字符以及 `9007199254740993` EU/t。
+
 相关 Gradle 验证任务为 `recipeEditorTest`、`recipeImporterTest`、`brewingDefinitionsTest`、`brewingDatapackTest`、`brewingApiTest`、`brewingRuleCacheTest`，均挂入 `check`。覆盖版本格式、生成 Java 编译与执行、JSON 导入保真、草稿存取、路径边界、数据包合并与公开注册 API。UUK 有独立拖放、资源选择草稿／过滤／布局和主题资源验证。
 
 NeoForge 1.21.1 的原生客户端回归可从该模块目录运行 `./gradlew -I ../gradle/recipe-editor-smoke.init.gradle runClient --no-daemon`。它使用隔离目录 `build/recipe-editor-smoke/`，检查 GUI 缩放 4／3 的槽位点击、搜索、暂存／连续选择、确认回填、产物数量／非法数量／取消、手填标签和属性页，并显式加载酿造原料槽以验证客户端 Mixin 可应用。输出截图与结果后自动关闭，测试源码只通过此初始化脚本加入，不进入正式 JAR。
@@ -104,10 +127,8 @@ NeoForge 1.21.1 的原生客户端回归可从该模块目录运行 `./gradlew -
 
 界面交互参考 [Crafting Generator](https://github.com/destruc7i0n/crafting) 的配方拖放及导出组织，版本化生成参考 [Misode](https://github.com/misode/misode.github.io)。实际渲染和控件使用项目 UUK。
 
-## Apple 风格工作区（本次重构）
+## 界面设计参考
 
-主页面将文档操作与内容导航分开：顶栏提供返回、草稿、操作与保存，下一行保留撤销／重做及画布／属性／生成分段导航。新建、剪贴板导入、连续填料和帮助收纳在“操作”页，避免窄窗口挤满按钮。宽度达到 760 GUI 单位时同时显示三个工作面板；较窄窗口切换单页。原料与产物作为完整配方流程居中，使用同一布局模型绘制并命中测试。
+工作区宽度充足时并排展示编辑区与生成结果，宽屏增加侧栏。窄屏使用分段导航，当前页、键盘焦点和主要操作均服从玩家选择的 UUK 主题。分栏行为参考 [Apple Split Views](https://developer.apple.com/design/human-interface-guidelines/split-views) 和 [Ionic Split Pane](https://ionicframework.com/docs/api/split-pane)。
 
-控件圆角和轻量分层参考 Apple 的 [Layout](https://developer.apple.com/design/human-interface-guidelines/layout)、[Toolbars](https://developer.apple.com/design/human-interface-guidelines/toolbars) 与 [Sidebars](https://developer.apple.com/design/human-interface-guidelines/sidebars)。这不是嵌入网页或 Apple 专有素材；沿用原生键盘、旁白、玩家主题及高对比设置，不捆绑 Apple 字体或 SF Symbols。配方存储、导入保真、覆盖确认和版本格式保持原有 ULK 实现。
-
-`recipeEditorLayoutTest` 覆盖最小 320×180、紧凑及宽屏断点，检查原料和产物均落在面板中。原生 smoke 扩展为 GUI 缩放 4／3／1／5，检查编辑器与操作页的控件边界。运行结果应以当前构建日志为准。
+字段名、可编辑值和子项入口按列对齐，常用改动可在当前行完成。控件分组和选中态参考 [Konsta UI List](https://konstaui.com/react/list) 与 [Framework7 Segmented](https://framework7.io/docs/segmented)。游戏内界面由 UUK 原生控件组成。
