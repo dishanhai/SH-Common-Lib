@@ -89,6 +89,54 @@ public final class RecipeWorkspace {
         return List.copyOf(ids);
     }
 
+    /**
+     * Lexically sorted ID-prefix query. Each call is a fresh filesystem snapshot, not a durable cursor.
+     * At most 16,384 directory entries are visited; oversized trees fail rather than appear complete.
+     * Draft contents are not loaded or validated. Missing directories are empty; I/O failures propagate.
+     */
+    public Page query(String prefix, int offset, int limit) throws IOException {
+        Objects.requireNonNull(prefix);
+        if (offset < 0 || limit < 1 || limit > 256) throw new IllegalArgumentException("Invalid page bounds");
+        Path drafts = resolve("drafts");
+        checkLinks(drafts);
+        try {
+            if (!Files.readAttributes(root, java.nio.file.attribute.BasicFileAttributes.class,
+                    LinkOption.NOFOLLOW_LINKS).isDirectory()) throw new IOException("Workspace root is not a directory");
+            if (!Files.readAttributes(drafts, java.nio.file.attribute.BasicFileAttributes.class,
+                    LinkOption.NOFOLLOW_LINKS).isDirectory()) throw new IOException("Draft root is not a directory");
+        } catch (java.nio.file.NoSuchFileException missing) {
+            return new Page(List.of(), offset, 0);
+        }
+        var ids = new ArrayList<String>();
+        try (var paths = Files.walk(drafts)) {
+            var iterator = paths.iterator();
+            int visited = 0;
+            while (iterator.hasNext()) {
+                Path path = iterator.next();
+                if (++visited > 16_384) throw new IOException("Draft directory scan limit exceeded");
+                if (!Files.readAttributes(path, java.nio.file.attribute.BasicFileAttributes.class,
+                        LinkOption.NOFOLLOW_LINKS).isRegularFile() || !path.getFileName().toString().endsWith(".json")) continue;
+                String relative = drafts.relativize(path).toString().replace('\\', '/');
+                int separator = relative.indexOf('/');
+                if (separator > 0) {
+                    String id = relative.substring(0, separator) + ":" + relative.substring(separator + 1, relative.length() - 5);
+                    if (RecipeGenerator.validId(id) && id.startsWith(prefix)) ids.add(id);
+                }
+            }
+        } catch (java.io.UncheckedIOException failure) {
+            throw failure.getCause();
+        }
+        ids.sort(String::compareTo);
+        int from = Math.min(offset, ids.size());
+        int to = from + Math.min(limit, ids.size() - from);
+        return new Page(ids.subList(from, to), offset, ids.size());
+    }
+
+    public record Page(List<String> ids, int offset, int total) {
+        public Page { ids = List.copyOf(ids); }
+        public boolean hasMore() { return (long) offset + ids.size() < total; }
+    }
+
     public Path export(RecipeArtifact artifact, boolean overwrite) throws IOException {
         Objects.requireNonNull(artifact);
         Path file = resolve(artifact.relativePath());
