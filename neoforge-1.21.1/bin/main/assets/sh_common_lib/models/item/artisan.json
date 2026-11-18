@@ -1,0 +1,12 @@
+{
+  "parent": "minecraft:item/handheld",
+  "textures": {
+    "layer0": "sh_common_lib:item/artisan"
+  },
+  "overrides": [
+    { "predicate": { "sh_common_lib:artisan_mode": 0.25 }, "model": "sh_common_lib:item/artisan_pickaxe" },
+    { "predicate": { "sh_common_lib:artisan_mode": 0.5 }, "model": "sh_common_lib:item/artisan_axe" },
+    { "predicate": { "sh_common_lib:artisan_mode": 0.75 }, "model": "sh_common_lib:item/artisan_shovel" },
+    { "predicate": { "sh_common_lib:artisan_mode": 1.0 }, "model": "sh_common_lib:item/artisan_hoe" }
+  ]
+}
