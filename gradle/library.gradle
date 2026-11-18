@@ -41,6 +41,34 @@ tasks.register('cosmicArtisanGestureTest', JavaExec) {
     mainClass = 'com.dishanhai.sh_common_lib.client.item.CosmicArtisanGestureTest'
 }
 
+tasks.register('accelerationPolicyTest', JavaExec) {
+    group = 'verification'
+    description = 'Checks acceleration rates, independent filter semantics and deferred server work.'
+    classpath = sourceSets.controlCenterVerification.runtimeClasspath
+    mainClass = 'com.dishanhai.sh_common_lib.internal.acceleration.AccelerationPolicyTest'
+}
+
+tasks.register('accelerationPersistenceTest', JavaExec) {
+    group = 'verification'
+    description = 'Checks range save/reload, transient caches, independent lists, pause and reclamation.'
+    classpath = sourceSets.controlCenterVerification.runtimeClasspath + sourceSets.main.runtimeClasspath
+    mainClass = 'com.dishanhai.sh_common_lib.internal.acceleration.AccelerationPersistenceTest'
+}
+
+tasks.register('tickBudgetTest', JavaExec) {
+    group = 'verification'
+    description = 'Checks fair deferred tick work and execution/time budget boundaries.'
+    classpath = sourceSets.controlCenterVerification.runtimeClasspath
+    mainClass = 'com.dishanhai.sh_common_lib.internal.acceleration.TickBudgetTest'
+}
+
+tasks.register('mobAiLeasesTest', JavaExec) {
+    group = 'verification'
+    description = 'Checks shared Mob AI leases, original state restoration, reload and shutdown cleanup.'
+    classpath = sourceSets.controlCenterVerification.runtimeClasspath
+    mainClass = 'com.dishanhai.sh_common_lib.internal.acceleration.MobAiLeasesTest'
+}
+
 tasks.register('clientSearchTest', JavaExec) {
     group = 'verification'
     description = 'Checks ULK client search and suggestion results.'
@@ -138,6 +166,7 @@ tasks.register('inventorySnapshotTest', JavaExec) {
 
 tasks.named('check') {
     dependsOn 'logAnalyzerTest'
+    dependsOn 'accelerationPolicyTest', 'accelerationPersistenceTest', 'tickBudgetTest', 'mobAiLeasesTest'
     dependsOn 'jeiSearchLayoutTest'
     dependsOn 'recipeEditorTest', 'recipeImporterTest', 'brewingDefinitionsTest', 'brewingDatapackTest', 'brewingApiTest', 'brewingRuleCacheTest'
     dependsOn tasks.named('searchGiveShortcutTest'), tasks.named('cosmicArtisanGestureTest'), tasks.named('artisanSettingsTest'), tasks.named('controlCenterDraftTest'), tasks.named('clientSearchTest'), tasks.named('searchHistoryTest'), tasks.named('jeiSearchSettingsTest'), tasks.named('searchCompletionUndoTest'), tasks.named('recipePreviewBoundsTest'), tasks.named('searchPagingTest'), tasks.named('inventoryScanTrackerTest'), tasks.named('inventorySnapshotTest')

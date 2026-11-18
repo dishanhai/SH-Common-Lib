@@ -5,6 +5,9 @@ import com.dishanhai.sh_common_lib.client.beacon.BeaconClient;
 import com.dishanhai.sh_common_lib.client.beacon.BeaconWorldRenderer;
 import net.minecraft.resources.Identifier;
 import com.dishanhai.sh_common_lib.client.item.CosmicArtisanShortcut;
+import com.dishanhai.sh_common_lib.client.item.AccelerationClient;
+import com.dishanhai.sh_common_lib.client.item.AccelerationInput;
+import com.dishanhai.sh_common_lib.client.item.AccelerationWorldRenderer;
 import com.dishanhai.sh_common_lib.client.item.CosmicArtisanAutoClick;
 import com.dishanhai.sh_common_lib.internal.item.CosmicArtisanModes.Mode;
 import net.minecraft.world.InteractionHand;
@@ -34,22 +37,37 @@ final class NeoForgeArtisanClient {
 
     static void registerBeaconMarkers(IEventBus modBus) {
         NeoForge.EVENT_BUS.addListener(BeaconWorldRenderer::extract);
+        NeoForge.EVENT_BUS.addListener(AccelerationWorldRenderer::extract);
         NeoForge.EVENT_BUS.addListener(BeaconWorldRenderer::submit);
         modBus.addListener((RegisterGuiLayersEvent event) -> event.registerBelowAll(
                 Identifier.fromNamespaceAndPath(ShCommonLib.MOD_ID, "beacon_markers"),
                 (graphics, delta) -> BeaconWorldRenderer.renderHud(graphics)));
+        modBus.addListener((RegisterGuiLayersEvent event) -> event.registerBelowAll(
+                Identifier.fromNamespaceAndPath(ShCommonLib.MOD_ID, "acceleration_markers"),
+                (graphics, delta) -> AccelerationWorldRenderer.renderHud(graphics)));
     }
 
     static void registerQuickConfig(IEventBus modBus) {
         var key = new KeyMapping("key.sh_common_lib.cosmic_artisan", KeyConflictContext.IN_GAME,
                 InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_G, NeoForgeKeyMappings.CATEGORY);
         modBus.addListener((RegisterKeyMappingsEvent event) -> event.register(key));
+        var accelerationKey = new KeyMapping("key.sh_common_lib.acceleration", KeyConflictContext.IN_GAME,
+                InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_X, NeoForgeKeyMappings.CATEGORY);
+        modBus.addListener((RegisterKeyMappingsEvent event) -> event.register(accelerationKey));
         var shortcut = new CosmicArtisanShortcut(key);
         NeoForge.EVENT_BUS.addListener((InputEvent.InteractionKeyMappingTriggered event) -> {
+            if (event.isUseItem() && AccelerationInput.mark(Minecraft.getInstance(),
+                    GLFW.glfwGetKey(Minecraft.getInstance().getWindow().handle(), GLFW.GLFW_KEY_LEFT_CONTROL) == GLFW.GLFW_PRESS
+                    || GLFW.glfwGetKey(Minecraft.getInstance().getWindow().handle(), GLFW.GLFW_KEY_RIGHT_CONTROL) == GLFW.GLFW_PRESS)) {
+                event.setSwingHand(false); event.setCanceled(true); return;
+            }
             if (event.isUseItem() && BeaconClient.warpAimed(Minecraft.getInstance())) {
                 event.setSwingHand(false);
                 event.setCanceled(true);
             }
+        });
+        NeoForge.EVENT_BUS.addListener((InputEvent.MouseScrollingEvent event) -> {
+            if (AccelerationClient.scroll(Minecraft.getInstance(), event.getScrollDeltaY())) event.setCanceled(true);
         });
         NeoForge.EVENT_BUS.addListener((InputEvent.Key event) -> shortcut.input(
                 InputConstants.getKey(event.getKeyEvent()), event.getAction()));
@@ -62,6 +80,10 @@ final class NeoForgeArtisanClient {
                     hit, InteractionHand.MAIN_HAND));
             var listener = client.getConnection();
             var connection = listener == null ? null : listener.getConnection();
+            AccelerationClient.tick(client, connection != null && NeoForgeAccelerationNetwork.supported(connection),
+                    request -> NeoForgeAccelerationNetwork.send(connection, request), NeoForgeCosmicModes::flags,
+                    mode -> NeoForgeCosmicModesNetwork.send(connection, mode.bit()));
+            while (accelerationKey.consumeClick()) AccelerationClient.open(client);
             shortcut.tick(client, client.getWindow().handle(),
                     connection != null && NeoForgeCosmicModesNetwork.supported(connection),
                     stack -> CosmicArtisanAutoClick.flags(NeoForgeCosmicModes.flags(stack)), mode -> {

@@ -3,7 +3,7 @@
   "minVersion": "0.8",
   "package": "com.dishanhai.sh_common_lib.neoforge.mixin",
   "compatibilityLevel": "JAVA_21",
-  "mixins": ["CosmicArtisanPlayerMixin", "CosmicArtisanHarvestMixin", "CosmicArtisanLootMixin", "CosmicArtisanWrenchMixin"],
-  "client": ["NeoForgeLoadingOverlayMixin", "NeoForgeLevelLoadingScreenMixin", "NeoForgeAe2ClientSetupMixin", "BrewingIngredientSlotMixin"],
+  "mixins": ["CosmicArtisanPlayerMixin", "CosmicArtisanHarvestMixin", "CosmicArtisanLootMixin", "CosmicArtisanWrenchMixin", "ServerLevelWeatherInvoker"],
+  "client": ["NeoForgeLoadingOverlayMixin", "NeoForgeLevelLoadingScreenMixin", "NeoForgeAe2ClientSetupMixin", "BrewingIngredientSlotMixin", "AccelerationCloudMixin"],
   "injectors": {"defaultRequire": 1}
 }

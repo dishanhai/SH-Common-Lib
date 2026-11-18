@@ -71,6 +71,7 @@ public final class NeoForgeShCommonLib {
             }
         });
         modBus.addListener(NeoForgeBeaconNetwork::register);
+        modBus.addListener(NeoForgeAccelerationNetwork::register);
         ParcelStorage.register(modBus);
         NeoForgeArtisan.register(modBus);
         NeoForgeCosmicHorizon.register(modBus);

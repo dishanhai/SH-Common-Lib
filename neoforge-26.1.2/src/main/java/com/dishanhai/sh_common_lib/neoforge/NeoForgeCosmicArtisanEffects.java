@@ -43,6 +43,30 @@ final class NeoForgeCosmicArtisanEffects {
     private NeoForgeCosmicArtisanEffects() {}
 
     static void register() {
+        var acceleration = new NeoForgeAccelerationPlatform();
+        CosmicArtisanAcceleration.install(acceleration);
+        NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.event.tick.ServerTickEvent.Post event) -> {
+            CosmicArtisanAcceleration.tickServer(event.getServer());
+            acceleration.flushClocks();
+        });
+        NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.event.server.ServerStoppingEvent event) ->
+                CosmicArtisanAcceleration.shutdown(event.getServer()));
+        NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.event.entity.EntityJoinLevelEvent event) -> {
+            if (event.getLevel() instanceof ServerLevel level)
+                CosmicArtisanAcceleration.entityJoined(level, event.getEntity());
+        });
+        NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, (PlayerInteractEvent.EntityInteract event) -> {
+            if (accelerateNonLiving(event, event.getTarget())) {
+                event.setCancellationResult(net.minecraft.world.InteractionResult.SUCCESS);
+                event.setCanceled(true);
+            }
+        });
+        NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, (PlayerInteractEvent.EntityInteractSpecific event) -> {
+            if (accelerateNonLiving(event, event.getTarget())) {
+                event.setCancellationResult(net.minecraft.world.InteractionResult.SUCCESS);
+                event.setCanceled(true);
+            }
+        });
         NeoForge.EVENT_BUS.addListener(NeoForgeCosmicArtisanEffects::tick);
         NeoForge.EVENT_BUS.addListener(NeoForgeCosmicArtisanEffects::protect);
         NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, NeoForgeCosmicArtisanEffects::attack);
@@ -53,6 +77,12 @@ final class NeoForgeCosmicArtisanEffects {
         });
         NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, NeoForgeCosmicArtisanEffects::forceMine);
         NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, (PlayerInteractEvent.RightClickBlock event) -> {
+            if (event.getEntity() instanceof ServerPlayer player && event.getHand() == net.minecraft.world.InteractionHand.MAIN_HAND
+                    && CosmicArtisanModes.isActive(event.getItemStack()) && CosmicArtisanAcceleration.handleBlock(player, event.getPos())) {
+                event.setCancellationResult(net.minecraft.world.InteractionResult.SUCCESS);
+                event.setCanceled(true);
+                return;
+            }
             if (event.getEntity() instanceof ServerPlayer player && event.getLevel() instanceof ServerLevel level
                     && player.isShiftKeyDown() && NeoForgeCosmicStorage.bind(player, level, event.getPos(), event.getItemStack())) {
                 event.setCancellationResult(net.minecraft.world.InteractionResult.SUCCESS);
@@ -73,6 +103,16 @@ final class NeoForgeCosmicArtisanEffects {
                 event.setNewAboutToBeSetTarget(null);
             }
         });
+    }
+
+    private static boolean accelerateNonLiving(PlayerInteractEvent event, net.minecraft.world.entity.Entity target) {
+        if (event.getHand() != net.minecraft.world.InteractionHand.MAIN_HAND
+                || !(event.getEntity() instanceof ServerPlayer player)) return false;
+        var tool = player.getMainHandItem();
+        if (CosmicArtisanModes.isActive(tool) && CosmicArtisanAcceleration.isEditing(player)) return true;
+        if (target instanceof LivingEntity || !player.isShiftKeyDown()) return false;
+        return CosmicArtisanModes.isActive(tool) && Mode.TIME_ACCELERATION.enabled(NeoForgeCosmicModes.flags(tool))
+                && CosmicArtisanAcceleration.startEntity(player, target);
     }
 
     private static void tick(PlayerTickEvent.Post event) {

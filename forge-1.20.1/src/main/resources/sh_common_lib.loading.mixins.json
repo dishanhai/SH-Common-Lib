@@ -4,6 +4,6 @@
   "package": "com.dishanhai.sh_common_lib.forge.mixin",
   "compatibilityLevel": "JAVA_17",
   "mixins": ["CosmicArtisanPlayerMixin", "CosmicArtisanHarvestMixin", "CosmicArtisanLootMixin", "CosmicArtisanWrenchMixin"],
-  "client": ["ForgeLoadingOverlayMixin", "ForgeWorldOpenFlowsMixin", "ForgeLevelLoadingScreenMixin", "ForgeAe2ClientSetupMixin", "BrewingIngredientSlotMixin"],
+  "client": ["ForgeLoadingOverlayMixin", "ForgeWorldOpenFlowsMixin", "ForgeLevelLoadingScreenMixin", "ForgeAe2ClientSetupMixin", "BrewingIngredientSlotMixin", "AccelerationCloudMixin"],
   "injectors": {"defaultRequire": 1}
 }

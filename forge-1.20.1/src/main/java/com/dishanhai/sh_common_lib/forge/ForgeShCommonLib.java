@@ -65,6 +65,7 @@ public final class ForgeShCommonLib {
             }
         });
         ForgeBeaconNetwork.register();
+        ForgeAccelerationNetwork.register();
         ParcelStorage.register(modBus);
         ForgeArtisan.register(modBus);
         ForgeCosmicHorizon.register(modBus);

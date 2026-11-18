@@ -56,7 +56,10 @@ public final class CosmicArtisanShortcut {
             gesture.release(now);
         }
         switch (gesture.poll(now)) {
-            case OPEN_CONFIG -> client.setScreen(new CosmicArtisanScreen(read, toggle, aeAvailable.getAsBoolean(), false, bossPolicy, toggleBoss));
+            case OPEN_CONFIG -> {
+                AccelerationClient.openedConfig();
+                client.setScreen(new CosmicArtisanScreen(read, toggle, aeAvailable.getAsBoolean(), false, bossPolicy, toggleBoss));
+            }
             case OPEN_WHEEL -> {
                 wheel = new CosmicArtisanScreen(read, toggle, aeAvailable.getAsBoolean(), true, bossPolicy, toggleBoss);
                 client.setScreen(wheel);

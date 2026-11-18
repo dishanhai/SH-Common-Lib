@@ -46,6 +46,7 @@ public final class CosmicArtisanUse {
                                           Consumer<ItemStack> routeDrop) {
         Player player = context.getPlayer();
         if (player == null) return InteractionResult.PASS;
+        if (CosmicArtisanAcceleration.handleBlock(player, context.getClickedPos())) return InteractionResult.SUCCESS;
         if (context.getLevel().getBlockState(context.getClickedPos()).getBlock() instanceof CosmicBeaconBlock) return InteractionResult.PASS;
         var teleport = teleport(player, flags);
         if (teleport != InteractionResult.PASS) return teleport;
@@ -75,10 +76,11 @@ public final class CosmicArtisanUse {
     }
 
     public static InteractionResult interact(ItemStack stack, Player player, LivingEntity target, InteractionHand hand, int flags) {
+        if (CosmicArtisanAcceleration.isEditing(player)) return InteractionResult.SUCCESS;
         var teleport = teleport(player, flags);
         if (teleport != InteractionResult.PASS) return teleport;
         if (player.isShiftKeyDown()) {
-            if (Mode.ENTITY_ACCELERATION.enabled(flags)) {
+            if (Mode.TIME_ACCELERATION.enabled(flags)) {
                 return CosmicArtisanAcceleration.startEntity(player, target) ? InteractionResult.SUCCESS : InteractionResult.PASS;
             }
             if (!Mode.PROTECTION_LIST.enabled(flags) || target instanceof Player) return InteractionResult.PASS;
@@ -113,6 +115,9 @@ public final class CosmicArtisanUse {
     }
 
     public static InteractionResult useInAir(Player player, int flags) {
+        if (CosmicArtisanAcceleration.isEditing(player)) return InteractionResult.SUCCESS;
+        if (player.isShiftKeyDown() && Mode.TIME_ACCELERATION.enabled(flags)
+                && CosmicArtisanAcceleration.startWorld(player)) return InteractionResult.SUCCESS;
         var teleport = teleport(player, flags);
         return teleport == InteractionResult.PASS ? CosmicArtisanConstruction.useInAir(player, flags) : teleport;
     }

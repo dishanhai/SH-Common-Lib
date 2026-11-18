@@ -38,6 +38,28 @@ final class ForgeCosmicArtisanEffects {
     private ForgeCosmicArtisanEffects() {}
 
     static void register() {
+        CosmicArtisanAcceleration.install(new ForgeAccelerationPlatform());
+        MinecraftForge.EVENT_BUS.addListener((TickEvent.ServerTickEvent event) -> {
+            if (event.phase == TickEvent.Phase.END) CosmicArtisanAcceleration.tickServer(event.getServer());
+        });
+        MinecraftForge.EVENT_BUS.addListener((net.minecraftforge.event.server.ServerStoppingEvent event) ->
+                CosmicArtisanAcceleration.shutdown(event.getServer()));
+        MinecraftForge.EVENT_BUS.addListener((net.minecraftforge.event.entity.EntityJoinLevelEvent event) -> {
+            if (event.getLevel() instanceof ServerLevel level)
+                CosmicArtisanAcceleration.entityJoined(level, event.getEntity());
+        });
+        MinecraftForge.EVENT_BUS.addListener(EventPriority.LOWEST, (PlayerInteractEvent.EntityInteract event) -> {
+            if (accelerateNonLiving(event, event.getTarget())) {
+                event.setCancellationResult(net.minecraft.world.InteractionResult.SUCCESS);
+                event.setCanceled(true);
+            }
+        });
+        MinecraftForge.EVENT_BUS.addListener(EventPriority.LOWEST, (PlayerInteractEvent.EntityInteractSpecific event) -> {
+            if (accelerateNonLiving(event, event.getTarget())) {
+                event.setCancellationResult(net.minecraft.world.InteractionResult.SUCCESS);
+                event.setCanceled(true);
+            }
+        });
         MinecraftForge.EVENT_BUS.addListener(ForgeCosmicArtisanEffects::tick);
         MinecraftForge.EVENT_BUS.addListener(ForgeCosmicArtisanEffects::protect);
         MinecraftForge.EVENT_BUS.addListener((BlockEvent.BreakEvent event) -> {
@@ -54,6 +76,12 @@ final class ForgeCosmicArtisanEffects {
         });
         MinecraftForge.EVENT_BUS.addListener(EventPriority.LOWEST, ForgeCosmicArtisanEffects::forceMine);
         MinecraftForge.EVENT_BUS.addListener(EventPriority.LOWEST, (PlayerInteractEvent.RightClickBlock event) -> {
+            if (event.getEntity() instanceof ServerPlayer player && event.getHand() == net.minecraft.world.InteractionHand.MAIN_HAND
+                    && CosmicArtisanModes.isActive(event.getItemStack()) && CosmicArtisanAcceleration.handleBlock(player, event.getPos())) {
+                event.setCancellationResult(net.minecraft.world.InteractionResult.SUCCESS);
+                event.setCanceled(true);
+                return;
+            }
             if (event.getEntity() instanceof ServerPlayer player && event.getLevel() instanceof ServerLevel level
                     && player.isShiftKeyDown() && ForgeCosmicStorage.bind(player, level, event.getPos(), event.getItemStack())) {
                 event.setCancellationResult(net.minecraft.world.InteractionResult.SUCCESS);
@@ -81,6 +109,16 @@ final class ForgeCosmicArtisanEffects {
             if (event.getOriginal() instanceof ServerPlayer player) revokeFlight(player);
             if (event.getEntity() instanceof ServerPlayer player) revokeFlight(player);
         });
+    }
+
+    private static boolean accelerateNonLiving(PlayerInteractEvent event, net.minecraft.world.entity.Entity target) {
+        if (event.getHand() != net.minecraft.world.InteractionHand.MAIN_HAND
+                || !(event.getEntity() instanceof ServerPlayer player)) return false;
+        var tool = player.getMainHandItem();
+        if (CosmicArtisanModes.isActive(tool) && CosmicArtisanAcceleration.isEditing(player)) return true;
+        if (target instanceof LivingEntity || !player.isShiftKeyDown()) return false;
+        return CosmicArtisanModes.isActive(tool) && Mode.TIME_ACCELERATION.enabled(ForgeCosmicModes.flags(tool))
+                && CosmicArtisanAcceleration.startEntity(player, target);
     }
 
     private static void tick(TickEvent.PlayerTickEvent event) {
