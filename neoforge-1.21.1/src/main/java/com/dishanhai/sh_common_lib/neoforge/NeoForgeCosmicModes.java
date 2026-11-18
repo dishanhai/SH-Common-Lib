@@ -31,12 +31,27 @@ public final class NeoForgeCosmicModes {
                 tag.getBoolean(CosmicArtisanModes.BEACON_PROJECTION_TAG));
     }
 
+    static boolean emptyTeleport(ItemStack stack) {
+        var tag = stack.getOrDefault(DataComponents.CUSTOM_DATA, CustomData.EMPTY).copyTag();
+        return tag.getBoolean(CosmicArtisanModes.EMPTY_TELEPORT_TAG);
+    }
+
     static BossPolicy bossPolicy(ItemStack stack) {
         var data = stack.getOrDefault(DataComponents.CUSTOM_DATA, CustomData.EMPTY).copyTag();
         return data == null ? BossPolicy.NEUTRAL : BossPolicy.fromId(data.getInt(CosmicArtisanModes.BOSS_POLICY_TAG));
     }
 
     static void toggle(ServerPlayer player, int bit) {
+        if (bit == CosmicArtisanModes.EMPTY_TELEPORT_REQUEST) {
+            var tool = player.getMainHandItem();
+            if (player.isSpectator() || !CosmicArtisanModes.isActive(tool)) return;
+            boolean updated = !emptyTeleport(tool);
+            CustomData.update(DataComponents.CUSTOM_DATA, tool,
+                    tag -> tag.putBoolean(CosmicArtisanModes.EMPTY_TELEPORT_TAG, updated));
+            player.inventoryMenu.broadcastChanges();
+            if (player.containerMenu != player.inventoryMenu) player.containerMenu.broadcastChanges();
+            return;
+        }
         if (bit == BossPolicy.FRIENDLY.request() || bit == BossPolicy.HOSTILE.request()) {
             var tool = player.getMainHandItem();
             if (!player.isSpectator() && CosmicArtisanModes.isActive(tool)) toggleBoss(player, tool, BossPolicy.fromId(-bit));

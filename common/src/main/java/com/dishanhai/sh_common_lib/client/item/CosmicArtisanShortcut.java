@@ -39,7 +39,7 @@ public final class CosmicArtisanShortcut {
 
     public void tick(Minecraft client, long window, boolean supported, ToIntFunction<ItemStack> read,
                      Consumer<Mode> toggle, BooleanSupplier aeAvailable, Function<ItemStack, BossPolicy> bossPolicy,
-                     Consumer<BossPolicy> toggleBoss) {
+                     Consumer<BossPolicy> toggleBoss, Runnable toggleEmptyTeleport) {
         while (mapping.consumeClick()) {
             // Raw press and release events retain the timing even while the wheel is open.
         }
@@ -58,10 +58,12 @@ public final class CosmicArtisanShortcut {
         switch (gesture.poll(now)) {
             case OPEN_CONFIG -> {
                 AccelerationClient.openedConfig();
-                client.setScreen(new CosmicArtisanScreen(read, toggle, aeAvailable.getAsBoolean(), false, bossPolicy, toggleBoss));
+                client.setScreen(new CosmicArtisanScreen(read, toggle, aeAvailable.getAsBoolean(), false, bossPolicy, toggleBoss,
+                        toggleEmptyTeleport));
             }
             case OPEN_WHEEL -> {
-                wheel = new CosmicArtisanScreen(read, toggle, aeAvailable.getAsBoolean(), true, bossPolicy, toggleBoss);
+                wheel = new CosmicArtisanScreen(read, toggle, aeAvailable.getAsBoolean(), true, bossPolicy, toggleBoss,
+                        toggleEmptyTeleport);
                 client.setScreen(wheel);
             }
             case CLOSE_WHEEL -> {

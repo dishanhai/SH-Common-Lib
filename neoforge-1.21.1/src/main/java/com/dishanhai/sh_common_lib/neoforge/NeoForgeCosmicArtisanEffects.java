@@ -43,6 +43,7 @@ final class NeoForgeCosmicArtisanEffects {
     private NeoForgeCosmicArtisanEffects() {}
 
     static void register() {
+        CosmicArtisanModes.installEmptyTeleportReader(NeoForgeCosmicModes::emptyTeleport);
         CosmicArtisanAcceleration.install(new NeoForgeAccelerationPlatform());
         NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.event.tick.ServerTickEvent.Post event) ->
                 CosmicArtisanAcceleration.tickServer(event.getServer()));

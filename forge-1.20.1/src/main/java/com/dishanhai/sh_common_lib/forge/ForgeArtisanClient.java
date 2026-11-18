@@ -15,6 +15,7 @@ import com.dishanhai.sh_common_lib.client.item.AccelerationInput;
 import com.dishanhai.sh_common_lib.client.item.AccelerationWorldMarkers;
 import com.dishanhai.sh_common_lib.client.item.AccelerationWorldRenderer;
 import com.dishanhai.sh_common_lib.client.item.CosmicArtisanAutoClick;
+import com.dishanhai.sh_common_lib.internal.item.CosmicArtisanModes;
 import com.dishanhai.sh_common_lib.internal.item.CosmicArtisanModes.Mode;
 import net.minecraft.world.InteractionHand;
 import com.mojang.blaze3d.platform.InputConstants;
@@ -101,7 +102,8 @@ final class ForgeArtisanClient {
                         if (mode == Mode.AUTO_CLICK) CosmicArtisanAutoClick.toggle();
                         else ForgeCosmicModesNetwork.send(connection, mode.bit());
                     }, ForgeCosmicStorage::available, ForgeCosmicModes::bossPolicy,
-                    policy -> ForgeCosmicModesNetwork.send(connection, policy.request()));
+                    policy -> ForgeCosmicModesNetwork.send(connection, policy.request()),
+                    () -> ForgeCosmicModesNetwork.send(connection, CosmicArtisanModes.EMPTY_TELEPORT_REQUEST));
         });
     }
 

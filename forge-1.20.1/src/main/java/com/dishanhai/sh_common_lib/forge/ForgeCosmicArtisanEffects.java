@@ -38,6 +38,7 @@ final class ForgeCosmicArtisanEffects {
     private ForgeCosmicArtisanEffects() {}
 
     static void register() {
+        CosmicArtisanModes.installEmptyTeleportReader(ForgeCosmicModes::emptyTeleport);
         CosmicArtisanAcceleration.install(new ForgeAccelerationPlatform());
         MinecraftForge.EVENT_BUS.addListener((TickEvent.ServerTickEvent event) -> {
             if (event.phase == TickEvent.Phase.END) CosmicArtisanAcceleration.tickServer(event.getServer());

@@ -9,6 +9,7 @@ import com.dishanhai.sh_common_lib.client.item.AccelerationClient;
 import com.dishanhai.sh_common_lib.client.item.AccelerationInput;
 import com.dishanhai.sh_common_lib.client.item.AccelerationWorldRenderer;
 import com.dishanhai.sh_common_lib.client.item.CosmicArtisanAutoClick;
+import com.dishanhai.sh_common_lib.internal.item.CosmicArtisanModes;
 import com.dishanhai.sh_common_lib.internal.item.CosmicArtisanModes.Mode;
 import net.minecraft.world.InteractionHand;
 import com.mojang.blaze3d.platform.InputConstants;
@@ -90,7 +91,8 @@ final class NeoForgeArtisanClient {
                         if (mode == Mode.AUTO_CLICK) CosmicArtisanAutoClick.toggle();
                         else NeoForgeCosmicModesNetwork.send(connection, mode.bit());
                     }, NeoForgeCosmicStorage::available, NeoForgeCosmicModes::bossPolicy,
-                    policy -> NeoForgeCosmicModesNetwork.send(connection, policy.request()));
+                    policy -> NeoForgeCosmicModesNetwork.send(connection, policy.request()),
+                    () -> NeoForgeCosmicModesNetwork.send(connection, CosmicArtisanModes.EMPTY_TELEPORT_REQUEST));
         });
     }
 

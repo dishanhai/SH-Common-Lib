@@ -5,33 +5,28 @@ import com.dishanhai.sh_better_ui.client.api.ShBetterUiApi;
 import com.dishanhai.sh_better_ui.client.glass.LiquidGlassSurface;
 import com.dishanhai.sh_better_ui.client.gui.display.GraphicDisplayLayout.Bounds;
 import com.dishanhai.sh_better_ui.client.gui.display.GraphicIcon;
-import com.dishanhai.sh_better_ui.client.gui.scaled.InterruptibleAnimation;
-import com.dishanhai.sh_better_ui.client.gui.scaled.PointerDrag;
-import com.dishanhai.sh_better_ui.client.gui.scaled.RoundedCorners;
-import com.dishanhai.sh_better_ui.client.gui.scaled.Spring;
-import com.dishanhai.sh_better_ui.client.gui.scaled.UiButton;
-import com.dishanhai.sh_better_ui.client.gui.scaled.UiPreferences;
-import com.dishanhai.sh_better_ui.client.gui.scaled.UiScrollableSectionBar;
-import com.dishanhai.sh_better_ui.client.gui.scaled.UiSectionBar;
-import com.dishanhai.sh_better_ui.client.gui.scaled.UiStyle;
-import com.dishanhai.sh_better_ui.client.gui.scaled.UiToggleButton;
+import com.dishanhai.sh_better_ui.client.gui.scaled.*;
 import com.dishanhai.sh_better_ui.client.gui.text.UiHudRichText;
+import com.dishanhai.sh_better_ui.kernel.api.layout.SettingsPanelLayout;
+import com.dishanhai.sh_better_ui.kernel.api.layout.SettingsPanelLayout.Rect;
+import com.dishanhai.sh_better_ui.kernel.api.layout.RadialMenuLayout;
 import com.dishanhai.sh_better_ui.kernel.api.screen.LayeredScreen;
-import com.dishanhai.sh_better_ui.kernel.api.text.TextReadabilityPalette;
-import com.dishanhai.sh_common_lib.internal.item.CosmicArtisanModes;
 import com.dishanhai.sh_common_lib.client.beacon.BeaconClient;
+import com.dishanhai.sh_common_lib.client.item.CosmicArtisanMenu.Group;
+import com.dishanhai.sh_common_lib.client.item.CosmicArtisanMenu.Option;
+import com.dishanhai.sh_common_lib.internal.item.CosmicArtisanModes;
 import com.dishanhai.sh_common_lib.internal.item.CosmicArtisanModes.Mode;
 import com.dishanhai.sh_common_lib.internal.item.CosmicArtisanModes.BossPolicy;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
+import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.world.item.ItemStack;
 import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
-import java.util.EnumMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -40,705 +35,492 @@ import java.util.function.Function;
 import java.util.function.ToIntFunction;
 import java.util.stream.Collectors;
 
+/** Apple-style grouped settings and a six-position wheel share one option catalog. */
 public final class CosmicArtisanScreen extends LayeredScreen {
-    private static final int BUTTON_HEIGHT = 20;
-    private static final int ROW = 24;
-    private static final int CLOSE_WIDTH = 44;
-    private static final List<Group> DEFAULT_GROUPS = List.of(
-            new Group("tools", GraphicIcon.TOOL, List.of(Mode.SILK_TOUCH, Mode.FORTUNE)),
-            new Group("combat", GraphicIcon.CRITICAL_WARNING, List.of(Mode.HOSTILE_FRIENDLY, Mode.FORCE_KILL, Mode.BEHEADING, Mode.CAPTURE, Mode.AREA_DAMAGE,
-                    Mode.KILL_AURA, Mode.PROTECTION_LIST)),
-            new Group("auxiliary", GraphicIcon.SETTINGS, List.of(Mode.TIME_ACCELERATION, Mode.ENTITY_ACCELERATION, Mode.PLAYER_PROTECTION,
-                    Mode.ADVANCED_STEALTH, Mode.MAGNET, Mode.AUTO_CLICK)),
-            new Group("travel", GraphicIcon.GOAL, List.of(Mode.TELEPORT, Mode.BEACON_HUD)),
-            new Group("mining", GraphicIcon.BLOCK, List.of(Mode.CONSTRUCTION_WAND, Mode.ANGEL_CORE, Mode.DESTRUCTION_CORE,
-                    Mode.CHAIN_MINING, Mode.FORCE_MINING, Mode.AUTO_SMELT, Mode.AE_STORAGE_PRIORITY, Mode.AE_LINK, Mode.WRENCH_TAG)),
-            new Group("vanilla", GraphicIcon.MINECRAFT, List.of(Mode.HOE_PRIORITY, Mode.CROP_HARVEST, Mode.SHEARS, Mode.FLINT_AND_STEEL,
-                    Mode.RIPEN, Mode.FORCE_GROW)));
-
-    private static final Group QUICK_GROUP = new Group("quick", GraphicIcon.QUICK, List.of(
-            Mode.FORCE_KILL, Mode.SILK_TOUCH, Mode.FORTUNE, Mode.CHAIN_MINING, Mode.AUTO_SMELT, Mode.MAGNET));
-    private static final int WHEEL_CAPACITY = 6;
-    private static final List<WheelSlot> WHEEL_SLOTS = List.of(
-            new WheelSlot(0, -2), new WheelSlot(-1, -1), new WheelSlot(1, -1),
-            new WheelSlot(-1, 1), new WheelSlot(1, 1), new WheelSlot(0, 2));
-
+    private static final long CONFIRM_MS = 3000;
     private final ToIntFunction<ItemStack> read;
     private final Consumer<Mode> toggle;
-    private final boolean wheel;
-    private final List<Group> groups;
     private final Function<ItemStack, BossPolicy> readBossPolicy;
     private final Consumer<BossPolicy> toggleBossPolicy;
-    private UiButton beaconDestinations;
-    private BossPolicy bossPolicy = BossPolicy.NEUTRAL;
-    private final EnumMap<BossPolicy, UiButton> bossButtons = new EnumMap<>(BossPolicy.class);
-    private final EnumMap<Mode, UiButton> buttons = new EnumMap<>(Mode.class);
-    private final EnumMap<Mode, UiToggleButton> toggles = new EnumMap<>(Mode.class);
-    private final List<UiButton> navigation = new ArrayList<>();
-    private final Map<UiButton, Integer> buttonPositions = new LinkedHashMap<>();
-    private final List<UiButton> configPageButtons = new ArrayList<>();
-    private final InterruptibleAnimation appearance =
-            new InterruptibleAnimation(new Spring.Preset(0.24, 0.95, 0.001F, 0.001F));
-    private final InterruptibleAnimation pageAppearance =
-            new InterruptibleAnimation(new Spring.Preset(0.24, 0.95, 0.001F, 0.001F), 1.0F);
-    private UiScrollableSectionBar groupTabs;
-    private UiButton layoutButton;
+    private final Runnable toggleEmptyTeleport;
+    private final boolean wheel;
+    private final List<Group> groups;
+    private final Map<Option, UiSwitchRow> switches = new LinkedHashMap<>();
+    private final Map<Option, UiButton> actionButtons = new LinkedHashMap<>();
+    private final Map<Option, Pending> pending = new LinkedHashMap<>();
+    private final Map<UiButton, Integer> sorting = new LinkedHashMap<>();
+    private final Map<UiButton, Rect> sortBounds = new LinkedHashMap<>();
     private final PointerDrag groupDrag = new PointerDrag();
-    private final TextReadabilityPalette textPalette = new TextReadabilityPalette();
+    private final InterruptibleAnimation appearance =
+            new InterruptibleAnimation(new Spring.Preset(.24, 1, .001f, .001f), .6f);
+    private UiNavigationRail navigation;
+    private UiScrollableSectionBar tabs;
+    private SettingsPanelLayout layout;
+    private RadialMenuLayout radial;
+    private Rect wheelArea;
     private List<Group> undoOrder = List.of();
-    private int draggedGroup = -1;
-    private int dropGroup = -1;
-    private boolean swallowRelease;
-    private boolean layoutSaveFailed;
-    private boolean sidebar;
-    private int navX;
-    private int navY;
-    private int navStep;
-    private int navButtonWidth;
-    private boolean entered;
-    private boolean editing;
-    private int flags;
-    private int activeGroup;
-    private int page;
-    private int pageCount;
-    private int left;
-    private int top;
-    private int panelWidth;
-    private int panelHeight;
-    private int contentX;
-    private int contentY;
-    private int contentWidth;
-    private int offset;
-    private float opacity;
-    private int pageOffset;
-    private float pageOpacity;
-    private int wheelCenterY;
+    private int activeGroup, page, pageCount = 1, editPage, editCapacity;
+    private int flags, draggedGroup = -1, dropGroup = -1;
+    private int sortFocusIndex = -1, pageFocusDirection;
+    private BossPolicy bossPolicy = BossPolicy.NEUTRAL;
+    private boolean allowEmpty, editing, tiny, entered, restoreNavigationFocus, saveFailed;
+    private String result = "";
+    private long resultUntil;
+    private record Pending(boolean expected, long deadline) {}
 
     CosmicArtisanScreen(ToIntFunction<ItemStack> read, Consumer<Mode> toggle, boolean aeAvailable, boolean wheel,
-                        Function<ItemStack, BossPolicy> readBossPolicy, Consumer<BossPolicy> toggleBossPolicy) {
+                        Function<ItemStack, BossPolicy> readBossPolicy, Consumer<BossPolicy> toggleBossPolicy,
+                        Runnable toggleEmptyTeleport) {
         super(label(wheel ? "wheel_title" : "title"));
-        this.read = read;
-        this.toggle = toggle;
-        this.wheel = wheel;
-        this.readBossPolicy = readBossPolicy;
-        this.toggleBossPolicy = toggleBossPolicy;
-        this.groups = readGroupOrder(aeAvailable);
-        if (wheel) {
-            groups.add(0, QUICK_GROUP);
-        } else {
-            var position = ArtisanAppearancePreferences.configPosition();
-            for (int i = 0; i < groups.size(); i++) {
-                if (groups.get(i).name().equals(position.group())) {
-                    activeGroup = i;
-                    page = position.page();
-                    break;
-                }
+        this.read = read; this.toggle = toggle; this.wheel = wheel;
+        this.readBossPolicy = readBossPolicy; this.toggleBossPolicy = toggleBossPolicy;
+        this.toggleEmptyTeleport = toggleEmptyTeleport;
+        groups = CosmicArtisanMenu.groups(aeAvailable, wheel);
+        if (!wheel) {
+            var saved = ArtisanAppearancePreferences.configPosition();
+            for (int i = 0; i < groups.size(); i++) if (groups.get(i).name().equals(saved.group())) {
+                activeGroup = i; page = saved.page(); break;
             }
         }
     }
 
-    @Override
-    protected void init() {
-        cancelDrag();
-        flags = minecraft.player == null ? 0 : read.applyAsInt(minecraft.player.getMainHandItem());
-        bossPolicy = minecraft.player == null ? BossPolicy.NEUTRAL : readBossPolicy.apply(minecraft.player.getMainHandItem());
-        clearOptions();
-        cancelTabDrag();
-        groupTabs = null;
-        navigation.clear();
-        buttonPositions.clear();
-        configPageButtons.clear();
-        pageAppearance.snapTo(1.0F);
-        if (wheel) layoutWheel();
-        else layoutConfig();
-        if (!entered) {
-            entered = true;
-            appearance.snapTo(0.30F);
-            appearance.blendTo(1.0F, now(), 0, 180, InterruptibleAnimation.BlendCurve.SMOOTHSTEP);
-        }
+    @Override protected void init() {
+        cancelInteractions();
+        if (navigation != null) navigation.close();
+        navigation = null; tabs = null;
+        switches.clear(); actionButtons.clear(); sorting.clear(); sortBounds.clear();
+        readState();
+        tiny = width < 180 || height < 180;
+        if (tiny) { button(new Rect(8, Math.max(8, height - 30), Math.max(20, width - 16), 22), label("close"), this::onClose); return; }
+        if (wheel) layoutWheel(); else layoutSettings();
+        if (!entered) { entered = true; appearance.animateTo(1, now()); }
     }
 
-    private void layoutConfig() {
-        panelWidth = Math.min(486, width - 12);
-        panelHeight = Math.min(224, height - 12);
-        left = (width - panelWidth) / 2;
-        top = (height - panelHeight) / 2;
-        sidebar = panelWidth >= 345 && panelHeight >= 204;
-        int navWidth = 90;
-        navX = left + 8;
-        navY = top + 32;
-        navStep = sidebar ? ROW : (panelWidth - 14) / groups.size();
-        navButtonWidth = sidebar ? navWidth : navStep - 2;
-        contentX = sidebar ? navX + navWidth + 10 : navX;
-        contentY = sidebar ? navY : navY + BUTTON_HEIGHT + 6;
-        contentWidth = left + panelWidth - 8 - contentX;
-        addButton(left + panelWidth - CLOSE_WIDTH - 8, top + 7, CLOSE_WIDTH, label("close"), this::onClose);
-        if (!sidebar && !editing && contentWidth >= GraphicIcon.PIXELS) {
-            var sections = groups.stream()
-                    .map(group -> new UiSectionBar.Section(label(group.name()), group.icon())).toList();
-            groupTabs = addRenderableWidget(ShBetterUiApi.controls().jellySectionBar(
-                    new Bounds(navX, navY, contentWidth, BUTTON_HEIGHT), UiPreferences.configured(),
-                    sections, activeGroup, this::selectGroup));
-        } else {
-            layoutGroupButtons();
+    private void layoutSettings() {
+        layout = SettingsPanelLayout.of(width, height, groups.size());
+        var panel = layout.panel();
+        var close = button(new Rect(panel.right() - 34, panel.y() + 10, 22, 22), label("close"), this::onClose);
+        close.setIcon(GraphicIcon.CLOSE);
+        if (editing) layoutSorting();
+        else {
+            layoutNavigation(layout.navigation(), layout.sidebar());
+            int capacity = layout.capacity();
+            var options = group().options();
+            pageCount = Math.max(1, (options.size() + capacity - 1) / capacity);
+            page = Math.min(page, pageCount - 1);
+            for (int i = page * capacity; i < Math.min(options.size(), (page + 1) * capacity); i++) {
+                var rect = layout.row(i - page * capacity);
+                addSetting(options.get(i), rect, i + 1 == Math.min(options.size(), (page + 1) * capacity));
+            }
         }
-        int footer = top + panelHeight - BUTTON_HEIGHT - 8;
-        layoutButton = addButton(left + 8, footer, 82, label(editing ? "confirm_layout" : "edit_layout"), () -> {
-            editing = !editing;
-            rebuildWidgets();
-            setFocused(layoutButton);
-        });
-        layoutButton.setLeadingIcon(editing ? GraphicIcon.SAVE : GraphicIcon.EDIT);
-        if (editing) {
-            var undo = addButton(left + panelWidth - 72, footer, 64, label("undo_layout"), this::undoLayout);
-            undo.setLeadingIcon(GraphicIcon.UNDO);
-            undo.active = !undoOrder.isEmpty();
-            addRenderableOnly((graphics, x, y, tick) -> renderDraggedGroup(graphics));
-        } else {
-            layoutConfigPage();
-        }
+        var footer = layout.footer();
+        button(new Rect(footer.x(), footer.y(), 82, 22), label(editing ? "confirm_layout" : "edit_layout"), () -> {
+            editing = !editing; editPage = 0; rebuildWidgets();
+        }).setLeadingIcon(editing ? GraphicIcon.SAVE : GraphicIcon.EDIT);
+        if (editing) button(new Rect(footer.x() + 88, footer.y(), 58, 22), label("undo_layout"), this::undoLayout).active = !undoOrder.isEmpty();
+        pageButtons(footer.right() - 92, footer.y());
+        updateControls();
     }
 
-    private void layoutGroupButtons() {
-        for (int i = 0; i < groups.size(); i++) {
-            int index = i;
-            var title = label(groups.get(i).name());
-            var group = addButton(groupX(i), groupY(i), navButtonWidth,
-                    editing ? label("drag_group", title) : title, () -> selectGroup(index));
-            if (editing) group.setPreview(UiHudRichText.prepare(label("drag_group_hint", title)));
-            else if (sidebar) group.setLeadingIcon(groups.get(i).icon());
-            group.setSelected(i == activeGroup);
-            navigation.add(group);
-        }
-    }
-
-    private void layoutConfigPage() {
-        int footer = top + panelHeight - BUTTON_HEIGHT - 8;
-        int columns = contentWidth >= 258 ? 2 : 1;
-        int firstRow = contentY + 19;
-        int capacity = columns * Math.max(1, (footer - firstRow - 3) / ROW);
-        var selected = groups.get(activeGroup);
-        int options = selected.optionCount();
-        int pages = (options + capacity - 1) / capacity;
-        page = Math.min(page, pages - 1);
-        int first = page * capacity;
-        int slot = (contentWidth + 4) / columns;
-        for (int i = first; i < Math.min(first + capacity, options); i++) {
-            int cell = i - first;
-            configPageButtons.add(addOption(selected, i,
-                    contentX + cell % columns * slot, firstRow + cell / columns * ROW, slot - 4));
-        }
-        if (pages > 1) {
-            int right = left + panelWidth - 8;
-            var previous = addButton(right - 100, footer, 26, label("previous_page_label"), () -> changePage(-1));
-            var next = addButton(right - 26, footer, 26, label("next_page_label"), () -> changePage(1));
-            previous.setIcon(GraphicIcon.PREVIOUS);
-            next.setIcon(GraphicIcon.NEXT);
-            previous.active = page > 0;
-            next.active = page + 1 < pages;
-            configPageButtons.add(previous);
-            configPageButtons.add(next);
-            pageCount = pages;
+    private void layoutNavigation(Rect area, boolean sidebar) {
+        if (sidebar) {
+            navigation = addRenderableWidget(ShBetterUiApi.controls().navigationRail(font, bounds(area), label("title"),
+                    groups.stream().map(group -> new UiNavigationRail.Item(label(group.name()), group.icon())).toList(),
+                    activeGroup, UiNavigationRail.Orientation.VERTICAL, UiPreferences.configured(), this::selectGroup));
+            if (restoreNavigationFocus) setFocused(navigation);
         } else {
-            pageCount = 0;
+            tabs = addRenderableWidget(ShBetterUiApi.controls().jellySectionBar(bounds(area), UiPreferences.configured(),
+                    groups.stream().map(group -> new UiSectionBar.Section(label(group.name()), group.icon())).toList(),
+                    activeGroup, this::selectGroup));
+            if (restoreNavigationFocus) { tabs.focus(activeGroup); setFocused(tabs); }
         }
+        restoreNavigationFocus = false;
     }
 
     private void layoutWheel() {
-        int columns = width >= 430 ? groups.size() : 4;
-        int navWidth = Math.min(width - 16, columns * 74);
-        int slot = navWidth / columns;
-        int rows = (groups.size() + columns - 1) / columns;
-        int navX = (width - slot * columns) / 2;
-        int navY = height - rows * ROW - 3;
-        int centerX = width / 2;
-        wheelCenterY = (navY - 4) / 2;
-        panelWidth = Math.min(176, Math.min(width - 28, navY - 10));
-        panelHeight = panelWidth;
-        left = centerX - panelWidth / 2;
-        top = wheelCenterY - panelHeight / 2;
-        for (int i = 0; i < groups.size(); i++) {
-            int index = i;
-            var button = addButton(navX + i % columns * slot, navY + i / columns * ROW,
-                    slot - 3, label(groups.get(i).name()), () -> selectGroup(index));
-            button.setSelected(i == activeGroup);
-            navigation.add(button);
-        }
-
-        var selected = groups.get(activeGroup);
-        int options = selected.optionCount();
-        pageCount = (options + WHEEL_CAPACITY - 1) / WHEEL_CAPACITY;
+        wheelArea = new Rect(8, 32, width - 16, height - 72);
+        int count = group().options().size();
+        pageCount = Math.max(1, (count + 5) / 6);
         page = Math.min(page, pageCount - 1);
-        int first = page * WHEEL_CAPACITY;
-        int centerGap = Math.min(102, width / 3);
-        int buttonWidth = Math.min(138, (width - centerGap - 16) / 2);
-        int side = (centerGap + buttonWidth) / 2;
-        int end = Math.min(options, first + WHEEL_CAPACITY);
-        int pitch = Math.min(65, (navY - BUTTON_HEIGHT - 10) / 2);
-        int centerWidth = pitch < 39 ? Math.min(buttonWidth, centerGap - 4) : buttonWidth;
+        int first = page * 6, end = Math.min(first + 6, count);
+        radial = RadialMenuLayout.of(wheelArea.width(), wheelArea.height(), end - first);
         for (int i = first; i < end; i++) {
-            WheelSlot position = WHEEL_SLOTS.get(i - first);
-            int y = switch (position.y()) {
-                case -2 -> -pitch;
-                case 2 -> pitch;
-                default -> position.y() * (BUTTON_HEIGHT / 2 + 7);
-            };
-            int optionWidth = position.x() == 0 ? centerWidth : buttonWidth;
-            addOption(selected, i, centerX + position.x() * side - optionWidth / 2,
-                    wheelCenterY + y - BUTTON_HEIGHT / 2, optionWidth);
+            var local = radial.slots().get(i - first);
+            var area = new Rect(wheelArea.x() + local.x(), wheelArea.y() + local.y(), local.width(), local.height());
+            var option = group().options().get(i);
+            var control = button(area, optionTitle(option), () -> activate(option));
+            control.setLeadingIcon(group().icon());
+            actionButtons.put(option, control);
         }
-        if (pageCount > 1) {
-            int y = wheelCenterY - BUTTON_HEIGHT / 2;
-            int arrowWidth = 20;
-            int space = centerGap / 2 - 2;
-            addButton(centerX - space, y, arrowWidth, label("previous_page"), () -> changePage(-1)).active = page > 0;
-            addButton(centerX + space - arrowWidth, y, arrowWidth, label("next_page"), () -> changePage(1)).active =
-                    page + 1 < pageCount;
-        }
+        layoutNavigation(new Rect(12, height - 29, width - 24, 22), false);
+        if (pageCount > 1) pageButtons(width - 102, 7);
+        else button(new Rect(width - 30, 7, 22, 22), label("close"), this::onClose).setIcon(GraphicIcon.CLOSE);
+        updateControls();
     }
 
-    private UiButton addButton(int x, int y, int buttonWidth, Component title, Runnable action) {
-        var button = new UiButton(x, y, buttonWidth, BUTTON_HEIGHT, UiHudRichText.prepare(title),
-                ignored -> action.run(), UiPreferences.configured(), false, UiStyle.LIQUID_GLASS);
-        return registerButton(button, y);
-    }
-
-    private UiButton registerButton(UiButton button, int y) {
-        button.setSampleBackground(false);
-        button.setY(y + offset);
-        buttonPositions.put(button, y);
-        return addRenderableWidget(button);
-    }
-
-    private UiButton addOption(Group group, int index, int x, int y, int buttonWidth) {
-        if (index < group.modes().size()) return addMode(group.modes().get(index), x, y, buttonWidth);
-        if (group.name().equals("travel")) {
-            beaconDestinations = addButton(x, y, buttonWidth, label("beacon_destinations"),
-                    () -> BeaconClient.openDestinations(wheel ? null : this));
-            setFunctionPreview(beaconDestinations, label("beacon_destinations"), label("beacon_destinations_hint"));
-            if (!wheel) beaconDestinations.setLeadingIcon(GraphicIcon.GOAL);
-            return beaconDestinations;
-        }
-        var policy = index == group.modes().size() ? BossPolicy.FRIENDLY : BossPolicy.HOSTILE;
-        var button = addButton(x, y, buttonWidth, bossLabel(policy), () -> toggleBossPolicy.accept(policy));
-        bossButtons.put(policy, button);
-        updateBossButton(policy, button);
-        return button;
-    }
-
-    private UiButton addMode(Mode mode, int x, int y, int buttonWidth) {
-        UiButton button;
-        if (wheel) {
-            button = addButton(x, y, buttonWidth, modeLabel(mode), () -> toggle.accept(mode));
+    private void addSetting(Option option, Rect rect, boolean last) {
+        if (option.toggle()) {
+            var control = addRenderableWidget(new UiSwitchRow(bounds(rect), optionTitle(option), optionHint(option),
+                    enabled(option), UiPreferences.configured(), ignored -> activate(option)));
+            control.setDivider(!last);
+            switches.put(option, control);
         } else {
-            var control = ShBetterUiApi.controls().toggle(new Bounds(x, y, buttonWidth, BUTTON_HEIGHT),
-                    mode.enabled(flags), UiPreferences.configured(), UiStyle.LIQUID_GLASS,
-                    enabled -> UiHudRichText.prepare(message(mode, enabled)), ignored -> toggle.accept(mode));
-            if (mode == Mode.HOE_PRIORITY) control.setIcons(GraphicIcon.SWITCH, GraphicIcon.SWITCH);
-            else control.setIcons(GraphicIcon.ENABLE, GraphicIcon.DISABLE);
-            toggles.put(mode, control);
-            button = registerButton(control.button(), y);
+            var control = button(new Rect(rect.x() + 4, rect.y() + 4, rect.width() - 8, rect.height() - 8),
+                    optionTitle(option), () -> activate(option));
+            control.setLeadingIcon(option.kind() == CosmicArtisanMenu.Kind.BEACONS ? GraphicIcon.GOAL : GraphicIcon.SETTINGS);
+            control.setPreview(UiHudRichText.prepare(optionTitle(option).copy().append("\n").append(optionHint(option))));
+            actionButtons.put(option, control);
         }
-        updateModeButton(mode, button);
-        buttons.put(mode, button);
-        return button;
+    }
+
+    private void pageButtons(int x, int y) {
+        var previous = button(new Rect(x, y, 24, 22), label("previous_page"), () -> changePage(-1));
+        var next = button(new Rect(x + 68, y, 24, 22), label("next_page"), () -> changePage(1));
+        previous.setIcon(GraphicIcon.PREVIOUS); next.setIcon(GraphicIcon.NEXT);
+        int current = editing ? editPage : page;
+        previous.active = current > 0; next.active = current + 1 < pageCount;
+        if (pageFocusDirection != 0) {
+            setFocused(pageFocusDirection > 0 && next.active ? next : previous.active ? previous : next);
+            pageFocusDirection = 0;
+        }
+    }
+
+    private UiButton button(Rect rect, Component label, Runnable action) {
+        var control = ShBetterUiApi.controls().button(bounds(rect), UiHudRichText.prepare(label),
+                ignored -> action.run(), UiPreferences.configured(), false, UiStyle.LIQUID_GLASS);
+        control.setSampleBackground(false);
+        return addRenderableWidget(control);
     }
 
     private void selectGroup(int index) {
-        if (activeGroup == index) return;
-        activeGroup = index;
-        page = 0;
-        if (wheel || editing) {
-            rebuildWidgets();
-        } else {
-            changeConfigPage();
-        }
-        if (groupTabs != null) {
-            groupTabs.focus(index);
-            setFocused(groupTabs);
-        } else {
-            setFocused(navigation.get(index));
-        }
+        if (index == activeGroup) return;
+        activeGroup = index; page = 0; restoreNavigationFocus = true; rememberPosition(); rebuildWidgets();
     }
-
     private void changePage(int direction) {
-        page += direction;
-        if (wheel) rebuildWidgets();
-        else changeConfigPage();
-        if (beaconDestinations != null && buttons.isEmpty()) setFocused(beaconDestinations);
-        else if (!buttons.isEmpty()) setFocused(buttons.values().iterator().next());
-        else if (!bossButtons.isEmpty()) setFocused(bossButtons.values().iterator().next());
+        int current = editing ? editPage : page;
+        int next = Math.max(0, Math.min(pageCount - 1, current + direction));
+        if (next == current) return;
+        cancelInteractions();
+        pageFocusDirection = direction;
+        if (editing) editPage = next; else { page = next; rememberPosition(); }
+        rebuildWidgets();
     }
 
-    private void changeConfigPage() {
-        for (var button : configPageButtons) {
-            if (getFocused() == button) setFocused(null);
-            removeWidget(button);
-            buttonPositions.remove(button);
+    private void activate(Option option) {
+        if (!available(option) || pending.containsKey(option)) return;
+        if (!option.toggle()) {
+            if (option.kind() == CosmicArtisanMenu.Kind.BEACONS) BeaconClient.openDestinations(wheel ? null : this);
+            else AccelerationClient.open(minecraft);
+            return;
         }
-        configPageButtons.clear();
-        clearOptions();
-        for (int i = 0; i < navigation.size(); i++) navigation.get(i).setSelected(i == activeGroup);
-        layoutConfigPage();
-        pageAppearance.snapTo(0.55F);
-        pageAppearance.blendTo(1.0F, now(), 0, 160, InterruptibleAnimation.BlendCurve.SMOOTHSTEP);
-    }
-
-    private void clearOptions() {
-        buttons.clear();
-        toggles.clear();
-        bossButtons.clear();
-        beaconDestinations = null;
-    }
-
-    private void moveGroup(int from, int to) {
-        if (to < 0 || to >= groups.size() || from == to) return;
-        var reordered = new ArrayList<>(groups);
-        Group group = reordered.remove(from);
-        reordered.add(to, group);
-        var previous = List.copyOf(groups);
-        if (saveOrder(reordered, group)) {
-            undoOrder = previous;
-            rebuildWidgets();
-            setFocused(navigation.get(activeGroup));
+        pending.put(option, new Pending(!enabled(option), now() + CONFIRM_MS));
+        updateControls();
+        try {
+            switch (option.kind()) {
+                case MODE -> toggle.accept(option.mode());
+                case BOSS -> toggleBossPolicy.accept(option.policy());
+                case EMPTY_TELEPORT -> toggleEmptyTeleport.run();
+                default -> throw new IllegalStateException("Not a toggle");
+            }
+        } catch (RuntimeException | LinkageError failure) {
+            pending.remove(option); result = "sync_failed"; resultUntil = now() + 4000;
+            System.getLogger(CosmicArtisanScreen.class.getName()).log(System.Logger.Level.WARNING,
+                    "Could not update Artisan setting " + option.key(), failure);
+            updateControls();
         }
     }
 
-    private void undoLayout() {
-        if (!undoOrder.isEmpty() && saveOrder(undoOrder, groups.get(activeGroup))) {
-            undoOrder = List.of();
-            rebuildWidgets();
-            setFocused(navigation.get(activeGroup));
+    private boolean enabled(Option option) {
+        return switch (option.kind()) {
+            case MODE -> option.mode().enabled(flags);
+            case BOSS -> bossPolicy == option.policy();
+            case EMPTY_TELEPORT -> allowEmpty;
+            default -> false;
+        };
+    }
+    private boolean available(Option option) {
+        return option.kind() != CosmicArtisanMenu.Kind.BOSS || Mode.HOSTILE_FRIENDLY.enabled(flags);
+    }
+    private Component optionTitle(Option option) {
+        if (option.mode() == Mode.HOE_PRIORITY) return label(Mode.HOE_PRIORITY.enabled(flags) ? "hoe_priority" : "shovel_priority");
+        return Component.translatable(option.key());
+    }
+    private Component optionHint(Option option) {
+        return Component.translatable(option.key() + "_hint");
+    }
+    private Component status(Option option) {
+        if (pending.containsKey(option)) return label("sync_waiting");
+        if (!available(option)) return label("requires_friendship");
+        return option.toggle() ? Component.translatable(enabled(option) ? "options.on" : "options.off") : label("open_action");
+    }
+    private void readState() {
+        if (minecraft.player == null) return;
+        var tool = minecraft.player.getMainHandItem();
+        flags = read.applyAsInt(tool); bossPolicy = readBossPolicy.apply(tool);
+        allowEmpty = CosmicArtisanModes.emptyTeleport(tool);
+    }
+    private void updateControls() {
+        var preferences = UiPreferences.configured();
+        switches.forEach((option, control) -> {
+            control.active = available(option);
+            control.setValue(enabled(option));
+            control.setPending(pending.containsKey(option));
+            control.setMessage(UiHudRichText.prepare(optionTitle(option)));
+            control.setDescription(pending.containsKey(option) ? label("sync_waiting") : optionHint(option));
+            control.setPreferences(preferences);
+        });
+        actionButtons.forEach((option, control) -> {
+            control.active = available(option) && !pending.containsKey(option);
+            control.setPreferences(preferences);
+            control.setMessage(UiHudRichText.prepare(optionTitle(option)));
+            control.setSelected(option.toggle() && enabled(option));
+            if (option.toggle()) control.setModeIndicators(2, enabled(option) ? 1 : 0);
+            control.setPreview(UiHudRichText.prepare(optionTitle(option).copy().append(" · ").append(status(option))
+                    .append("\n").append(optionHint(option))));
+        });
+        if (navigation != null) navigation.setPreferences(preferences);
+        if (tabs != null) tabs.setPreferences(preferences);
+    }
+
+    @Override public void tick() {
+        if (!minecraft.isWindowActive()) cancelInteractions();
+        if (minecraft.player == null || !CosmicArtisanModes.isActive(minecraft.player.getMainHandItem())) { onClose(); return; }
+        readState();
+        long now = now();
+        var iterator = pending.entrySet().iterator();
+        while (iterator.hasNext()) {
+            var change = iterator.next();
+            if (enabled(change.getKey()) == change.getValue().expected()) {
+                iterator.remove(); result = "sync_saved"; resultUntil = now + 2200;
+            } else if (now >= change.getValue().deadline()) {
+                iterator.remove(); result = "sync_failed"; resultUntil = now + 4000;
+            }
         }
+        updateControls();
     }
 
-    private boolean saveOrder(List<Group> order, Group selected) {
-        layoutSaveFailed = !ArtisanAppearancePreferences.saveQuickGroups(
-                order.stream().map(Group::name).collect(Collectors.joining(",")));
-        if (layoutSaveFailed) return false;
-        groups.clear();
-        groups.addAll(order);
-        activeGroup = groups.indexOf(selected);
-        page = 0;
-        return true;
-    }
-
-    private int groupX(int slot) { return navX + (sidebar ? 0 : slot * navStep); }
-
-    private int groupY(int slot) { return navY + (sidebar ? slot * navStep : 0); }
-
-    private int dropSlot(double x, double y) {
-        var last = groups.size() - 1;
-        if (x < navX - 3 || x >= groupX(last) + navButtonWidth + 3
-                || y < navY + offset - 3 || y >= groupY(last) + offset + BUTTON_HEIGHT + 3) return -1;
-        double along = sidebar ? y - navY - offset : x - navX;
-        return Math.max(0, Math.min(last, (int) (along / navStep)));
+    private void layoutSorting() {
+        var content = layout.content();
+        int x = layout.panel().x() + 12, width = layout.panel().width() - 24;
+        editCapacity = Math.max(1, (content.height() - 22) / 28);
+        pageCount = Math.max(1, (groups.size() + editCapacity - 1) / editCapacity);
+        editPage = Math.min(editPage, pageCount - 1);
+        for (int i = editPage * editCapacity; i < Math.min(groups.size(), (editPage + 1) * editCapacity); i++) {
+            int index = i;
+            var rect = new Rect(x, content.y() + 22 + (i % editCapacity) * 28, width, 24);
+            var control = button(rect, label("drag_group", label(groups.get(i).name())), () -> {});
+            control.setLeadingIcon(GraphicIcon.EDIT);
+            control.setPreview(UiHudRichText.prepare(label("drag_group_hint", label(groups.get(i).name()))));
+            sorting.put(control, index); sortBounds.put(control, rect);
+            if (index == sortFocusIndex) setFocused(control);
+        }
+        sortFocusIndex = -1;
     }
 
     private boolean pressGroup(double x, double y, int button) {
-        if (groupDrag.active()) return true;
-        if (button != GLFW.GLFW_MOUSE_BUTTON_LEFT) return false;
-        swallowRelease = false;
-        if (!editing || !minecraft.isWindowActive()) return false;
-        for (int i = 0; i < navigation.size(); i++) {
-            if (!navigation.get(i).isMouseOver(x, y)) continue;
+        if (!editing || button != 0 || !minecraft.isWindowActive()) return false;
+        for (var entry : sorting.entrySet()) if (entry.getKey().isMouseOver(x, y)) {
             if (!groupDrag.begin(button, x, y)) return false;
-            draggedGroup = dropGroup = i;
-            setFocused(navigation.get(i));
-            return true;
+            draggedGroup = dropGroup = entry.getValue(); setFocused(entry.getKey()); return true;
         }
         return false;
     }
-
+    private int dropSlot(double x, double y) {
+        for (var entry : sorting.entrySet()) {
+            var rect = sortBounds.get(entry.getKey());
+            if (x >= rect.x() && x < rect.right() && y >= rect.y() - 2 && y < rect.bottom() + 2) return entry.getValue();
+        }
+        return -1;
+    }
     private boolean dragGroup(double x, double y, int button) {
-        if (!groupDrag.active() || button != GLFW.GLFW_MOUSE_BUTTON_LEFT) return false;
-        if (!minecraft.isWindowActive()) cancelDrag();
+        if (!groupDrag.active() || button != 0) return false;
+        if (!minecraft.isWindowActive()) cancelInteractions();
         else if (groupDrag.move(button, x, y) != null) dropGroup = dropSlot(x, y);
         return true;
     }
-
     private boolean releaseGroup(double x, double y, int button) {
-        if (button != GLFW.GLFW_MOUSE_BUTTON_LEFT) return false;
-        if (!groupDrag.active()) {
-            boolean consumed = swallowRelease;
-            swallowRelease = false;
-            return consumed;
-        }
+        if (!groupDrag.active() || button != 0) return false;
         int from = draggedGroup;
-        int to = minecraft.isWindowActive() && groupDrag.release(button, x, y) != null ? dropSlot(x, y) : -1;
-        cancelDrag();
-        swallowRelease = false;
-        moveGroup(from, to);
-        return true;
+        int target = minecraft.isWindowActive() && groupDrag.release(button, x, y) != null ? dropSlot(x, y) : -1;
+        cancelInteractions(); moveGroup(from, target); return true;
     }
-
-    private void cancelDrag() {
-        if (draggedGroup < 0) return;
-        groupDrag.cancel();
-        for (int i = 0; i < navigation.size(); i++) {
-            var button = navigation.get(i);
-            button.visible = true;
-            button.setX(groupX(i));
-            button.setY(groupY(i) + offset);
+    private void moveGroup(int from, int target) {
+        if (from < 0 || target < 0 || from == target || target >= groups.size()) return;
+        var previous = List.copyOf(groups); var selected = group();
+        var next = new ArrayList<>(groups); next.add(target, next.remove(from));
+        if (saveOrder(next, selected)) {
+            undoOrder = previous; editPage = target / editCapacity; sortFocusIndex = target; rebuildWidgets();
         }
-        draggedGroup = dropGroup = -1;
-        swallowRelease = true;
+    }
+    private boolean saveOrder(List<Group> next, Group selected) {
+        saveFailed = !ArtisanAppearancePreferences.saveQuickGroups(next.stream().map(Group::name).collect(Collectors.joining(",")));
+        if (saveFailed) return false;
+        groups.clear(); groups.addAll(next); activeGroup = groups.indexOf(selected); return true;
+    }
+    private void undoLayout() {
+        if (!undoOrder.isEmpty() && saveOrder(undoOrder, group())) { undoOrder = List.of(); rebuildWidgets(); }
+    }
+    private void cancelInteractions() {
+        groupDrag.cancel(); draggedGroup = dropGroup = -1;
+        switches.values().forEach(UiSwitchRow::cancelInteraction);
+        if (navigation != null) navigation.cancelInteraction();
+        if (tabs != null) tabs.cancelDrag();
+        sorting.keySet().forEach(control -> { control.visible = true; var rect = sortBounds.get(control); control.setX(rect.x()); control.setY(rect.y()); });
+        setDragging(false);
     }
 
     private boolean layoutKey(int key, int modifiers) {
-        if (key == GLFW.GLFW_KEY_ESCAPE && cancelTabDrag()) return true;
-        if (groupDrag.active()) {
-            if (key == GLFW.GLFW_KEY_ESCAPE) cancelDrag();
+        if (key == GLFW.GLFW_KEY_ESCAPE && (groupDrag.active() || editing)) {
+            if (groupDrag.active()) cancelInteractions(); else { editing = false; rebuildWidgets(); }
             return true;
         }
-        if (!editing || (modifiers & GLFW.GLFW_MOD_SHIFT) == 0) return false;
-        int from = navigation.indexOf(getFocused());
-        if (from < 0) return false;
-        if (key == GLFW.GLFW_KEY_LEFT || key == GLFW.GLFW_KEY_UP) moveGroup(from, from - 1);
-        else if (key == GLFW.GLFW_KEY_RIGHT || key == GLFW.GLFW_KEY_DOWN) moveGroup(from, from + 1);
-        else return false;
-        return true;
+        if (editing && key == GLFW.GLFW_KEY_Z && (modifiers & GLFW.GLFW_MOD_CONTROL) != 0) { undoLayout(); return true; }
+        if (editing && (modifiers & GLFW.GLFW_MOD_ALT) != 0 && (key == GLFW.GLFW_KEY_UP || key == GLFW.GLFW_KEY_DOWN)) {
+            for (var entry : sorting.entrySet()) if (entry.getKey() == getFocused()) {
+                moveGroup(entry.getValue(), entry.getValue() + (key == GLFW.GLFW_KEY_UP ? -1 : 1)); return true;
+            }
+        }
+        if (key == GLFW.GLFW_KEY_PAGE_UP || key == GLFW.GLFW_KEY_PAGE_DOWN) { changePage(key == GLFW.GLFW_KEY_PAGE_UP ? -1 : 1); return true; }
+        return false;
     }
 
-    @Override
-    public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+    @Override public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
         return pressGroup(event.x(), event.y(), event.button()) || super.mouseClicked(event, doubleClick);
     }
-
-    @Override
-    public boolean mouseDragged(MouseButtonEvent event, double dx, double dy) {
+    @Override public boolean mouseDragged(MouseButtonEvent event, double dx, double dy) {
         return dragGroup(event.x(), event.y(), event.button()) || super.mouseDragged(event, dx, dy);
     }
-
-    @Override
-    public boolean mouseReleased(MouseButtonEvent event) {
-        return releaseGroup(event.x(), event.y(), event.button()) || super.mouseReleased(event);
+    @Override public boolean mouseReleased(MouseButtonEvent event) {
+        if (releaseGroup(event.x(), event.y(), event.button())) return true;
+        for (var control : switches.values()) if (control.releasePointer(event.x(), event.y(), event.button())) { setDragging(false); return true; }
+        return super.mouseReleased(event);
     }
-
-    @Override
-    public boolean keyPressed(KeyEvent event) {
+    @Override public boolean keyPressed(KeyEvent event) {
         return layoutKey(event.key(), event.modifiers()) || super.keyPressed(event);
     }
 
-    @Override
-    public void removed() {
-        cancelDrag();
-        cancelTabDrag();
-        if (!wheel) ArtisanAppearancePreferences.rememberConfigPosition(groups.get(activeGroup).name(), page);
-        super.removed();
-    }
-
-    private static List<Group> readGroupOrder(boolean aeAvailable) {
-        var result = new ArrayList<Group>();
-        for (String name : ArtisanAppearancePreferences.quickGroups().split(",")) {
-            for (Group group : DEFAULT_GROUPS) {
-                if (group.name().equals(name) && !result.contains(group)) result.add(group);
-            }
-        }
-        for (Group group : DEFAULT_GROUPS) {
-            if (!result.contains(group)) result.add(group);
-        }
-        if (!aeAvailable) {
-            result.replaceAll(group -> new Group(group.name(), group.icon(), group.modes().stream()
-                    .filter(mode -> mode != Mode.AE_STORAGE_PRIORITY && mode != Mode.AE_LINK).toList()));
-        }
-        return result;
-    }
-
-    @Override
-    public void tick() {
-        if (!minecraft.isWindowActive()) {
-            cancelDrag();
-            cancelTabDrag();
-        }
-        if (minecraft.player == null || !CosmicArtisanModes.isActive(minecraft.player.getMainHandItem())) {
-            onClose();
-            return;
-        }
-        var held = minecraft.player.getMainHandItem();
-        int updated = read.applyAsInt(held);
-        var policy = readBossPolicy.apply(held);
-        if (updated == flags && policy == bossPolicy) return;
-        flags = updated;
-        bossPolicy = policy;
-        buttons.forEach(this::updateModeButton);
-        bossButtons.forEach(this::updateBossButton);
-    }
-
-    private Component bossLabel(BossPolicy policy) {
-        var name = label(policy == BossPolicy.FRIENDLY ? "boss_friendly" : "boss_hostile");
-        return label(policy == bossPolicy ? "enabled" : "disabled", name);
-    }
-
-    private void updateBossButton(BossPolicy policy, UiButton button) {
-        button.active = Mode.HOSTILE_FRIENDLY.enabled(flags);
-        Component status = bossLabel(policy);
-        button.setMessage(UiHudRichText.prepare(status));
-        button.setSelected(policy == bossPolicy && button.active);
-        setFunctionPreview(button, status, label(policy == BossPolicy.FRIENDLY ? "boss_friendly_hint" : "boss_hostile_hint"));
-    }
-
-    private void updateModeButton(Mode mode, UiButton button) {
-        var control = toggles.get(mode);
-        if (control != null) {
-            control.setValue(mode.enabled(flags));
-        } else {
-            button.setMessage(UiHudRichText.prepare(modeLabel(mode)));
-            button.setSelected(mode.enabled(flags));
-        }
-        setFunctionPreview(button, message(mode), Component.translatable(mode.translationKey() + "_hint"));
-    }
-
-    private static void setFunctionPreview(UiButton button, Component status, Component hint) {
-        button.setPreview(UiHudRichText.prepare(status.copy().append("\n").append(hint)));
-    }
-
-    private Component modeLabel(Mode mode) {
-        return wheel && mode != Mode.HOE_PRIORITY ? Component.translatable(mode.translationKey()) : message(mode);
-    }
-
-    @Override
-    protected void renderBackdrop(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
+    @Override protected void renderBackdrop(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
         var preferences = UiPreferences.configured();
-        long frameTime = now();
-        opacity = appearance.sample(frameTime, preferences);
-        offset = Math.round((1.0F - opacity) * 10);
-        pageOpacity = pageAppearance.sample(frameTime, preferences);
-        pageOffset = Math.round((1.0F - pageOpacity) * 9);
-        if (groupTabs != null) {
-            groupTabs.setY(navY + offset);
-            groupTabs.setPreferences(preferences);
-        }
-        for (var entry : buttonPositions.entrySet()) {
-            var button = entry.getKey();
-            button.setY(entry.getValue() + offset);
-            button.setAlpha(opacity);
-        }
-        for (var button : configPageButtons) {
-            button.setY(buttonPositions.get(button) + offset + pageOffset);
-            button.setAlpha(opacity * pageOpacity);
-        }
-        if (groupDrag.active()) {
-            for (int i = 0; i < navigation.size(); i++) {
-                var button = navigation.get(i);
-                int slot = i;
-                if (i != draggedGroup && dropGroup >= 0) {
-                    if (draggedGroup < i && i <= dropGroup) slot--;
-                    if (dropGroup <= i && i < draggedGroup) slot++;
-                }
-                button.visible = i != draggedGroup;
-                button.setX(groupX(slot));
-                button.setY(groupY(slot) + offset);
-            }
-        }
-        var material = wheel ? CosmicArtisanMaterial.WHEEL : CosmicArtisanMaterial.PANEL;
-        graphics.fill(0, 0, width, height, withAlpha(material.scrim(), opacity));
-        float radius = wheel ? panelWidth / 2f : 10;
-        int y = top + offset;
-        int edge = preferences.highContrast() ? 0xFFFFFFFF : material.edge();
-        if (!preferences.highContrast() && preferences.useBackdropBlur()
-                && ShBetterUiApi.blur().prepareBackdrop(graphics)
-                && LiquidGlassSurface.drawPrepared(graphics, left, y, panelWidth, panelHeight,
-                        radius, material.tint(), edge, material.glass().optics(), preferences, opacity)) return;
-        int fill = preferences.highContrast() ? 0xFF000000 : material.fallback();
-        RoundedCorners.draw(graphics, left, y, panelWidth, panelHeight, radius, 1,
-                withAlpha(edge, opacity), withAlpha(fill, opacity));
-    }
-
-    @Override
-    protected void renderForeground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
-        var preferences = UiPreferences.configured();
-        textPalette.update(null, 0xFF000000, preferences.highContrast() ? 0xFF000000 : 0xFF686879);
-        int text = withAlpha(preferences.highContrast() ? 0xFFFFFFFF : 0xFFE7E8F0, opacity);
+        var theme = UiTheme.current();
+        float opacity = appearance.sample(now(), preferences);
+        graphics.fill(0, 0, width, height, withAlpha(theme.background(), wheel ? .22f : .42f));
+        if (tiny) return;
         if (wheel) {
-            int centerY = wheelCenterY + offset;
-            int centerX = width / 2;
-            drawRich(graphics, title, centerX, centerY - (pageCount > 1 ? 22 : 13), text, preferences, true);
-            drawRich(graphics, pageCount > 1 ? label("page", page + 1, pageCount)
-                    : label(groups.get(activeGroup).name()), centerX, centerY - (pageCount > 1 ? 4 : -1), text,
-                    preferences, true);
-            if (top >= 14) drawRich(graphics, label("wheel_hint"), centerX, top - 12 + offset, text, preferences, true);
+            if (!radial.compact()) {
+                var center = radial.center();
+                paintPanel(graphics, new Rect(wheelArea.x() + center.x(), wheelArea.y() + center.y(),
+                        center.width(), center.height()), center.width() / 2f, opacity);
+            }
             return;
         }
-        drawRich(graphics, title, left + 10, top + 13 + offset, text, preferences, false);
-        if (editing) {
+        paintPanel(graphics, layout.panel(), 14, opacity);
+        if (!editing) {
+            var content = layout.content();
+            int rows = Math.min(layout.capacity(), group().options().size() - page * layout.capacity());
+            if (rows > 0) RoundedCorners.draw(graphics, content.x(), content.y() + 22,
+                    content.width(), rows * layout.rowHeight(), 9, preferences.highContrast() ? 1 : 0,
+                    theme.border(), withAlpha(theme.background(), preferences.highContrast() ? 1 : .32f));
+        } else if (groupDrag.active()) renderSorting(graphics);
+    }
+
+    private void paintPanel(GuiGraphicsExtractor graphics, Rect rect, float radius, float opacity) {
+        var preferences = UiPreferences.configured();
+        var theme = UiTheme.current();
+        var material = wheel ? CosmicArtisanMaterial.WHEEL : CosmicArtisanMaterial.PANEL;
+        int edge = preferences.highContrast() ? theme.text() : withAlpha(theme.border(), .65f);
+        if (!preferences.highContrast() && preferences.useBackdropBlur() && ShBetterUiApi.blur().prepareBackdrop(graphics)
+                && LiquidGlassSurface.drawPrepared(graphics, rect.x(), rect.y(), rect.width(), rect.height(), radius,
+                        withAlpha(theme.surface(), .85f), edge, material.glass().optics(), preferences, opacity)) return;
+        int fill = withAlpha(theme.surface(), preferences.highContrast() ? 1 : .97f);
+        RoundedCorners.draw(graphics, rect.x(), rect.y(), rect.width(), rect.height(), radius, 1, edge, fill);
+    }
+
+    private void renderSorting(GuiGraphicsExtractor graphics) {
+        UiButton dragged = null;
+        for (var entry : sorting.entrySet()) {
+            var control = entry.getKey(); var rect = sortBounds.get(control);
+            int slot = entry.getValue();
+            if (slot == draggedGroup) { dragged = control; continue; }
             if (dropGroup >= 0) {
-                RoundedCorners.draw(graphics, groupX(dropGroup), groupY(dropGroup) + offset, navButtonWidth,
-                        BUTTON_HEIGHT, 5, 1, preferences.highContrast() ? 0xFFFFFFFF : 0xFF8BBFF4, 0x50252F44);
+                if (draggedGroup < slot && slot <= dropGroup) slot--;
+                if (dropGroup <= slot && slot < draggedGroup) slot++;
             }
-            int y = contentY + 3 + offset;
-            var hint = UiHudRichText.prepare(label(layoutSaveFailed ? "layout_save_failed" : "drag_layout_hint"));
-            for (var line : font.split(hint, contentWidth - 4)) {
-                drawRich(graphics, line, contentX + 2, y, text, preferences, false);
-                y += font.lineHeight;
-            }
-            return;
+            control.setY(rect.y() + (slot - entry.getValue()) * 28);
         }
-        int pageText = withAlpha(text, pageOpacity);
-        drawRich(graphics, label(groups.get(activeGroup).name()), contentX + 2, contentY + 3 + offset + pageOffset, pageText,
-                preferences, false);
-        if (pageCount > 1) {
-            drawRich(graphics, label("page", page + 1, pageCount),
-                    left + panelWidth - 58, top + panelHeight - 22 + offset + pageOffset, pageText, preferences, true);
+        if (dragged == null) return;
+        var origin = sortBounds.get(dragged);
+        dragged.setX(Math.max(layout.panel().x() + 6, Math.min(layout.panel().right() - dragged.getWidth() - 6,
+                origin.x() + (int)Math.round(groupDrag.offsetX()))));
+        dragged.setY(Math.max(layout.content().y(), Math.min(layout.footer().y() - 26,
+                origin.y() + (int)Math.round(groupDrag.offsetY()))));
+        if (dropGroup >= 0) {
+            int y = layout.content().y() + 22 + (dropGroup % editCapacity) * 28;
+            RoundedCorners.draw(graphics, origin.x(), y, origin.width(), 24, 7, 1, UiTheme.current().accent(), 0);
         }
     }
 
-    private void drawRich(GuiGraphicsExtractor graphics, Component text, int x, int y, int color,
-                          UiPreferences preferences, boolean centered) {
-        drawRich(graphics, UiHudRichText.prepare(text).getVisualOrderText(), x, y, color, preferences, centered);
+    @Override protected void renderForeground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
+        var theme = UiTheme.current();
+        if (tiny) { draw(graphics, label("larger_gui"), 8, 14, Math.max(1, width - 16), theme.text(), 3); return; }
+        if (wheel) { renderWheelText(graphics); return; }
+        var panel = layout.panel(); var content = layout.content();
+        draw(graphics, title, panel.x() + 14, panel.y() + 15, panel.width() - 60, theme.text(), 1);
+        if (editing) {
+            draw(graphics, label(saveFailed ? "layout_save_failed" : "drag_layout_hint"), panel.x() + 14,
+                    content.y() + 3, panel.width() - 28, theme.secondaryText(theme.text(), .2f), 1);
+        } else {
+            draw(graphics, label("group_" + group().name() + "_hint"), content.x() + 2, content.y() + 3,
+                    content.width() - 4, theme.secondaryText(theme.text(), .18f), 1);
+        }
+        var footer = layout.footer();
+        if (pageCount > 1) centered(graphics, label("page", (editing ? editPage : page) + 1, pageCount),
+                footer.right() - 46, footer.y() + 7, 40, theme.text(), 1);
+        if (!editing) {
+            Component state = !pending.isEmpty() ? label("sync_waiting") : now() < resultUntil ? label(result) : label("instant_save");
+            draw(graphics, state, footer.x() + 90, footer.y() + 7, Math.max(1, footer.width() - 188),
+                    theme.secondaryText(theme.text(), .18f), 1);
+        }
     }
 
-    private void drawRich(GuiGraphicsExtractor graphics, FormattedCharSequence text, int x, int y, int color,
-                          UiPreferences preferences, boolean centered) {
-        int left = centered ? x - font.width(text) / 2 : x;
-        UiHudRichText.draw(graphics, font, text, left, y, color, preferences, textPalette);
+    private void renderWheelText(GuiGraphicsExtractor graphics) {
+        var theme = UiTheme.current();
+        draw(graphics, title, 14, 12, Math.max(20, width - 124), theme.text(), 1);
+        if (pageCount > 1) centered(graphics, label("page", page + 1, pageCount), width - 56, 14, 40, theme.text(), 1);
+        if (radial.compact()) return;
+        var center = radial.center();
+        int cx = wheelArea.x() + center.x() + center.width() / 2;
+        int cy = wheelArea.y() + center.y() + center.height() / 2;
+        Option preview = null;
+        for (var entry : actionButtons.entrySet()) if (entry.getValue().isHovered() || entry.getValue() == getFocused()) { preview = entry.getKey(); break; }
+        int available = Math.max(16, center.width() - 12);
+        centered(graphics, preview == null ? label(group().name()) : optionTitle(preview), cx, cy - 15, available, theme.text(), 2);
+        long enabled = group().options().stream().filter(option -> option.toggle() && enabled(option)).count();
+        centered(graphics, preview == null ? label("enabled_count", enabled) : status(preview), cx, cy + 10, available,
+                theme.secondaryText(theme.text(), .16f), 1);
     }
 
-    private void renderDraggedGroup(GuiGraphicsExtractor graphics) {
-        if (!groupDrag.active()) return;
-        int x = groupX(draggedGroup) + (int) Math.round(groupDrag.offsetX());
-        int y = groupY(draggedGroup) + offset + (int) Math.round(groupDrag.offsetY());
-        x = Math.max(0, Math.min(width - navButtonWidth, x));
-        y = Math.max(0, Math.min(height - BUTTON_HEIGHT, y));
-        int edge = UiPreferences.configured().highContrast() ? 0xFFFFFFFF
-                : dropGroup >= 0 ? 0xFF8BBFF4 : 0xFF7C85A1;
-        RoundedCorners.draw(graphics, x, y, navButtonWidth, BUTTON_HEIGHT, 5, 1, edge, 0xFF364861);
-        var title = label(groups.get(draggedGroup).name());
-        var lines = font.split(UiHudRichText.prepare(title), navButtonWidth - 6);
-        if (!lines.isEmpty()) drawRich(graphics, lines.get(0), x + navButtonWidth / 2, y + 6, 0xFFFFFFFF,
-                UiPreferences.configured(), true);
+    private void draw(GuiGraphicsExtractor graphics, Component text, int x, int y, int width, int color, int maxLines) {
+        var lines = font.split(UiHudRichText.prepare(text), Math.max(1, width));
+        for (int i = 0; i < Math.min(maxLines, lines.size()); i++) graphics.text(font, lines.get(i), x, y + i * font.lineHeight, color, false);
     }
-
-    @Override
-    public boolean isPauseScreen() { return false; }
-
-    private Component message(Mode mode) {
-        return message(mode, mode.enabled(flags));
+    private void centered(GuiGraphicsExtractor graphics, Component text, int x, int y, int width, int color, int maxLines) {
+        var lines = font.split(UiHudRichText.prepare(text), Math.max(1, width));
+        for (int i = 0; i < Math.min(maxLines, lines.size()); i++) {
+            FormattedCharSequence line = lines.get(i);
+            graphics.text(font, line, x - font.width(line) / 2, y + i * font.lineHeight, color, false);
+        }
     }
-
-    private static Component message(Mode mode, boolean enabled) {
-        if (mode == Mode.HOE_PRIORITY) return label(enabled ? "hoe_priority" : "shovel_priority");
-        return label(enabled ? "enabled" : "disabled", Component.translatable(mode.translationKey()));
+    private void rememberPosition() {
+        if (!wheel) ArtisanAppearancePreferences.rememberConfigPosition(group().name(), page);
     }
-
-    private boolean cancelTabDrag() {
-        if (groupTabs == null || !groupTabs.cancelDrag()) return false;
-        setDragging(false);
-        return true;
+    @Override public void onClose() { rememberPosition(); cancelInteractions(); super.onClose(); }
+    @Override public void removed() {
+        cancelInteractions(); if (navigation != null) navigation.close(); super.removed();
     }
-
-    private static int withAlpha(int color, float opacity) {
-        return (color & 0xFFFFFF) | (Math.round((color >>> 24) * opacity) << 24);
-    }
-
+    @Override public boolean isPauseScreen() { return false; }
+    private Group group() { return groups.get(activeGroup); }
+    private static Bounds bounds(Rect rect) { return new Bounds(rect.x(), rect.y(), rect.width(), rect.height()); }
+    private static Component label(String key, Object... args) { return Component.translatable(CosmicArtisanMenu.prefix(key), args); }
+    private static int withAlpha(int color, float opacity) { return color & 0xFFFFFF | Math.round((color >>> 24) * opacity) << 24; }
     private static long now() { return System.nanoTime() / 1_000_000L; }
-
-    private static Component label(String key, Object... args) {
-        return Component.translatable("screen.sh_common_lib.cosmic_artisan." + key, args);
-    }
-
-    private record WheelSlot(int x, int y) {}
-    private record Group(String name, GraphicIcon icon, List<Mode> modes) {
-        int optionCount() { return modes.size() + (name.equals("travel") ? 1 : name.equals("combat") ? 2 : 0); }
-    }
 }

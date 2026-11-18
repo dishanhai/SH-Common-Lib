@@ -6,14 +6,29 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.item.ItemStack;
 
+import java.util.Objects;
+import java.util.function.Predicate;
+
 public final class CosmicArtisanModes {
     public static final int ATTACK_DAMAGE = 10000;
     public static final int ATTACK_SPEED = 40;
     public static final int FORTUNE_LEVEL = 3;
     public static final String TAG = ShCommonLib.MOD_ID + ":cosmic_modes";
     public static final String BEACON_PROJECTION_TAG = ShCommonLib.MOD_ID + ":beacon_projection";
+    public static final String EMPTY_TELEPORT_TAG = ShCommonLib.MOD_ID + ":empty_teleport";
+    // All 32 legacy mode bits are occupied; keep this opt-in setting separate from them.
+    public static final int EMPTY_TELEPORT_REQUEST = -3;
+    private static Predicate<ItemStack> emptyTeleportReader = stack -> false;
 
     private CosmicArtisanModes() {}
+
+    public static void installEmptyTeleportReader(Predicate<ItemStack> reader) {
+        emptyTeleportReader = Objects.requireNonNull(reader);
+    }
+
+    public static boolean emptyTeleport(ItemStack stack) {
+        return emptyTeleportReader.test(stack);
+    }
 
     public static int readFlags(int stored, boolean beaconProjection) {
         int projectionBit = Mode.BEACON_HUD.bit();

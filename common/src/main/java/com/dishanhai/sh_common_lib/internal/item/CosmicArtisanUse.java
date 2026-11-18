@@ -131,6 +131,8 @@ public final class CosmicArtisanUse {
             Vec3 aim = Vec3.directionFromRotation(player.getXRot(), player.getYRot());
             var hit = level.clip(new ClipContext(eyes, eyes.add(aim.scale(TELEPORT_RANGE)),
                     ClipContext.Block.OUTLINE, ClipContext.Fluid.NONE, player));
+            if (hit.getType() == HitResult.Type.MISS
+                    && !CosmicArtisanModes.emptyTeleport(player.getMainHandItem())) return InteractionResult.SUCCESS;
             Vec3 end = hit.getLocation();
             boolean landed = false;
             if (hit.getType() == HitResult.Type.BLOCK) {
