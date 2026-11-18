@@ -1,0 +1,8 @@
+{
+  "model": {
+    "type": "minecraft:condition",
+    "property": "sh_common_lib:sealed",
+    "on_true": { "type": "minecraft:model", "model": "sh_common_lib:item/sealed_crate_closed" },
+    "on_false": { "type": "minecraft:model", "model": "sh_common_lib:item/sealed_crate" }
+  }
+}

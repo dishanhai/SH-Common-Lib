@@ -1,0 +1,6 @@
+{
+  "parent": "minecraft:item/handheld",
+  "textures": {
+    "layer0": "sh_common_lib:item/artisan_shovel"
+  }
+}
