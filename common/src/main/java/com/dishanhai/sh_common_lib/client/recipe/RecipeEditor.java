@@ -3,7 +3,8 @@ package com.dishanhai.sh_common_lib.client.recipe;
 
 import com.dishanhai.sh_better_ui.client.api.UiFrame;
 import com.dishanhai.sh_better_ui.client.api.UiWorkbench;
-import static com.dishanhai.sh_better_ui.client.api.UiWorkbench.button;
+import com.dishanhai.sh_better_ui.client.gui.scaled.RoundedCorners;
+import com.dishanhai.sh_better_ui.client.gui.scaled.UiTheme;
 import com.dishanhai.sh_better_ui.client.api.UiScreen;
 import com.dishanhai.sh_better_ui.client.api.UiScreenBuilder;
 import com.dishanhai.sh_better_ui.client.gui.display.GraphicDisplayLayout.Bounds;
@@ -56,7 +57,10 @@ public final class RecipeEditor {
     private RecipeArtifact generatedArtifact;
     private long registryValidationTime;
     private Component status = text("intro");
+    private Component validationStatus;
     private int view, codePage;
+    private RecipeEditorLayout.Layout layout;
+    private RecipeEditorLayout.Slots slotLayout;
     private boolean busy;
 
     private RecipeEditor(Screen parent, Supplier<? extends GuiEventListener> returnFocus, RecipeTarget target) {
@@ -82,14 +86,24 @@ public final class RecipeEditor {
         catch (ClassNotFoundException ignored) { return false; }
     }
 
+    private static UiScreenBuilder builder(Component title, Screen parent) {
+        return UiWorkbench.builder(title, parent).onRender(RecipeEditor::drawBackdrop);
+    }
+
+    private static void drawBackdrop(UiScreen owner, UiFrame frame) {
+        var theme = UiTheme.current();
+        int background = frame.preferences().highContrast() ? theme.background()
+                : theme.light() ? 0xFFF3F3F5 : 0xFF18181B;
+        RoundedCorners.draw(frame.graphics(), 0, 0, owner.width, owner.height, 0, 0, 0, background);
+    }
+
     private void open() {
-        screen = UiWorkbench.builder(text("title"), exitGuard())
-                .onInit(this::init).onForeground(this::draw).build();
+        screen = builder(text("title"), exitGuard()).onInit(this::init).onRender(this::drawSurfaces).onForeground(this::draw).build();
         screen.open();
     }
 
     private Screen exitGuard() {
-        return UiWorkbench.builder(text("unsaved"), new Screen(text("title")) {
+        return builder(text("unsaved"), new Screen(text("title")) {
                     @Override protected void init() { refresh(); }
                 })
                 .onInit(guard -> {
@@ -108,42 +122,74 @@ public final class RecipeEditor {
 
     private void refresh() { open(); }
 
+    private static UiButton button(UiScreen owner, int x, int y, int width, int height, Component label, Runnable action) {
+        var control = UiWorkbench.button(owner, x, y, width, height, label, action);
+        control.setCornerRadius(Math.min(8, height / 2f));
+        return control;
+    }
+
     private void init(UiScreen owner) {
         generatedDocument = null;
-        inputs = null; output = null; copy = null; export = null;
-        int w = owner.width, y = 8, bw = Math.max(24, (w - 40) / 7);
-        button(owner, 8, y, bw, 20, text("back"), owner::onClose).setLeadingIcon(GraphicIcon.BACK);
-        button(owner, 12 + bw, y, bw, 20, text("save"), this::save).setLeadingIcon(GraphicIcon.SAVE);
-        undoButton = button(owner, 16 + bw * 2, y, bw, 20, text("undo"), () -> restore(false));
-        redoButton = button(owner, 20 + bw * 3, y, bw, 20, text("redo"), () -> restore(true));
-        undoButton.setLeadingIcon(GraphicIcon.UNDO); redoButton.setLeadingIcon(GraphicIcon.FORWARD);
-        button(owner, 24 + bw * 4, y, bw, 20, text("drafts"), () -> openDrafts(0)).setLeadingIcon(GraphicIcon.FOLDER);
-        button(owner, 28 + bw * 5, y, bw, 20, text("new"), () ->
-                confirmReplace(() -> { clearPendingNumbers(); change(RecipeDocument.empty()); saved = document; savedId = null; refresh(); })).setLeadingIcon(GraphicIcon.NEW);
-        button(owner, 32 + bw * 6, y, bw, 20, text("import"), () -> confirmReplace(this::importClipboard)).setLeadingIcon(GraphicIcon.PASTE);
-
-        int tabW = Math.max(30, (w - 24) / 3);
+        inputs = null; output = null; copy = null; export = null; slotLayout = null;
+        layout = RecipeEditorLayout.compute(owner.width, owner.height);
+        int w = owner.width;
+        button(owner, 8, 8, 42, 24, text("back"), owner::onClose);
+        button(owner, 56, 8, 52, 24, text("drafts"), () -> openDrafts(0));
+        button(owner, 114, 8, 52, 24, text("actions"), this::openActions);
+        var saveButton = button(owner, w - 78, 8, 70, 24, text("save"), this::save);
+        saveButton.setSelected(true);
+        undoButton = button(owner, 8, 40, 38, 22, text("undo"), () -> restore(false));
+        redoButton = button(owner, 50, 40, 38, 22, text("redo"), () -> restore(true));
+        int tabX = 100, tabWidth = Math.max(40, (w - tabX - 8) / 3);
         for (int i = 0; i < 3; i++) {
             final int tab = i;
-            var b = button(owner, 8 + i * (tabW + 4), 34, tabW, 20, text("view." + i), () -> {
-                view = tab; refresh();
-            });
-            b.setSelected(view == i);
-            b.setLeadingIcon(i == 0 ? GraphicIcon.RECIPE : i == 1 ? GraphicIcon.SETTINGS : GraphicIcon.CODE);
+            var control = button(owner, tabX + i * tabWidth, 40, tabWidth - 3, 22,
+                    text("view." + i), () -> { view = tab; refresh(); });
+            control.setSelected(view == i);
         }
         if (icons.isEmpty()) icons.putAll(UiWorkbench.itemIcons());
-        int bodyY = 60;
-        if (w >= 650) {
-            canvas(owner, 12, bodyY, 190);
-            properties(owner, 214, bodyY, 200);
-            result(owner, 426, bodyY, w - 438);
-        } else if (view == 0) canvas(owner, 12, bodyY, w - 24);
-        else if (view == 1) properties(owner, 12, bodyY, w - 24);
-        else result(owner, 12, bodyY, w - 24);
+        if (layout.wide() || view == 0) {
+            var area = layout.canvas(); canvas(owner, area.x(), area.y(), area.width());
+        }
+        if (layout.wide() || view == 1) {
+            var area = layout.properties(); properties(owner, area.x(), area.y(), area.width());
+        }
+        if (layout.wide() || view == 2) {
+            var area = layout.result(); result(owner, area.x(), area.y(), area.width());
+        }
+    }
+
+    /** Secondary document actions stay out of the editing toolbar. */
+    private void openActions() {
+        builder(text("actions"), screen).onInit(owner -> {
+            back(owner);
+            int x = Math.max(12, (owner.width - 320) / 2), width = Math.min(320, owner.width - 24);
+            int y = Math.max(38, owner.viewport().y() + 8);
+            button(owner, x, y, width, 22, text("new"), () -> confirmReplace(() -> {
+                clearPendingNumbers(); change(RecipeDocument.empty()); saved = document; savedId = null; refresh();
+            }));
+            button(owner, x, y + 28, width, 22, text("import"), () -> confirmReplace(this::importClipboard));
+            button(owner, x, y + 56, width, 22, text("fill_sequence"), this::openSequence).active =
+                    document.type() == RecipeType.SHAPED || document.type() == RecipeType.SHAPELESS;
+            button(owner, x, y + 84, width, 22, text("help"), this::help);
+        }).open();
+    }
+
+    private void drawSurfaces(UiScreen owner, UiFrame frame) {
+        drawBackdrop(owner, frame);
+        // Native theme colors retain contrast and the player's selected appearance.
+        int edge = (UiWorkbench.secondaryTextColor() & 0xFFFFFF) | 0x38000000;
+        int fill = (UiWorkbench.secondaryTextColor() & 0xFFFFFF) | 0x10000000;
+        RoundedCorners.draw(frame.graphics(), 4, 4, owner.width - 8, 32, 10, 1, edge, fill);
+        {
+            for (var pane : layout.wide() ? List.of(layout.canvas(), layout.properties(), layout.result()) : List.of(layout.content()))
+                RoundedCorners.draw(frame.graphics(), pane.x() - 4, pane.y() - 4,
+                        pane.width() + 8, pane.height() + 8, 10, 1, edge, fill);
+        }
     }
 
     private void canvas(UiScreen owner, int x, int y, int width) {
-        button(owner, x, y, width, 22, typeLabel(document.type()), this::openTypes).setLeadingIcon(GraphicIcon.RECIPE_TYPE);
+        button(owner, x, y, width, 22, typeLabel(document.type()), this::openTypes);
         if (document.type() == RecipeType.CUSTOM) {
             button(owner, x, y + 32, width, 22, text("custom_edit"), this::openCustom);
             return;
@@ -152,26 +198,22 @@ public final class RecipeEditor {
         var values = new ArrayList<ItemStack>();
         var names = new ArrayList<Component>();
         for (int i = 0; i < count; i++) { values.add(icon(document.inputs().get(i), isPotion(i))); names.add(slotName(i)); }
-        int columns = count == 9 ? 3 : count;
-        int cell = cellSize(owner.height, count);
-        int gridWidth = Math.min(width, columns * cell + (columns - 1) * 2);
-        int gridHeight = count == 9 ? cell * 3 + 4 : cell;
+        boolean hasOutput = document.type() != RecipeType.SMITHING_TRIM || target == RecipeTarget.NEOFORGE_26_1_2;
+        var pane = layout.canvas();
+        int top = y + (owner.height >= 220 ? 40 : 24);
+        slotLayout = RecipeEditorLayout.slots(new RecipeEditorLayout.Rect(x, top, width, pane.bottom() - top), count, hasOutput);
+        var grid = slotLayout.inputs();
         inputs = owner.add(new UiIngredientSlots(Minecraft.getInstance().font,
-                new Bounds(x, y + 46, gridWidth, gridHeight), text("inputs"), columns, values,
+                new Bounds(grid.x(), grid.y(), grid.width(), grid.height()), text("inputs"), slotLayout.columns(), values,
                 UiWorkbench.preferences(owner), this::openSlot, i -> setSlot(i, ""), this::moveSlot));
         inputs.setSlotNames(names);
         inputs.setAllowDrag(document.type() == RecipeType.SHAPED || document.type() == RecipeType.SHAPELESS);
-        if (document.type() == RecipeType.SHAPED || document.type() == RecipeType.SHAPELESS) {
-            button(owner, x, y + 52 + gridHeight, width, 20, text("fill_sequence"), this::openSequence);
-        }
-        if (document.type() != RecipeType.SMITHING_TRIM || target == RecipeTarget.NEOFORGE_26_1_2) {
-            int oy = y + 46;
+        if (hasOutput) {
+            var result = slotLayout.output();
             output = owner.add(new UiIngredientSlots(Minecraft.getInstance().font,
-                    new Bounds(x + gridWidth + 24, oy, cell, cell), text("output"), 1,
-                    List.of(resultIcon()),
-                    UiWorkbench.preferences(owner), i -> openSlot(9), i -> setSlot(9, ""), (a,b) -> {}));
-            output.setSlotNames(List.of(slotName(9)));
-            output.setAllowDrag(false);
+                    new Bounds(result.x(), result.y(), result.width(), result.height()), text("output"), 1,
+                    List.of(resultIcon()), UiWorkbench.preferences(owner), i -> openSlot(9), i -> setSlot(9, ""), (a,b) -> {}));
+            output.setSlotNames(List.of(slotName(9))); output.setAllowDrag(false);
         }
     }
 
@@ -182,10 +224,6 @@ public final class RecipeEditor {
             case BREWING, BREWING_CONTAINER -> 2;
             default -> 1;
         };
-    }
-
-    private static int cellSize(int height, int inputs) {
-        return Math.max(18, Math.min(30, (height - 124) / (inputs == 9 ? 3 : 1)));
     }
 
     private boolean isPotion(int slot) { return document.type() == RecipeType.BREWING && (slot == 0 || slot == 9); }
@@ -213,26 +251,39 @@ public final class RecipeEditor {
     }
 
     private void properties(UiScreen owner, int x, int y, int width) {
-        field(owner, x, y, width, "id", document.id(), value -> edit(value, document.result(), document.count(),
+        int stride = owner.height < 220 ? 26 : 36;
+        propertyField(owner, x, y, width, "id", document.id(), value -> edit(value, document.result(), document.count(),
                 document.experience(), document.cookingTime(), document.group()));
-        field(owner, x, y + 30, width, "group", document.group(), value -> edit(document.id(), document.result(), document.count(),
+        propertyField(owner, x, y + stride, width, "group", document.group(), value -> edit(document.id(), document.result(), document.count(),
                 document.experience(), document.cookingTime(), value));
         if (document.type() != RecipeType.BREWING && document.type() != RecipeType.SMITHING_TRIM && document.type() != RecipeType.CUSTOM) {
-            field(owner, x, y + 60, isCooking() ? width / 3 - 3 : width, "count", numberText.getOrDefault("count", Integer.toString(document.count())), value -> {
-                try { int parsed = Integer.parseInt(value); invalidNumbers.remove("count"); edit(document.id(), document.result(), parsed, document.experience(), document.cookingTime(), document.group()); }
+            propertyField(owner, x, y + stride * 2, isCooking() ? width / 3 - 3 : width, "count", numberText.getOrDefault("count", Integer.toString(document.count())), value -> {
+                try { int parsed = Integer.parseInt(value); invalidNumbers.remove("count"); status = text("modified"); edit(document.id(), document.result(), parsed, document.experience(), document.cookingTime(), document.group()); }
                 catch (NumberFormatException ignored) { invalidNumbers.add("count"); status = text("invalid_number"); }
             });
         }
         if (isCooking()) {
-            field(owner, x + width / 3, y + 60, width / 3 - 3, "time", numberText.getOrDefault("time", Integer.toString(document.cookingTime())), value -> {
-                try { int parsed = Integer.parseInt(value); invalidNumbers.remove("time"); edit(document.id(), document.result(), document.count(), document.experience(), parsed, document.group()); }
+            propertyField(owner, x + width / 3, y + stride * 2, width / 3 - 3, "time", numberText.getOrDefault("time", Integer.toString(document.cookingTime())), value -> {
+                try { int parsed = Integer.parseInt(value); invalidNumbers.remove("time"); status = text("modified"); edit(document.id(), document.result(), document.count(), document.experience(), parsed, document.group()); }
                 catch (NumberFormatException ignored) { invalidNumbers.add("time"); status = text("invalid_number"); }
             });
-            field(owner, x + width * 2 / 3, y + 60, width / 3 - 3, "experience", numberText.getOrDefault("experience", Float.toString(document.experience())), value -> {
-                try { float parsed = Float.parseFloat(value); invalidNumbers.remove("experience"); edit(document.id(), document.result(), document.count(), parsed, document.cookingTime(), document.group()); }
+            propertyField(owner, x + width * 2 / 3, y + stride * 2, width / 3 - 3, "experience", numberText.getOrDefault("experience", Float.toString(document.experience())), value -> {
+                try { float parsed = Float.parseFloat(value); invalidNumbers.remove("experience"); status = text("modified"); edit(document.id(), document.result(), document.count(), parsed, document.cookingTime(), document.group()); }
                 catch (NumberFormatException ignored) { invalidNumbers.add("experience"); status = text("invalid_number"); }
             });
         }
+    }
+
+    private UiTextField propertyField(UiScreen owner, int x, int y, int width, String key, String value, Consumer<String> edit) {
+        var row = RecipeEditorLayout.propertyRow(new RecipeEditorLayout.Rect(x, y, width, 36), 0, 0, 1, owner.height < 220);
+        var bounds = row.field();
+        return field(owner, bounds.x(), bounds.y() - 12, bounds.width(), key, value, edit);
+    }
+
+    private void propertyLabel(UiScreen owner, UiFrame frame, int x, int y, int width, String key) {
+        var row = RecipeEditorLayout.propertyRow(new RecipeEditorLayout.Rect(x, y, width, 36), 0, 0, 1, owner.height < 220);
+        var label = row.label();
+        line(frame, text(key), label.x(), label.y(), label.width(), UiWorkbench.secondaryTextColor());
     }
 
     private boolean isCooking() {
@@ -278,59 +329,69 @@ public final class RecipeEditor {
     }
 
     private RecipeArtifact artifact() {
-        if (!invalidNumbers.isEmpty()) { status = text("invalid_number"); return null; }
+        if (!invalidNumbers.isEmpty()) { validationStatus = text("invalid_number"); return null; }
         long now = System.nanoTime();
         if (document.equals(generatedDocument) && format == generatedFormat && now < registryValidationTime) return generatedArtifact;
+        validationStatus = null;
         registryValidationTime = now + 1_000_000_000L;
         generatedDocument = document; generatedFormat = format; generatedArtifact = null;
         try {
             var issues = new ArrayList<>(RecipeGenerator.validate(document, target, format));
             if (issues.isEmpty()) issues.addAll(RecipeRegistryValidation.validate(document));
-            if (!issues.isEmpty()) { var issue = issues.get(0); status = text("issue", text("field." + issue.field()), text("error." + issue.key())); return null; }
+            if (!issues.isEmpty()) { var issue = issues.get(0); validationStatus = text("issue", text("field." + issue.field()), text("error." + issue.key())); return null; }
             generatedArtifact = RecipeGenerator.generate(document, target, format);
             return generatedArtifact;
-        } catch (RuntimeException exception) { status = text("failed", exception.getMessage()); return null; }
+        } catch (RuntimeException exception) { validationStatus = text("failed", exception.getMessage()); return null; }
     }
 
     private void draw(UiScreen owner, UiFrame frame) {
         undoButton.active = undo.canRestore(); redoButton.active = redo.canRestore();
         var artifact = artifact();
         if (copy != null) { copy.active = artifact != null && !busy; export.active = copy.active; }
-        int w = owner.width;
-        if (w >= 650 || view == 0) {
-            int x = 12, y = 94;
-            if (document.type() != RecipeType.CUSTOM) {
-                line(frame, text("inputs"), x, y, w >= 650 ? 190 : w - 24, UiWorkbench.textColor());
-                int cell = cellSize(owner.height, inputCount());
-                int columns = inputCount() == 9 ? 3 : inputCount();
-                int gridWidth = columns * cell + (columns - 1) * 2;
-                line(frame, text(document.type() == RecipeType.SMITHING_TRIM ? "trim_pattern" : "output"), x + gridWidth + 24, y,
-                        w >= 650 ? 190 - gridWidth - 24 : w - gridWidth - 48, UiWorkbench.textColor());
+        if (owner.width >= 500) line(frame, text("title").copy().withStyle(style -> style.withBold(true)),
+                180, 16, owner.width - 270, UiWorkbench.textColor());
+        if ((layout.wide() || view == 0) && slotLayout != null) {
+            var grid = slotLayout.inputs(); var out = slotLayout.output();
+            if (owner.height >= 220) {
+                line(frame, text("inputs"), grid.x(), grid.y() - 12, grid.width(), UiWorkbench.secondaryTextColor());
+                if (output != null) line(frame, text(document.type() == RecipeType.SMITHING_TRIM ? "trim_pattern" : "output"),
+                        out.x(), out.y() - 12, Math.max(out.width(), 56), UiWorkbench.secondaryTextColor());
             }
-            if (owner.height >= 220) line(frame, text("slot_help"), x, owner.height - 38, w >= 650 ? 190 : w - 24, UiWorkbench.secondaryTextColor());
+            if (output != null) {
+                var arrow = slotLayout.arrow();
+                line(frame, Component.literal("→"), arrow.x(), arrow.y() + arrow.height() / 2 - 4, arrow.width(), UiWorkbench.secondaryTextColor());
+            }
         }
-        if (w >= 650 || view == 1) {
-            int x = w >= 650 ? 214 : 12, width = w >= 650 ? 200 : w - 24;
-            line(frame, text("id"), x, 60, width, UiWorkbench.secondaryTextColor());
-            line(frame, text("group"), x, 90, width, UiWorkbench.secondaryTextColor());
+        if (layout.wide() || view == 1) {
+            var pane = layout.properties(); int x = pane.x(), y = pane.y(), width = pane.width();
+            int stride = owner.height < 220 ? 26 : 36;
+            propertyLabel(owner, frame, x, y, width, "id");
+            propertyLabel(owner, frame, x, y + stride, width, "group");
             if (document.type() != RecipeType.BREWING && document.type() != RecipeType.SMITHING_TRIM && document.type() != RecipeType.CUSTOM)
-                line(frame, text("count"), x, 120, isCooking() ? width / 3 - 3 : width, UiWorkbench.secondaryTextColor());
+                propertyLabel(owner, frame, x, y + stride * 2, isCooking() ? width / 3 - 3 : width, "count");
             if (isCooking()) {
-                line(frame, text("time"), x + width / 3, 120, width / 3 - 3, UiWorkbench.secondaryTextColor());
-                line(frame, text("experience"), x + width * 2 / 3, 120, width / 3 - 3, UiWorkbench.secondaryTextColor());
+                propertyLabel(owner, frame, x + width / 3, y + stride * 2, width / 3 - 3, "time");
+                propertyLabel(owner, frame, x + width * 2 / 3, y + stride * 2, width / 3 - 3, "experience");
             }
         }
-        if ((w >= 650 || view == 2) && artifact != null) {
-            int x = w >= 650 ? 426 : 12, width = w >= 650 ? w - 438 : w - 24;
+        if ((layout.wide() || view == 2) && artifact != null) {
+            var pane = layout.result(); int x = pane.x(), width = pane.width(), top = pane.y() + (owner.height < 200 ? 72 : 86);
             var lines = artifact.content().split("\n", -1);
-            int rows = Math.max(1, (owner.height - 178) / 11), pages = Math.max(1, (lines.length + rows - 1) / rows);
+            int rows = Math.max(1, (pane.bottom() - top) / 11), pages = Math.max(1, (lines.length + rows - 1) / rows);
             codePage = Math.max(0, Math.min(codePage, pages - 1));
-            line(frame, text("code_page", codePage + 1, pages), x, 142, width, UiWorkbench.accentColor());
-            for (int i = 0; i < rows && codePage * rows + i < lines.length; i++) {
-                line(frame, Component.literal(lines[codePage * rows + i]), x, 155 + i * 11, width, UiWorkbench.textColor());
-            }
+            if (owner.height >= 200) line(frame, text("code_page", codePage + 1, pages), x, pane.y() + 74, width, UiWorkbench.accentColor());
+            for (int i = 0; i < rows && codePage * rows + i < lines.length && top + i * 11 + 9 <= pane.bottom(); i++)
+                line(frame, Component.literal(lines[codePage * rows + i]), x, top + i * 11, width, UiWorkbench.textColor());
         }
-        line(frame, status, 12, Math.max(0, owner.height - 12), Math.max(0, w - 24), UiWorkbench.accentColor());
+        if ((layout.wide() || view == 2) && artifact == null && validationStatus != null) {
+            var pane = layout.result();
+            line(frame, validationStatus, pane.x(), pane.y() + (owner.height < 200 ? 72 : 86),
+                    pane.width(), UiWorkbench.accentColor());
+        }
+        var footer = layout.status();
+        Component feedback = validationStatus != null && (status.equals(text("intro")) || status.equals(text("modified")))
+                ? validationStatus : status;
+        line(frame, feedback, footer.x(), footer.y() + 4, footer.width(), UiWorkbench.accentColor());
     }
 
     private static void line(UiFrame frame, Component text, int x, int y, int width, int color) {
@@ -421,7 +482,7 @@ public final class RecipeEditor {
     private void openSlot(int slot, String[] value) {
         String original = slot == 9 ? document.result() : document.inputs().get(slot);
         final UiTextField[] currentInput = new UiTextField[1];
-        UiWorkbench.builder(slotName(slot), pendingGuard(() -> !value[0].equals(original),
+        builder(slotName(slot), pendingGuard(() -> !value[0].equals(original),
                 () -> { setSlot(slot, value[0]); refresh(); }, () -> openSlot(slot, value))).onInit(owner -> {
             back(owner);
             int w = owner.width - 24, y = Math.max(38, owner.viewport().y() + 12);
@@ -443,7 +504,7 @@ public final class RecipeEditor {
     }
 
     private void openTypes() {
-        UiWorkbench.builder(text("type"), screen).onInit(owner -> {
+        builder(text("type"), screen).onInit(owner -> {
             back(owner);
             var types = RecipeType.values(); int columns = owner.height < 220 ? 3 : 2;
             int width = (owner.width - 24 - (columns - 1) * 4) / columns, y = Math.max(38, owner.viewport().y() + 8);
@@ -476,7 +537,7 @@ public final class RecipeEditor {
     }
 
     private void openCustom(String[] raw) {
-        UiWorkbench.builder(text("custom_edit"), pendingGuard(() -> !raw[0].equals(document.rawJson()),
+        builder(text("custom_edit"), pendingGuard(() -> !raw[0].equals(document.rawJson()),
                 () -> applyCustom(raw[0]), () -> openCustom(raw))).onInit(owner -> {
             back(owner);
             int w = owner.width - 24, y = Math.max(38, owner.viewport().y() + 10);
@@ -499,7 +560,7 @@ public final class RecipeEditor {
     }
 
     private Screen pendingGuard(Supplier<Boolean> changed, Runnable apply, Runnable resume) {
-        return UiWorkbench.builder(text("unsaved"), new Screen(text("title")) {
+        return builder(text("unsaved"), new Screen(text("title")) {
             @Override protected void init() { resume.run(); }
         }).onInit(owner -> {
             if (!changed.get()) { refresh(); return; }
@@ -524,7 +585,7 @@ public final class RecipeEditor {
     private void help() {
         boolean brewing = document.type() == RecipeType.BREWING || document.type() == RecipeType.BREWING_CONTAINER;
         String section = brewing ? "brewing" : format.name().toLowerCase(Locale.ROOT);
-        UiWorkbench.builder(text("help"), screen).onInit(owner -> {
+        builder(text("help"), screen).onInit(owner -> {
             back(owner);
             button(owner, 12, owner.height - 32, owner.width - 24, 22, text("open_directory"), () -> {
                 try {
@@ -574,7 +635,7 @@ public final class RecipeEditor {
     private void openDrafts(int page) {
         try {
             var ids = workspace.list();
-            UiWorkbench.builder(text("drafts"), screen).onInit(owner -> {
+            builder(text("drafts"), screen).onInit(owner -> {
                 back(owner);
                 int y = Math.max(38, owner.viewport().y() + 6);
                 int rows = Math.max(1, (owner.height - y - 40) / 26), pages = Math.max(1, (ids.size() + rows - 1) / rows);

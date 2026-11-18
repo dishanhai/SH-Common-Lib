@@ -330,3 +330,5 @@ Forge 1.20.1、NeoForge 1.21.1 和 NeoForge 26.1.2 的客户端可使用 `com.di
 首次进入主菜单时，SH-Common-Lib 会在 `config/sh_common_lib/changelog/Update-0.0.0.md` 放入一份双语预设。默认 `enabled: false`。编辑正文并改成 `enabled: true` 后，重启客户端即可在主菜单看到公告。游戏会保留已有的同名文件。
 
 SH-Common-Lib 以 [MIT License](LICENSE) 发布。
+
+配方批量预检、服务端注册表验证与有界草稿查询见 [配方后端 API](docs/RECIPE_BACKEND_API.md)。批次 API 不自动安装配方或执行服务端重载。

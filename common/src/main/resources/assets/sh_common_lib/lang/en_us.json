@@ -873,5 +873,6 @@
   "screen.sh_common_lib.recipe_editor.field.input5": "Ingredient 6",
   "screen.sh_common_lib.recipe_editor.field.input6": "Ingredient 7",
   "screen.sh_common_lib.recipe_editor.field.input7": "Ingredient 8",
-  "screen.sh_common_lib.recipe_editor.field.input8": "Ingredient 9"
+  "screen.sh_common_lib.recipe_editor.field.input8": "Ingredient 9",
+  "screen.sh_common_lib.recipe_editor.actions": "Actions"
 }

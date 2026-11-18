@@ -300,3 +300,27 @@ publishing {
         }
     }
 }
+
+tasks.register('recipeBackendTest', JavaExec) {
+    group = 'verification'
+    description = 'Checks recipe batch preflight, immutable results and bounded workspace queries.'
+    classpath = sourceSets.controlCenterVerification.runtimeClasspath + sourceSets.main.runtimeClasspath
+    mainClass = 'com.dishanhai.sh_common_lib.api.ulk.recipe.RecipeBatchTest'
+}
+tasks.named('check') { dependsOn 'recipeBackendTest' }
+
+tasks.register('recipeReferencesTest', JavaExec) {
+    group = 'verification'
+    description = 'Checks server-safe recipe reference lookup, unavailable registries and versioned trim semantics.'
+    classpath = sourceSets.controlCenterVerification.runtimeClasspath + sourceSets.main.runtimeClasspath
+    mainClass = 'com.dishanhai.sh_common_lib.api.ulk.recipe.RecipeReferencesTest'
+}
+tasks.named('check') { dependsOn 'recipeReferencesTest' }
+
+// Responsive editor geometry is shared by every supported loader.
+tasks.register('recipeEditorLayoutTest', JavaExec) {
+    group = 'verification'
+    classpath = sourceSets.controlCenterVerification.runtimeClasspath
+    mainClass = 'com.dishanhai.sh_common_lib.client.recipe.RecipeEditorLayoutTest'
+}
+tasks.named('check') { dependsOn 'recipeEditorLayoutTest' }
