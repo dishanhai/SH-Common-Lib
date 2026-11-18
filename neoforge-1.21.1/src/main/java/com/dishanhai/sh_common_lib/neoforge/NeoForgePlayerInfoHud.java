@@ -40,6 +40,7 @@ final class NeoForgePlayerInfoHud {
         modBus.addListener((RegisterKeyMappingsEvent event) -> {
             event.register(hud.editKey());
             event.register(ControlCenterModule.openKey());
+            event.register(ControlCenterModule.voiceKey());
             event.register(copyData);
             event.register(copyState);
             event.register(previousPage);

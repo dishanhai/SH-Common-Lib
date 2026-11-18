@@ -122,6 +122,18 @@ var highestFirst = analysis.byWeight();
 
 「设置 → 开发者 → 开发者配置」可进入开发者配置页，当前显示空状态。
 
+### 语音取物
+
+在「主控中心 → 设置 → 开发者」开启「语音取物」，点击「应用」。默认关闭，快捷键默认为 **F4**，可以在「按键绑定」里修改。玩家需拥有原版 **OP 2 或更高权限**，物品由服务端的 `/give` 命令发放。
+
+初次使用时，将 [whisper.cpp](https://github.com/ggml-org/whisper.cpp/releases) 的 `whisper-cli`（Windows 用 `whisper-cli.exe`，并保留同目录的依赖 DLL）与 [多语言 ggml-base.bin](https://huggingface.co/ggerganov/whisper.cpp/blob/main/ggml-base.bin) 放进客户端的 `config/sh_common_lib/voice/`。语音在本机识别，每次操作最多录音 5 秒，临时音频在识别结束后删除。
+
+- **按一次**取 1 件。**快速按两次**取该物品的一组，数量按物品的堆叠上限计算。
+- 看到物品栏上方「单件」或「整组」模式的「正在聆听」后，说出物品名。例如「木头 / wood」取橡木原木，「水 / water」取水桶。水桶的堆叠上限为 1。
+- 原版和模组物品均使用 `zh_cn`、`en_us` 的显示名称。精确匹配优先，重名时不会发放。
+- 可开启默认关闭的「语音模糊匹配」。精确未命中时，最多容许 1 处字符差异，6 个字符及以上容许 2 处。也支持补全首尾的一个英文词或最多两个中文字符。只有唯一最佳物品才会发放。
+- 打开界面、失去窗口焦点或离开世界会取消本次操作。
+
 SHCLIB 内部可在 `ControlCenterModule.settings` 中添加 `SettingsGroup`，用 `Toggle` 接入开关，用 `Page` 接入独立子页。有多个分组时，「设置」页会显示可滚动的分组导航。
 
 ## 加载动画与性能分析

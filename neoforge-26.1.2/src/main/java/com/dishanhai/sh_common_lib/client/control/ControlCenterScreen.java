@@ -384,7 +384,8 @@ final class ControlCenterScreen extends Screen {
     private void apply() {
         var result = draft.apply(hud::applySettings, ClientLoading::applySettings,
                 com.dishanhai.sh_common_lib.client.jei.JeiSearchPreferences::save, ArtisanControlSettings::save,
-                com.dishanhai.sh_common_lib.client.item.ArtisanAppearancePreferences::save);
+                com.dishanhai.sh_common_lib.client.item.ArtisanAppearancePreferences::save,
+                com.dishanhai.sh_common_lib.client.voice.VoiceItemPreferences::save);
         status = label(switch (result) {
             case SAVED -> "saved";
             case PARTIAL -> "partially_saved";

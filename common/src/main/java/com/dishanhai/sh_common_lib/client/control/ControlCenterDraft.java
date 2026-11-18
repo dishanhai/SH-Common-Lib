@@ -6,6 +6,7 @@ import com.dishanhai.sh_common_lib.client.hud.PlayerInfoItem;
 import com.dishanhai.sh_common_lib.client.hud.HudGroups;
 import com.dishanhai.sh_common_lib.client.jei.JeiSearchSettings;
 import com.dishanhai.sh_common_lib.client.item.ArtisanAppearancePreferences;
+import com.dishanhai.sh_common_lib.client.voice.VoiceItemPreferences;
 import com.dishanhai.sh_common_lib.internal.item.ArtisanSettings;
 import com.dishanhai.sh_common_lib.internal.item.ArtisanSettings.Passives;
 import com.dishanhai.sh_common_lib.internal.item.ArtisanSettings.Profiles;
@@ -20,7 +21,7 @@ final class ControlCenterDraft {
     enum ApplyResult { SAVED, PARTIAL, FAILED }
 
     private static final Values DEFAULTS = new Values(PlayerInfoHudSettings.DEFAULT, false, false, JeiSearchSettings.DEFAULT,
-            Profiles.DEFAULTS, ArtisanAppearancePreferences.DEFAULT_TARGET_COLORS);
+            Profiles.DEFAULTS, ArtisanAppearancePreferences.DEFAULT_TARGET_COLORS, VoiceItemPreferences.Settings.DEFAULT);
     private final boolean artisanEditable;
     private Values saved;
     private Values draft;
@@ -36,8 +37,14 @@ final class ControlCenterDraft {
 
     ControlCenterDraft(PlayerInfoHudSettings hud, boolean animation, boolean profiling, JeiSearchSettings jei,
                        Profiles artisan, boolean artisanEditable, boolean artisanTargetColors) {
+        this(hud, animation, profiling, jei, artisan, artisanEditable, artisanTargetColors, VoiceItemPreferences.Settings.DEFAULT);
+    }
+
+    ControlCenterDraft(PlayerInfoHudSettings hud, boolean animation, boolean profiling, JeiSearchSettings jei,
+                       Profiles artisan, boolean artisanEditable, boolean artisanTargetColors,
+                       VoiceItemPreferences.Settings voiceItems) {
         this.artisanEditable = artisanEditable;
-        saved = new Values(hud, animation, profiling, jei, artisan, artisanTargetColors);
+        saved = new Values(hud, animation, profiling, jei, artisan, artisanTargetColors, voiceItems);
         draft = saved;
     }
 
@@ -48,6 +55,7 @@ final class ControlCenterDraft {
     ArtisanSettings artisan(boolean cosmic) { return draft.artisan().get(cosmic); }
     Passives artisanPassives() { return draft.artisan().passives(); }
     boolean artisanTargetColors() { return draft.artisanTargetColors(); }
+    VoiceItemPreferences.Settings voiceItems() { return draft.voiceItems(); }
     boolean dirty() { return !draft.equals(saved); }
     boolean canReset() { return beforeReset != null || !draft.equals(defaults()); }
     boolean canUndoReset() { return beforeReset != null; }
@@ -66,6 +74,13 @@ final class ControlCenterDraft {
         if (artisanEditable) edit(draft.withArtisan(draft.artisan().withPassives(value)));
     }
     void setArtisanTargetColors(boolean enabled) { edit(draft.withArtisanTargetColors(enabled)); }
+    void setVoiceItems(boolean enabled) {
+        edit(draft.withVoiceItems(new VoiceItemPreferences.Settings(enabled, voiceItems().fuzzy())));
+    }
+
+    void setVoiceFuzzy(boolean enabled) {
+        edit(draft.withVoiceItems(new VoiceItemPreferences.Settings(voiceItems().enabled(), enabled)));
+    }
     void setJeiEnabled(boolean value) { edit(draft.withJei(jei().withEnabled(value))); }
     void setJeiAe2Orderable(boolean value) { edit(draft.withJei(jei().withAe2Orderable(value))); }
     void setJeiOptimizeRendering(boolean value) { edit(draft.withJei(jei().withOptimizeRendering(value))); }
@@ -127,6 +142,12 @@ final class ControlCenterDraft {
     ApplyResult apply(Predicate<PlayerInfoHudSettings> saveHud, BiPredicate<Boolean, Boolean> saveLoading,
                       Predicate<JeiSearchSettings> saveJei, Predicate<Profiles> saveArtisan,
                       Predicate<Boolean> saveArtisanTargetColors) {
+        return apply(saveHud, saveLoading, saveJei, saveArtisan, saveArtisanTargetColors, ignored -> false);
+    }
+
+    ApplyResult apply(Predicate<PlayerInfoHudSettings> saveHud, BiPredicate<Boolean, Boolean> saveLoading,
+                      Predicate<JeiSearchSettings> saveJei, Predicate<Profiles> saveArtisan,
+                      Predicate<Boolean> saveArtisanTargetColors, Predicate<VoiceItemPreferences.Settings> saveVoiceItems) {
         int successes = 0;
         int failures = 0;
         if (!draft.hud().equals(saved.hud())) {
@@ -156,6 +177,12 @@ final class ControlCenterDraft {
         if (draft.artisanTargetColors() != saved.artisanTargetColors()) {
             if (saveArtisanTargetColors.test(draft.artisanTargetColors())) {
                 saved = saved.withArtisanTargetColors(draft.artisanTargetColors());
+                successes++;
+            } else failures++;
+        }
+        if (!draft.voiceItems().equals(saved.voiceItems())) {
+            if (saveVoiceItems.test(draft.voiceItems())) {
+                saved = saved.withVoiceItems(draft.voiceItems());
                 successes++;
             } else failures++;
         }
@@ -192,12 +219,13 @@ final class ControlCenterDraft {
     }
 
     private record Values(PlayerInfoHudSettings hud, boolean animation, boolean profiling, JeiSearchSettings jei,
-                          Profiles artisan, boolean artisanTargetColors) {
+                          Profiles artisan, boolean artisanTargetColors, VoiceItemPreferences.Settings voiceItems) {
         private Values { Objects.requireNonNull(hud); Objects.requireNonNull(jei); Objects.requireNonNull(artisan); }
-        private Values withHud(PlayerInfoHudSettings value) { return new Values(value, animation, profiling, jei, artisan, artisanTargetColors); }
-        private Values withLoading(boolean animation, boolean profiling) { return new Values(hud, animation, profiling, jei, artisan, artisanTargetColors); }
-        private Values withJei(JeiSearchSettings value) { return new Values(hud, animation, profiling, value, artisan, artisanTargetColors); }
-        private Values withArtisan(Profiles value) { return new Values(hud, animation, profiling, jei, value, artisanTargetColors); }
-        private Values withArtisanTargetColors(boolean enabled) { return new Values(hud, animation, profiling, jei, artisan, enabled); }
+        private Values withHud(PlayerInfoHudSettings value) { return new Values(value, animation, profiling, jei, artisan, artisanTargetColors, voiceItems); }
+        private Values withLoading(boolean animation, boolean profiling) { return new Values(hud, animation, profiling, jei, artisan, artisanTargetColors, voiceItems); }
+        private Values withJei(JeiSearchSettings value) { return new Values(hud, animation, profiling, value, artisan, artisanTargetColors, voiceItems); }
+        private Values withArtisan(Profiles value) { return new Values(hud, animation, profiling, jei, value, artisanTargetColors, voiceItems); }
+        private Values withArtisanTargetColors(boolean enabled) { return new Values(hud, animation, profiling, jei, artisan, enabled, voiceItems); }
+        private Values withVoiceItems(VoiceItemPreferences.Settings value) { return new Values(hud, animation, profiling, jei, artisan, artisanTargetColors, value); }
     }
 }

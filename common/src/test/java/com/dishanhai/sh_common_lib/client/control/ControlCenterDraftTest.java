@@ -7,6 +7,7 @@ import com.dishanhai.sh_common_lib.client.hud.PlayerInfoItem;
 import com.dishanhai.sh_common_lib.client.hud.HudGroups;
 import com.dishanhai.sh_common_lib.client.jei.JeiSearchSettings;
 import com.dishanhai.sh_common_lib.client.item.ArtisanAppearancePreferences;
+import com.dishanhai.sh_common_lib.client.voice.VoiceItemPreferences;
 import com.dishanhai.sh_common_lib.internal.item.ArtisanSettings;
 import com.dishanhai.sh_common_lib.internal.item.ArtisanSettings.Passives;
 import com.dishanhai.sh_common_lib.internal.item.ArtisanSettings.Profiles;
@@ -26,6 +27,7 @@ public final class ControlCenterDraftTest {
         jeiSettingsAreStagedAndRetryable();
         artisanSettingsRespectReadOnlyWorldsAndApply();
         artisanAppearancePersistsOnClient();
+        voiceItemsAreOptInAndPersist();
         ControlCenterLayoutTest.run();
         PlayerInfoHudSettingsIoTest.run();
         System.out.println("Control center draft checks passed");
@@ -136,6 +138,46 @@ public final class ControlCenterDraftTest {
         check(state.dirty() && !state.jei().optimizeRendering(), "restore defaults disables the rendering optimization");
         state.restoreDefaults();
         check(!state.dirty() && state.jei().optimizeRendering(), "undoing the reset restores the rendering optimization");
+    }
+
+    private static void voiceItemsAreOptInAndPersist() throws Exception {
+        var directory = Files.createTempDirectory("shclib-voice-preferences");
+        var settings = new ControlCenterDraft(PlayerInfoHudSettings.DEFAULT, false, false);
+        try {
+            VoiceItemPreferences.initialize(directory);
+            var defaults = VoiceItemPreferences.Settings.DEFAULT;
+            check(settings.voiceItems().equals(defaults) && VoiceItemPreferences.current().equals(defaults),
+                    "voice items and fuzzy matching start disabled");
+            settings.setVoiceItems(true);
+            settings.setVoiceFuzzy(true);
+            check(settings.dirty() && VoiceItemPreferences.current().equals(defaults),
+                    "voice item settings must stay off until apply");
+            check(settings.apply(hud -> true, (a, p) -> true, jei -> true, artisan -> true, colors -> true,
+                    enabled -> false) == ControlCenterDraft.ApplyResult.FAILED && settings.dirty(),
+                    "the voice setting must remain staged after a failed write");
+            check(settings.apply(hud -> true, (a, p) -> true, jei -> true, artisan -> true, colors -> true,
+                    VoiceItemPreferences::save) == ControlCenterDraft.ApplyResult.SAVED && !settings.dirty(),
+                    "applying a voice setting must save it");
+            VoiceItemPreferences.initialize(directory);
+            var enabled = new VoiceItemPreferences.Settings(true, true);
+            check(VoiceItemPreferences.current().equals(enabled), "both voice options must survive a restart");
+            settings.restoreDefaults();
+            check(settings.voiceItems().equals(defaults) && VoiceItemPreferences.current().equals(enabled),
+                    "reset is staged and defaults both options to off");
+            settings.restoreDefaults();
+            check(settings.voiceItems().equals(enabled) && !settings.dirty(), "undo must restore both voice options");
+            settings.setVoiceItems(false);
+            check(!settings.voiceItems().enabled() && settings.voiceItems().fuzzy(),
+                    "disabling voice must preserve the selected fuzzy preference");
+            check(VoiceItemPreferences.save(settings.voiceItems()), "disabling voice must be saved");
+            VoiceItemPreferences.initialize(directory);
+            check(VoiceItemPreferences.current().equals(new VoiceItemPreferences.Settings(false, true)),
+                    "the individual voice options must survive a restart");
+        } finally {
+            Files.deleteIfExists(directory.resolve("voice/preferences.properties"));
+            Files.deleteIfExists(directory.resolve("voice"));
+            Files.deleteIfExists(directory);
+        }
     }
 
     private static void stagedEditsAndUndo() {

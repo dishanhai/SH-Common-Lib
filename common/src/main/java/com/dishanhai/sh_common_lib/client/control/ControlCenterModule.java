@@ -25,6 +25,8 @@ import com.dishanhai.sh_common_lib.client.loading.ClientLoading;
 import com.dishanhai.sh_common_lib.client.jei.JeiSearchPreferences;
 import com.dishanhai.sh_common_lib.internal.item.ArtisanConfig;
 import com.dishanhai.sh_common_lib.client.item.ArtisanAppearancePreferences;
+import com.dishanhai.sh_common_lib.client.voice.VoiceItemClient;
+import com.dishanhai.sh_common_lib.client.voice.VoiceItemPreferences;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.Util;
 import net.minecraft.client.KeyMapping;
@@ -48,6 +50,10 @@ public final class ControlCenterModule implements UIModule {
     private static final UiId ID = new UiId(ShCommonLib.MOD_ID, "control_center");
     private static final KeyMapping OPEN_KEY = new KeyMapping("key.sh_common_lib.control_center",
             InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_F10, "key.categories.sh_common_lib");
+    private static final KeyMapping VOICE_KEY = new KeyMapping(VoiceItemClient.KEY,
+            InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_F4, "key.categories.sh_common_lib");
+    private static final VoiceItemClient VOICE = new VoiceItemClient(VOICE_KEY,
+            player -> player.hasPermissions(2));
     private static ControlCenterModule active;
     private static PlayerInfoHud playerInfoHud;
     private static ControlCenterScreen openPage;
@@ -97,7 +103,10 @@ public final class ControlCenterModule implements UIModule {
         playerInfoHud = hud;
     }
 
+    public static KeyMapping voiceKey() { return VOICE_KEY; }
+
     public static void tick(PlayerInfoHud hud) {
+        VOICE.tick();
         if (!OPEN_KEY.consumeClick()) return;
         while (OPEN_KEY.consumeClick()) {
             // Consume repeated presses before opening the screen once.
@@ -115,7 +124,7 @@ public final class ControlCenterModule implements UIModule {
         }
         var draft = new ControlCenterDraft(hud.settings(), ClientLoading.animation(), ClientLoading.profiling(),
                 JeiSearchPreferences.current(), ArtisanConfig.profiles(), ArtisanControlSettings.editable(),
-                ArtisanAppearancePreferences.targetColors());
+                ArtisanAppearancePreferences.targetColors(), VoiceItemPreferences.current());
         var page = new ControlCenterScreen(center.settings(hud, draft), center.module, center.screens, ID, hud, draft);
         var guard = page.returnGuard(parent);
         var screen = center.screens.create(center.module, new UiScreenBuilder(label("title")).parent(guard)
@@ -168,6 +177,10 @@ public final class ControlCenterModule implements UIModule {
         var playerInfo = new SettingsGroup(Component.translatable(playerInfoKey + "editor"), GraphicIcon.MONITOR,
                 hudEntries, true);
         var developer = new SettingsGroup(label("developer"), GraphicIcon.DEVELOPMENT, List.of(
+                new SettingsGroup.Toggle(enabled -> label(enabled ? "voice_items_on" : "voice_items_off"),
+                        () -> draft.voiceItems().enabled(), draft::setVoiceItems),
+                new SettingsGroup.Toggle(enabled -> label(enabled ? "voice_fuzzy_on" : "voice_fuzzy_off"),
+                        () -> draft.voiceItems().fuzzy(), draft::setVoiceFuzzy, () -> draft.voiceItems().enabled()),
                 new SettingsGroup.Page(com.dishanhai.sh_common_lib.client.recipe.RecipeEditorAccess.title(), GraphicIcon.DEVELOPMENT,
                         com.dishanhai.sh_common_lib.client.recipe.RecipeEditorAccess::unavailable,
                         com.dishanhai.sh_common_lib.client.recipe.RecipeEditorAccess::open),

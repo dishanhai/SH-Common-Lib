@@ -3,9 +3,11 @@ package com.dishanhai.sh_common_lib.api.client.ulk;
 
 import java.util.List;
 import java.util.ArrayDeque;
+import java.util.Map;
 
 public final class ClientSearchTest {
     public static void main(String[] args) throws Exception {
+        uniqueFuzzyNameMatches();
         var sources = new SearchSources(2, new java.util.Random(1));
         sources.replaceAvailable(List.of("Iron Ingot", "钻石", "Iron Ingot", "Gold"));
         require(sources.random().size() == 2, "random source is bounded and deduplicated");
@@ -120,6 +122,24 @@ public final class ClientSearchTest {
         require(SearchCorrection.suggest("钻百块", List.of(
                 new ClientSearch.Entry<>("diamond", "钻石块", List.of(), List.of(), "", List.of())), 3)
                 .get(0).completion().equals("钻石块"), "Unicode correction uses code points");
+    }
+
+    private static void uniqueFuzzyNameMatches() {
+        var names = Map.of("diamond", "diamond", "橡木原木", "oak_log", "oak log", "oak_log",
+                "iron ingot", "iron_ingot", "gold ingot", "gold_ingot", "mystic steel ingot", "mod_ingot");
+        require(SearchCorrection.uniqueNameMatch("diamand", names).orElseThrow().equals("diamond"),
+                "an English transcription typo can resolve an item");
+        require(SearchCorrection.uniqueNameMatch("橡木原目", names).orElseThrow().equals("oak_log"),
+                "a Chinese transcription typo can resolve an item");
+        require(SearchCorrection.uniqueNameMatch("mystic steel", names).orElseThrow().equals("mod_ingot"),
+                "one additional word can resolve a mod item");
+        require(SearchCorrection.uniqueNameMatch("ingot", names).isEmpty(),
+                "equal best matches of distinct items must be rejected");
+        require(SearchCorrection.uniqueNameMatch("log", Map.of("oak log", "oak_log", "wood log", "oak_log"))
+                .orElseThrow().equals("oak_log"), "multiple names of one item do not make the match ambiguous");
+        require(SearchCorrection.uniqueNameMatch("steel", names).isEmpty(), "expansion remains bounded");
+        require(SearchCorrection.uniqueNameMatch("石", Map.of("钻石", "diamond")).isEmpty(),
+                "single-character guesses are too broad");
     }
 
     private static void require(boolean condition, String message) {
