@@ -1,5 +1,23 @@
 # 构建经验
 
+- 坐姿 Fumo 的脚部优先做成短腿接小脚。长鞋面和多层外底从游戏里的斜上视角会显得像台阶。刘海用同一片皮肤头发区域取色，发束贴着头顶连成一体。核对脚掌贴地、旋转后的四向轮廓，以及舞动时模型中心没有左右位移或倾斜。
+
+- Forge 的 SHBUI 后备玩偶掉落表通过可选物品标签引用单装物品。新增变体时需要同时添加标签，否则单装的玩偶能放置却不会掉落。完成后用隔离存档复验单装和双装迁移。
+
+- Fumo 加立体细节时，用游戏实际纹理做正背面预览，并确保相互重叠的露出面有深度差。后发分片若与上层使用同一平面，移动视角会出现闪纹。
+
+- Fumo 音量应同时核对 Ogg 解码后的电平与游戏播放增益。提高源文件的电平可以维持现有衰减和播放范围。此次原音轨平均约 −23 dBFS；本机 libsndfile 在写 Vorbis 时中途退出，改用 FFmpeg 编码后复测为 +8.04 dB，峰值 −2.80 dBFS。
+
+- SHCLIB 编译和运行测试时会直接读取 SHBUI 的本地 JAR。两个仓库同时重写和读取同一个 JAR 会间歇出现 ZIP 页尾缺失和找不到类。先完成 SHBUI 构建，再跑 SHCLIB。
+
+- 校准 Fumo 摆件的坐姿尺寸时，以实际模组 JAR 的方块模型几何为准。ExtendedAE 1.4.19 的鱼大选择框高一格，模型最高点却是 20.5 个单位。调整外观时同时核对落地坐标、物品预览和四个朝向的判定范围。
+
+- 跨版本新增合成配方时，照对应模块的原版格式填写原料键。Forge 1.20.1 和 NeoForge 1.21.1 使用带 `item` 的对象，NeoForge 26.1.2 使用直接的物品 ID 字符串。
+
+- SHCLIB 0.4.1 默认指定的 Forge SHBUI 1.0.11 开发包和 NeoForge 26.1.2 的 1.0.11-alpha.8 包缺少当前源码引用的控件及世界覆盖接口。分别用 `-PshBetterUiJar` 指向 SHBUI 1.0.12-dev 和 1.0.12-alpha.8 后，两端完整构建通过。
+
+- 对三个 Minecraft 版本共用的取物逻辑，用 `ItemStack#getItem().isEnabled(level.enabledFeatures())` 判断物品是否启用。NeoForge 1.21.1 和 26.1.2 的 `ItemStack` 上没有承载该判断的方法。选择快捷键时也需核对 SHBUI 的默认绑定，F8 已用于其控制面板。
+
 - 主控中心的 JEI 扩展详情将搜索设置和素材渲染优化分区。两项各有独立开关，验证时应覆盖单独关闭搜索增强后素材渲染优化仍生效的场景。
 
 - 同一工作区并行修改信标时，若 `BeaconWorldMarkers` 与各端世界渲染器暂时出现方法签名不匹配或缺少 `BeaconBeamPreference`，先核对相关文件是否已齐全，再重跑受影响加载器的构建。此次在信标改动齐全后重跑 Forge 1.20.1 通过。
@@ -123,6 +141,7 @@
 - Gradle 的自定义 `JavaExec` 任务可能使用运行 Gradle 的 Java 17，而项目源码由 Java 21 或 25 工具链编译；应显式设置 `javaLauncher` 为项目工具链，再运行测试。
 
 - 当前 Windows 命令工具即使指定 Git Bash 也可能误触发 WSL 占位程序；可通过 Node 的 `execFile` 显式启动 `C:\Program Files\Git\bin\bash.exe`，继续使用 Git Bash。
+- 核对公开发布需求时，Git 标签、同名本地 JAR 和 CurseForge 发行包可能并非同一构建。SHCLIB 0.3.0 的前置版本应从公开 JAR 的 `META-INF/*mods.toml` 读取。若 CurseForge 的 `edge.forgecdn.net` 下载超时或续传失败，可用相同文件路径从 `mediafilez.forgecdn.net` 下载后再核对。
 
 - Forge 目录迁移为 `forge-1.20.1` 后，根目录 `build-all.bat` 仍指向旧的 `forge` 会在启动构建前报找不到路径；迁移目录时应同步检查批处理入口。
 
