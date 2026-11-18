@@ -1,4 +1,8 @@
 {
+  "block.sh_common_lib.dishanhai_fumo": "dishanhai",
+  "block.sh_common_lib.beibeipuo_fumo": "BeiBeiPuo",
+  "subtitles.sh_common_lib.beibeipuo_fumo": "BeiBeiPuo plays music",
+  "subtitles.sh_common_lib.dishanhai_fumo": "dishanhai plays music",
   "screen.sh_common_lib.cosmic_artisan.hostile_friendly": "Hostile Mob Friendship",
   "screen.sh_common_lib.cosmic_artisan.hostile_friendly_hint": "Hostile mobs ignore you while you carry the tool. Neutral bosses may retaliate for 30 seconds after you attack.",
   "screen.sh_common_lib.cosmic_artisan.boss_friendly": "Boss Friendly",

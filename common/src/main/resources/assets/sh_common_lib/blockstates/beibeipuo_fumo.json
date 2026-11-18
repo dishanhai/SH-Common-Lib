@@ -1,0 +1,8 @@
+{
+  "variants": {
+    "facing=north": { "model": "sh_common_lib:block/beibeipuo_fumo" },
+    "facing=east": { "model": "sh_common_lib:block/beibeipuo_fumo", "y": 90 },
+    "facing=south": { "model": "sh_common_lib:block/beibeipuo_fumo", "y": 180 },
+    "facing=west": { "model": "sh_common_lib:block/beibeipuo_fumo", "y": 270 }
+  }
+}

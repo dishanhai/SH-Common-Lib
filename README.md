@@ -48,6 +48,8 @@ Windows 下可在项目根目录运行 `build-all.bat` 构建三个版本。将 
 
 ## Unified LIB Kernel（ULK）
 
+其他模组可以通过 [ULK Fumo API](docs/FUMO_API.md) 注册坐姿玩偶，并复用 64×64 皮肤模板、舞动及空间音效。
+
 ULK 提供服务端只读玩家物品检查。`UnifiedLibKernel.inspect` 需要在目标玩家的服务器线程调用，返回当前时刻的快照；快照保留物品 NBT 或数据组件，数量使用 `long`。手持物品分别归入 `MAIN_HAND` 和 `OFF_HAND`，不再计入 `INVENTORY`；其余玩家槽位、Curios 饰品、精妙背包（包括嵌套和共享背包）、AE2 无线终端与随身元件、Mekanism 便携 QIO 和 QIO 驱动器的内容分别标记来源。此接口只检查物品，不统计流体或化学品。可选模组未安装时不影响其他来源。
 
 ```java

@@ -1,4 +1,8 @@
 {
+  "block.sh_common_lib.dishanhai_fumo": "dishanhai",
+  "block.sh_common_lib.beibeipuo_fumo": "BeiBeiPuo",
+  "subtitles.sh_common_lib.beibeipuo_fumo": "BeiBeiPuo 播放音乐",
+  "subtitles.sh_common_lib.dishanhai_fumo": "dishanhai 播放音乐",
   "screen.sh_common_lib.cosmic_artisan.hostile_friendly": "敌对友好",
   "screen.sh_common_lib.cosmic_artisan.hostile_friendly_hint": "携带开启本模式的百工·寰宇时，普通敌对生物会放弃针对你。中立 Boss 只在你攻击后反击 30 秒。",
   "screen.sh_common_lib.cosmic_artisan.boss_friendly": "Boss 友好",
