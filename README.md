@@ -72,6 +72,29 @@ NeoForge 1.21.1 的服务端会通过 `META-INF/sh_better_ui.automation` 自动�
 
 Forge 1.20.1 使用 Curios 5.14.1、Sophisticated Backpacks 3.26.20、AE2 15.4.10 和 Mekanism 10.4.16 的接口构建；NeoForge 1.21.1 使用 Curios 9.5.1、Sophisticated Backpacks 3.26.21、AE2 19.2.18 和 Mekanism 10.7.19。NeoForge 26.1.2 使用 Curios 15.0.0、Sophisticated Backpacks 3.26.20、AE2 26.1.13-beta，以及非官方社区移植版 Mekanism: Version Locked 2.11 的接口；其他 Mekanism 移植版需要单独验证。可选模组均需独立安装，不打包进 SHCLIB。
 
+### 日志分析 API
+
+`LogAnalyzer` 可分析 Minecraft、Forge 和 NeoForge 的 `latest.log`、`debug.log`、Minecraft 崩溃报告和 HotSpot 的 `hs_err_pid*.log`。它接受 UTF-8 文件、字符串或 `Reader`，可以在游戏外调用。
+
+```java
+import com.dishanhai.sh_common_lib.api.ulk.log.LogAnalyzer;
+import com.dishanhai.sh_common_lib.api.ulk.log.LogType;
+import java.nio.file.Path;
+
+var analysis = LogAnalyzer.analyze(Path.of("logs/latest.log"));
+var warnings = analysis.entries(LogType.WARNING);
+var highestFirst = analysis.byWeight();
+```
+
+| 类型 | 权重 | 判定 |
+| --- | ---: | --- |
+| `CRASH` | 100 | 崩溃报告标头、`FATAL`、明确的崩溃提示或主线程、渲染线程、服务端线程的未捕获异常 |
+| `ERROR` | 70 | `ERROR`、独立的 Java 异常或残留堆栈 |
+| `WARNING` | 40 | `WARN` 或 `WARNING` |
+| `NORMAL` | 10 | `INFO`、`DEBUG`、`TRACE` 或其他纯文本 |
+
+每个条目保留从 1 开始的起始行号和原文，换行统一为 LF。连续的 Java 堆栈随所属条目返回，崩溃报告正文保留为一个条目。`entries()` 按原顺序返回，`byWeight()` 按权重降序排列，同权重保留原顺序。分析会同步读完输入并保留条目，较大的文件应在后台线程读取。
+
 ## 代码放在哪里
 
 - `common/src/main/java/`：共用 API 与实现。保持 Java 17 兼容；只使用两端均兼容的类型。公共入口为 `com.dishanhai.sh_common_lib.api`。

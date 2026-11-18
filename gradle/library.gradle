@@ -107,6 +107,14 @@ tasks.register('inventoryScanTrackerTest', JavaExec) {
     mainClass = 'com.dishanhai.sh_common_lib.internal.ulk.InventoryScanTrackerTest'
 }
 
+tasks.register('logAnalyzerTest', JavaExec) {
+    group = 'verification'
+    description = 'Checks ULK log classification, stack traces and stable severity ordering.'
+    javaLauncher = javaToolchains.launcherFor { languageVersion = project.java.toolchain.languageVersion }
+    classpath = sourceSets.controlCenterVerification.runtimeClasspath
+    mainClass = 'com.dishanhai.sh_common_lib.api.ulk.log.LogAnalyzerTest'
+}
+
 def ulkVerificationClasses = layout.buildDirectory.dir('classes/ulkVerification')
 tasks.register('compileUlkVerification', JavaCompile) {
     source files('../common/src/test/ulk-fixtures/net/minecraft/world/item/ItemStack.java',
@@ -129,6 +137,7 @@ tasks.register('inventorySnapshotTest', JavaExec) {
 }
 
 tasks.named('check') {
+    dependsOn 'logAnalyzerTest'
     dependsOn 'jeiSearchLayoutTest'
     dependsOn 'recipeEditorTest', 'recipeImporterTest', 'brewingDefinitionsTest', 'brewingDatapackTest', 'brewingApiTest', 'brewingRuleCacheTest'
     dependsOn tasks.named('searchGiveShortcutTest'), tasks.named('cosmicArtisanGestureTest'), tasks.named('artisanSettingsTest'), tasks.named('controlCenterDraftTest'), tasks.named('clientSearchTest'), tasks.named('searchHistoryTest'), tasks.named('jeiSearchSettingsTest'), tasks.named('searchCompletionUndoTest'), tasks.named('recipePreviewBoundsTest'), tasks.named('searchPagingTest'), tasks.named('inventoryScanTrackerTest'), tasks.named('inventorySnapshotTest')
