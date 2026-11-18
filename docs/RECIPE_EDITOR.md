@@ -103,3 +103,11 @@ NeoForge 1.21.1 的原生客户端回归可从该模块目录运行 `./gradlew -
 2026-11-16 的 NeoForge 1.21.1 隔离客户端通过上述流程，实际逻辑视口为 420×240／缩放 4 与 560×320／缩放 3；截图复核中文名称、行内物品和按钮图标可见。320×180 只完成纯布局边界测试。另以三个版本正式 JAR 单独编译第三方酿造 API 调用，编译类路径无需 Minecraft／加载器／Gson；这不代表真实第三方模组的运行时酿造已验收。
 
 界面交互参考 [Crafting Generator](https://github.com/destruc7i0n/crafting) 的配方拖放及导出组织，版本化生成参考 [Misode](https://github.com/misode/misode.github.io)。实际渲染和控件使用项目 UUK。
+
+## Apple 风格工作区（本次重构）
+
+主页面将文档操作与内容导航分开：顶栏提供返回、草稿、操作与保存，下一行保留撤销／重做及画布／属性／生成分段导航。新建、剪贴板导入、连续填料和帮助收纳在“操作”页，避免窄窗口挤满按钮。宽度达到 760 GUI 单位时同时显示三个工作面板；较窄窗口切换单页。原料与产物作为完整配方流程居中，使用同一布局模型绘制并命中测试。
+
+控件圆角和轻量分层参考 Apple 的 [Layout](https://developer.apple.com/design/human-interface-guidelines/layout)、[Toolbars](https://developer.apple.com/design/human-interface-guidelines/toolbars) 与 [Sidebars](https://developer.apple.com/design/human-interface-guidelines/sidebars)。这不是嵌入网页或 Apple 专有素材；沿用原生键盘、旁白、玩家主题及高对比设置，不捆绑 Apple 字体或 SF Symbols。配方存储、导入保真、覆盖确认和版本格式保持原有 ULK 实现。
+
+`recipeEditorLayoutTest` 覆盖最小 320×180、紧凑及宽屏断点，检查原料和产物均落在面板中。原生 smoke 扩展为 GUI 缩放 4／3／1／5，检查编辑器与操作页的控件边界。运行结果应以当前构建日志为准。

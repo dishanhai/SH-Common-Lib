@@ -25,6 +25,9 @@ public final class RecipeEditorAccess {
                     .getMethod("fit", net.minecraft.client.gui.Font.class, Component.class, int.class);
             Class.forName("com.dishanhai.sh_better_ui.client.gui.text.UiRichText", false, loader)
                     .getMethod("withItem", String.class, Component.class);
+            Class.forName("com.dishanhai.sh_better_ui.client.gui.scaled.UiButton", false, loader)
+                    .getMethod("setCornerRadius", float.class);
+            Class.forName("com.dishanhai.sh_better_ui.client.gui.scaled.RoundedCorners", false, loader);
             return null;
         } catch (ReflectiveOperationException | LinkageError missing) {
             return Component.translatable("screen.sh_common_lib.recipe_editor.requires_uuk");
