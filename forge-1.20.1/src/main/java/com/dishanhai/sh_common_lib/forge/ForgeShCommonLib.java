@@ -1,6 +1,7 @@
 package com.dishanhai.sh_common_lib.forge;
 
 import com.dishanhai.sh_common_lib.api.ShCommonLib;
+import com.dishanhai.sh_common_lib.internal.block.FakeFumoBlock;
 import com.dishanhai.sh_common_lib.api.ulk.fumo.FumoPack;
 import com.dishanhai.sh_common_lib.api.ulk.fumo.Fumos;
 import net.minecraft.resources.ResourceLocation;
@@ -40,6 +41,10 @@ public final class ForgeShCommonLib {
             () -> new CosmicBeaconBlock(BlockBehaviour.Properties.of(), ForgeBeaconNetwork::reply));
     private static final net.minecraftforge.registries.RegistryObject<Item> BEACON_ITEM = BLOCK_ITEMS.register(
             CosmicBeacon.BLOCK_ID, () -> new BlockItem(BEACON.get(), new Item.Properties()));
+    private static final net.minecraftforge.registries.RegistryObject<FakeFumoBlock> FAKE_FUMO =
+            BLOCKS.register("fake_fumo", () -> new FakeFumoBlock(BlockBehaviour.Properties.of()));
+    private static final net.minecraftforge.registries.RegistryObject<Item> FAKE_FUMO_ITEM =
+            BLOCK_ITEMS.register("fake_fumo", () -> new BlockItem(FAKE_FUMO.get(), new Item.Properties()));
     private static final String DISHANHAI_FUMO = "dishanhai_fumo";
     private static final String BEIBEIPUO_FUMO = "beibeipuo_fumo";
     private static final DeferredRegister<BlockEntityType<?>> BLOCK_ENTITIES =
@@ -62,6 +67,7 @@ public final class ForgeShCommonLib {
             if (event.getTabKey().equals(CreativeModeTabs.COLORED_BLOCKS)) {
                 event.accept(fumos.variant(DISHANHAI_FUMO).item().get());
                 event.accept(fumos.variant(BEIBEIPUO_FUMO).item().get());
+                event.accept(FAKE_FUMO_ITEM.get());
             }
         });
         ForgeBeaconNetwork.register();
