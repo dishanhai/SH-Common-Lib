@@ -3,6 +3,13 @@ package com.dishanhai.sh_common_lib.client.beacon;
 
 import com.dishanhai.sh_better_ui.client.gui.scaled.LiquidGlassTheme;
 import com.dishanhai.sh_better_ui.client.gui.scaled.UiPreferences;
+import com.dishanhai.sh_better_ui.config.ClientUiSettings;
+import com.dishanhai.sh_better_ui.kernel.api.glass.GlassDraw;
+import com.dishanhai.sh_better_ui.kernel.api.glass.GlassMaterial;
+import com.dishanhai.sh_better_ui.kernel.api.glass.GlassQuality;
+import com.dishanhai.sh_better_ui.kernel.api.glass.GlassRegion;
+import com.dishanhai.sh_better_ui.kernel.api.glass.GlassVariant;
+import com.dishanhai.sh_better_ui.kernel.internal.ClientUiKernel;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
@@ -14,6 +21,9 @@ import org.joml.Matrix4fc;
 import static com.dishanhai.sh_common_lib.client.beacon.BeaconWorldMarkers.*;
 
 public final class BeaconWorldRenderer {
+    private static final GlassMaterial HUD_GLASS = new GlassMaterial(GlassVariant.CLEAR,
+            GlassMaterial.preset(GlassVariant.CLEAR).optics(), GlassQuality.PERFORMANCE, GlassMaterial.Foreground.LIGHT);
+
     @FunctionalInterface
     public interface Beam {
         void draw(PoseStack pose, MultiBufferSource buffers, long gameTime, int height, int color,
@@ -44,9 +54,15 @@ public final class BeaconWorldRenderer {
         var panels = BeaconWorldMarkers.takePanels(client);
         if (panels.isEmpty()) return;
         var preferences = UiPreferences.configured();
+        var settings = ClientUiSettings.current();
+        boolean glass = preferences.useBackdropBlur() && settings.backdrop().enabled()
+                && !settings.dynamicTheme().lowPerformance()
+                && ClientUiKernel.paintHudGlassBatch(graphics, panels.stream().map(BeaconWorldRenderer::hudGlass).toList());
         for (var panel : panels) {
             var bounds = panel.bounds();
-            LiquidGlassTheme.popover(graphics, bounds.x(), bounds.y(), bounds.width(), bounds.height(), preferences);
+            if (!glass) {
+                LiquidGlassTheme.popover(graphics, bounds.x(), bounds.y(), bounds.width(), bounds.height(), preferences);
+            }
             var pose = graphics.pose();
             pose.pushPose();
             try {
@@ -59,5 +75,14 @@ public final class BeaconWorldRenderer {
                 pose.popPose();
             }
         }
+    }
+
+    private static GlassDraw hudGlass(Panel panel) {
+        var bounds = panel.bounds();
+        var region = GlassRegion.rounded(bounds.x(), bounds.y(), bounds.width(), bounds.height(), 5);
+        float inset = Math.min(4, Math.min(region.width(), region.height()) * 0.25f);
+        var text = new GlassDraw.ForegroundBounds(region.x() + inset, region.y() + inset,
+                region.width() - 2 * inset, region.height() - 2 * inset);
+        return new GlassDraw(region, HUD_GLASS, GlassDraw.Profile.SNELL, text);
     }
 }

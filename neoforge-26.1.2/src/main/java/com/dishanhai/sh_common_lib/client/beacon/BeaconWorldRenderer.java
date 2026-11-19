@@ -52,7 +52,7 @@ public final class BeaconWorldRenderer {
         var client = Minecraft.getInstance();
         for (var panel : BeaconWorldMarkers.takePanels(client)) {
             var bounds = panel.bounds();
-            ClientPanels.panel(graphics, bounds.x(), bounds.y(), bounds.width(), bounds.height());
+            ClientPanels.hud(graphics, bounds.x(), bounds.y(), bounds.width(), bounds.height());
             var pose = graphics.pose();
             pose.pushMatrix();
             try {

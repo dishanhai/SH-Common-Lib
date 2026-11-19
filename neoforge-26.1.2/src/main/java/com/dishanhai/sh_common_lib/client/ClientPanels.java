@@ -37,6 +37,10 @@ public final class ClientPanels {
         surface(graphics, new Bounds(x, y, width, height), GlassVariant.REGULAR, 0xB018202C);
     }
 
+    public static boolean hud(GuiGraphicsExtractor graphics, int x, int y, int width, int height) {
+        return surface(graphics, new Bounds(x, y, width, height), GlassVariant.CLEAR, 0x7018202C, 0x508393A7);
+    }
+
     public static void strongPopover(GuiGraphicsExtractor graphics, int x, int y, int width, int height) {
         var base = GlassMaterial.preset(GlassVariant.REGULAR).optics();
         var optics = new GlassOptics(base.transmission(), base.refraction(), base.lensing(), 0.9f,
@@ -48,12 +52,17 @@ public final class ClientPanels {
     }
 
     public static void surface(GuiGraphicsExtractor graphics, Bounds area, GlassVariant variant, int tint) {
+        surface(graphics, area, variant, tint, border());
+    }
+
+    private static boolean surface(GuiGraphicsExtractor graphics, Bounds area, GlassVariant variant, int tint, int edge) {
         var preferences = UiPreferences.configured();
         if (variant != null && ShBetterUiApi.blur().prepareBackdrop(graphics)
                 && LiquidGlassSurface.drawPrepared(graphics, area.x(), area.y(), area.width(), area.height(),
-                6, tint, border(), GlassMaterial.preset(variant).optics(), preferences, 1)) return;
+                6, tint, edge, GlassMaterial.preset(variant).optics(), preferences, 1)) return true;
         RoundedCorners.draw(graphics, area.x(), area.y(), area.width(), area.height(), 6, 1,
                 border(), highContrast() ? 0xFF000000 : 0xFF18202C);
+        return false;
     }
 
     public static UiButton button(int x, int y, int width, int height, Component label, Button.OnPress onPress) {

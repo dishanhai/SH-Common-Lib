@@ -71,15 +71,17 @@ public final class HudPanel {
         pose.pushMatrix();
         try {
             pose.translate(x, y).scale(scale);
+            boolean clearGlass = false;
             if (glass && popover) ClientPanels.strongPopover(graphics, 0, 0, width, height);
-            else if (glass) ClientPanels.panel(graphics, 0, 0, width, height);
+            else if (glass) clearGlass = ClientPanels.hud(graphics, 0, 0, width, height);
             else ClientPanels.surface(graphics, new com.dishanhai.sh_better_ui.client.gui.display.GraphicDisplayLayout.Bounds(0, 0, width, height), null, 0xFF18202C);
             if (selected >= 0 && selected < rows.size()) {
                 int rowY = PADDING + selected * (font.lineHeight + 3);
                 if (glass) ClientPanels.strongPopover(graphics, PADDING - 2, rowY, width - 2 * PADDING + 4, font.lineHeight + 3);
                 else ClientPanels.surface(graphics, new com.dishanhai.sh_better_ui.client.gui.display.GraphicDisplayLayout.Bounds(PADDING - 2, rowY, width - 2 * PADDING + 4, font.lineHeight + 3), null, 0xFF18202C);
             }
-            palette.update(null, 0xff000000, ClientPanels.panelTextBackdrop());
+            // The clear surface refracts the world. Keep text protection on bright terrain as well.
+            palette.update(null, 0xff000000, clearGlass ? 0xffffffff : ClientPanels.panelTextBackdrop());
             int textColor = palette.color(ClientPanels.TEXT);
             int lineY = PADDING + 1;
             for (var row : rows) {
