@@ -995,5 +995,6 @@
   "screen.sh_common_lib.recipe_editor.field.input6": "原料 7",
   "screen.sh_common_lib.recipe_editor.field.input7": "原料 8",
   "screen.sh_common_lib.recipe_editor.field.input8": "原料 9",
-  "screen.sh_common_lib.recipe_editor.actions": "操作"
+  "screen.sh_common_lib.recipe_editor.actions": "操作",
+  "block.sh_common_lib.fake_fumo": "假 Fumo"
 }

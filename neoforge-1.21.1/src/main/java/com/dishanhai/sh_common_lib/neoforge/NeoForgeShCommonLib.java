@@ -1,6 +1,7 @@
 package com.dishanhai.sh_common_lib.neoforge;
 
 import com.dishanhai.sh_common_lib.api.ShCommonLib;
+import com.dishanhai.sh_common_lib.internal.block.FakeFumoBlock;
 import com.dishanhai.sh_common_lib.api.ulk.fumo.Fumos;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
@@ -40,6 +41,10 @@ public final class NeoForgeShCommonLib {
             BlockBehaviour.Properties.of());
     private static final net.neoforged.neoforge.registries.DeferredItem<BlockItem> BEACON_ITEM =
             BLOCK_ITEMS.registerSimpleBlockItem(BEACON);
+    private static final net.neoforged.neoforge.registries.DeferredBlock<FakeFumoBlock> FAKE_FUMO =
+            BLOCKS.registerBlock("fake_fumo", FakeFumoBlock::new, BlockBehaviour.Properties.of());
+    private static final net.neoforged.neoforge.registries.DeferredItem<BlockItem> FAKE_FUMO_ITEM =
+            BLOCK_ITEMS.registerSimpleBlockItem(FAKE_FUMO);
     private static final String DISHANHAI_FUMO = "dishanhai_fumo";
     private static final String BEIBEIPUO_FUMO = "beibeipuo_fumo";
     private static final DeferredRegister<BlockEntityType<?>> BLOCK_ENTITIES =
@@ -68,6 +73,7 @@ public final class NeoForgeShCommonLib {
             if (event.getTabKey().equals(CreativeModeTabs.COLORED_BLOCKS)) {
                 event.accept(fumos.variant(DISHANHAI_FUMO).item().get());
                 event.accept(fumos.variant(BEIBEIPUO_FUMO).item().get());
+                event.accept(FAKE_FUMO_ITEM.get());
             }
         });
         modBus.addListener(NeoForgeBeaconNetwork::register);
