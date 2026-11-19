@@ -1,0 +1,15 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    "I I",
+    " C "
+  ],
+  "key": {
+    "I": "minecraft:iron_ingot",
+    "C": "minecraft:cauldron"
+  },
+  "result": {
+    "id": "sh_common_lib:trash_can"
+  }
+}

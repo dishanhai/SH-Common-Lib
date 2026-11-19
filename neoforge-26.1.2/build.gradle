@@ -18,6 +18,9 @@ sourceSets.main.java {
     exclude '**/neoforge/ulk/InventoryCapabilityModule.java'
     // The legacy baked model shortcut is replaced by the GUI item atlas path in 26.1.2.
     exclude '**/client/jei/JeiFlatItemModel.java'
+    // Create and Ars Nouveau do not have releases for this Minecraft version.
+    exclude '**/internal/trash/TrashStress*.java', '**/internal/trash/NeoTrashSource.java',
+            '**/internal/trash/TrashSinks.java', '**/mixin/trash/**'
     // A file in this version's source tree replaces the same path in a shared tree.
     def versionSources = file('src/main/java')
     exclude { entry ->
@@ -29,6 +32,7 @@ sourceSets.main.java {
     }
 }
 sourceSets.main.resources.srcDir '../common/src/announcement/resources'
+sourceSets.main.resources.exclude 'sh_common_lib.trash_create.mixins.json'
 
 repositories {
     mavenCentral()

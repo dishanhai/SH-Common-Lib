@@ -8,6 +8,7 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
 
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.function.BiFunction;
@@ -51,6 +52,10 @@ public final class FumoPack {
 
     BlockEntityType<DanceEntity> danceEntityType() {
         return entityType.get();
+    }
+
+    Collection<Variant> variants() {
+        return variants.values();
     }
 
     private DanceEntity newDanceEntity(BlockPos pos, BlockState state) {

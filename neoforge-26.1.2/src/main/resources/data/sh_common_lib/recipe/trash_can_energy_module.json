@@ -1,0 +1,12 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    "minecraft:iron_ingot",
+    "minecraft:redstone",
+    "minecraft:redstone_block"
+  ],
+  "result": {
+    "id": "sh_common_lib:trash_can_energy_module"
+  }
+}

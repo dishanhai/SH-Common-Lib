@@ -2,9 +2,13 @@
 package com.dishanhai.sh_common_lib.api.ulk.fumo;
 
 import com.dishanhai.sh_common_lib.internal.block.DishanhaiFumoBlock;
+import com.dishanhai.sh_common_lib.internal.block.FumoCurioRenderer;
+import com.dishanhai.sh_common_lib.internal.block.FumoHeadItem;
 import com.dishanhai.sh_common_lib.internal.block.FumoRenderer;
+import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.neoforged.bus.api.IEventBus;
+import net.neoforged.fml.ModList;
 import net.neoforged.fml.loading.FMLEnvironment;
 import net.neoforged.neoforge.client.event.EntityRenderersEvent;
 import net.neoforged.neoforge.registries.DeferredRegister;
@@ -23,7 +27,8 @@ public final class Fumos {
                                     String... variantPaths) {
         var pack = new FumoPack(entityPath, variantPaths, (path, type) -> {
             var block = blocks.registerBlock(path, properties -> new DishanhaiFumoBlock(properties, type));
-            var item = items.registerSimpleBlockItem(block);
+            var item = items.registerItem(path, properties -> new FumoHeadItem(block.get(),
+                    properties.equippable(EquipmentSlot.HEAD).useBlockDescriptionPrefix()));
             return new FumoPack.Variant(block, item);
         }, (path, validBlocks, factory) -> entities.register(path,
                 () -> new BlockEntityType<>(factory::apply, validBlocks.get())));
@@ -33,8 +38,12 @@ public final class Fumos {
 
     private static final class Client {
         private static void register(IEventBus modBus, FumoPack pack) {
-            modBus.addListener((EntityRenderersEvent.RegisterRenderers event) ->
-                    event.registerBlockEntityRenderer(pack.danceEntityType(), FumoRenderer::new));
+            modBus.addListener((EntityRenderersEvent.RegisterRenderers event) -> {
+                event.registerBlockEntityRenderer(pack.danceEntityType(), FumoRenderer::new);
+                if (ModList.get().isLoaded("curios")) {
+                    pack.variants().forEach(variant -> FumoCurioRenderer.register(variant.item().get()));
+                }
+            });
         }
     }
 }

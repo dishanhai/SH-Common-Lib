@@ -21,6 +21,7 @@ repositories {
     maven { url = 'https://maven.blamejared.com/'; content { includeGroup 'mezz.jei' } }
     maven { url = 'https://maven.latvian.dev/releases/'; content { includeGroup 'dev.latvian.mods' } }
     maven { url = 'https://api.modrinth.com/maven'; content { includeGroup 'maven.modrinth' } }
+    maven { url = 'https://maven.createmod.net'; content { includeGroup 'net.createmod.ponder' } }
     maven { url = 'https://www.cursemaven.com'; content { includeGroup 'curse.maven' } }
 }
 
@@ -33,6 +34,9 @@ dependencies {
     compileOnly fg.deobf('maven.modrinth:TyCTlI4b:xviLgqVd') // Sophisticated Backpacks 3.26.20
     compileOnly fg.deobf('maven.modrinth:nmoqTijg:FrNTdGKb') // Sophisticated Core 1.5.30
     compileOnly fg.deobf('maven.modrinth:Ce6I4WUE:uxe1WQp4') // Mekanism 10.4.16
+    compileOnly fg.deobf('maven.modrinth:TKB6INcv:Hw2aD01e') // Ars Nouveau 4.12.7
+    compileOnly fg.deobf('maven.modrinth:LNytGWDc:8amzvn9x') // Create 6.0.8
+    compileOnly fg.deobf('net.createmod.ponder:Ponder-Forge-1.20.1:1.0.91') { transitive = false } // Provided by Create
     if (findProperty('appliedMekanisticsJar')) {
         compileOnly files(property('appliedMekanisticsJar'))
     } else {
@@ -55,6 +59,7 @@ minecraft {
         configureEach {
             workingDirectory file("run/${name}")
             mods { sh_common_lib { source sourceSets.main } }
+            arg '-mixin.config=sh_common_lib.trash_create.mixins.json'
         }
         client {
             arg '-mixin.config=sh_common_lib.loading.mixins.json'
@@ -66,6 +71,6 @@ minecraft {
 }
 
 tasks.named('jar') {
-    manifest.attributes('MixinConfigs': 'sh_common_lib.loading.mixins.json,sh_common_lib.jei_ae2.mixins.json,sh_common_lib.extendedae.mixins.json')
+    manifest.attributes('MixinConfigs': 'sh_common_lib.loading.mixins.json,sh_common_lib.jei_ae2.mixins.json,sh_common_lib.extendedae.mixins.json,sh_common_lib.trash_create.mixins.json')
     finalizedBy 'reobfJar'
 }

@@ -3,6 +3,11 @@ package com.dishanhai.sh_common_lib.forge;
 import com.dishanhai.sh_common_lib.api.ShCommonLib;
 import com.dishanhai.sh_common_lib.api.ulk.fumo.FumoRewards;
 import com.dishanhai.sh_common_lib.internal.block.FakeFumoBlock;
+import com.dishanhai.sh_common_lib.internal.block.FumoDisplay;
+import com.dishanhai.sh_common_lib.internal.block.FumoHeadPlatform;
+import net.minecraft.world.InteractionResult;
+import net.minecraftforge.eventbus.api.EventPriority;
+import net.minecraftforge.event.entity.player.PlayerInteractEvent;
 import com.dishanhai.sh_common_lib.api.ulk.fumo.FumoPack;
 import com.dishanhai.sh_common_lib.api.ulk.fumo.Fumos;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -58,6 +63,15 @@ public final class ForgeShCommonLib {
         ForgeArtisanConfig.register(context);
         IEventBus modBus = context.getModEventBus();
         ForgeRecipeBrewing.register(modBus);
+        FumoHeadPlatform.register();
+        com.dishanhai.sh_common_lib.internal.trash.TrashCanPlatform.register(modBus);
+        MinecraftForge.EVENT_BUS.addListener(EventPriority.LOWEST, (PlayerInteractEvent.RightClickBlock event) -> {
+            if (event.getUseBlock() != net.minecraftforge.eventbus.api.Event.Result.DENY
+                    && FumoDisplay.use(event.getLevel(), event.getPos(), event.getEntity(), event.getHand())) {
+                event.setCancellationResult(InteractionResult.sidedSuccess(event.getLevel().isClientSide()));
+                event.setCanceled(true);
+            }
+        });
         var fumoPoolResource = ResourceLocation.parse(FumoRewards.POOL_RESOURCE);
         MinecraftForge.EVENT_BUS.addListener((AddReloadListenerEvent event) -> event.addListener(FumoRewards.reloadListener(
                 FMLPaths.CONFIGDIR.get(), manager -> manager.getResource(fumoPoolResource),
@@ -97,6 +111,7 @@ public final class ForgeShCommonLib {
             FumoRewards.resetPool();
         });
         if (FMLEnvironment.dist == Dist.CLIENT) {
+            FumoHeadPlatform.registerClient();
             modBus.addListener(InfinityCellDecoration::register);
             modBus.addListener(InfinityCellDecoration::registerTooltip);
             modBus.addListener(ForgeArtisanClient::registerModel);

@@ -38,6 +38,7 @@ import java.util.function.Supplier;
 /** A seated plush with horizontal placement and vanilla waterlogging. */
 public final class DishanhaiFumoBlock extends Block implements SimpleWaterloggedBlock, EntityBlock {
     public static final BooleanProperty DANCING = BooleanProperty.create("dancing");
+    public static final BooleanProperty HOLDING = BooleanProperty.create("holding");
     // The model extends above the block; keep the interaction shape within this cell.
     private static final VoxelShape NORTH = Shapes.or(
             box(3, 0, 2.25, 13, 3, 9.75),
@@ -68,12 +69,13 @@ public final class DishanhaiFumoBlock extends Block implements SimpleWaterlogged
         registerDefaultState(defaultBlockState()
                 .setValue(BlockStateProperties.HORIZONTAL_FACING, Direction.NORTH)
                 .setValue(DANCING, false)
+                .setValue(HOLDING, false)
                 .setValue(BlockStateProperties.WATERLOGGED, false));
     }
 
     @Override
     protected void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> builder) {
-        builder.add(BlockStateProperties.HORIZONTAL_FACING, BlockStateProperties.WATERLOGGED, DANCING);
+        builder.add(BlockStateProperties.HORIZONTAL_FACING, BlockStateProperties.WATERLOGGED, DANCING, HOLDING);
     }
 
     @Override
@@ -137,12 +139,20 @@ public final class DishanhaiFumoBlock extends Block implements SimpleWaterlogged
     }
 
     @Override
+    public void onRemove(BlockState state, Level level, BlockPos pos, BlockState next, boolean moving) {
+        if (!state.is(next.getBlock()) && level.getBlockEntity(pos) instanceof DanceEntity plush) {
+            FumoDisplay.drop(plush);
+        }
+        super.onRemove(state, level, pos, next, moving);
+    }
+
+    @Override
     public <T extends BlockEntity> BlockEntityTicker<T> getTicker(Level level, BlockState state, BlockEntityType<T> type) {
         return level.isClientSide() && state.getValue(DANCING) && type == entityType.get()
                 ? (world, pos, current, entity) -> FumoMusic.playNearby((DanceEntity) entity) : null;
     }
 
-    public static final class DanceEntity extends BlockEntity {
+    public static final class DanceEntity extends FumoItemEntity {
         public DanceEntity(BlockEntityType<DanceEntity> type, BlockPos pos, BlockState state) {
             super(type, pos, state);
         }

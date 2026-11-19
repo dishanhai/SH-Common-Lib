@@ -39,6 +39,7 @@ import java.util.function.Supplier;
 /** A seated plush with horizontal placement and vanilla waterlogging. */
 public final class DishanhaiFumoBlock extends Block implements SimpleWaterloggedBlock, EntityBlock {
     public static final BooleanProperty DANCING = BooleanProperty.create("dancing");
+    public static final BooleanProperty HOLDING = BooleanProperty.create("holding");
     // The model extends above the block; keep the interaction shape within this cell.
     private static final VoxelShape NORTH = Shapes.or(
             box(3, 0, 2.25, 13, 3, 9.75),
@@ -69,12 +70,13 @@ public final class DishanhaiFumoBlock extends Block implements SimpleWaterlogged
         registerDefaultState(defaultBlockState()
                 .setValue(BlockStateProperties.HORIZONTAL_FACING, Direction.NORTH)
                 .setValue(DANCING, false)
+                .setValue(HOLDING, false)
                 .setValue(BlockStateProperties.WATERLOGGED, false));
     }
 
     @Override
     protected void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> builder) {
-        builder.add(BlockStateProperties.HORIZONTAL_FACING, BlockStateProperties.WATERLOGGED, DANCING);
+        builder.add(BlockStateProperties.HORIZONTAL_FACING, BlockStateProperties.WATERLOGGED, DANCING, HOLDING);
     }
 
     @Override
@@ -136,9 +138,15 @@ public final class DishanhaiFumoBlock extends Block implements SimpleWaterlogged
                 ? (world, pos, current, entity) -> FumoMusic.playNearby((DanceEntity) entity) : null;
     }
 
-    public static final class DanceEntity extends BlockEntity {
+    public static final class DanceEntity extends FumoItemEntity {
         public DanceEntity(BlockEntityType<DanceEntity> type, BlockPos pos, BlockState state) {
             super(type, pos, state);
+        }
+
+        @Override
+        public void preRemoveSideEffects(BlockPos pos, BlockState state) {
+            FumoDisplay.drop(this);
+            super.preRemoveSideEffects(pos, state);
         }
     }
 

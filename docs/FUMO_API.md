@@ -3,6 +3,18 @@
 
 支持 Forge 1.20.1、NeoForge 1.21.1 与 NeoForge 26.1.2。将对应版本的 SH-Common-Lib 添加为模组依赖，使用自己模组的延迟注册表和事件总线。
 
+## 展示物品
+
+主手拿着物品右键 Fumo 会放入 1 件并抬起手臂。普通物品使用物品模型，方块使用缩小的方块模型。再次放入会把原件退回玩家。Shift＋右键可取下，背包已满时物品会掉到地上。展示内容保存在方块实体中，拆除玩偶时会掉落手上的物品。
+
+## 头部佩戴
+
+用 `Fumos.register` 注册的玩偶可放入原版头盔格。安装 Curios 后，山海和 BeiBeiPuo Fumo 也可放入头部饰品槽。外部模组可把自己的玩偶加入 `curios:head` 物品标签。模型的 `display.head` 决定头顶位置和比例，坐姿模板已提供该变换。
+
+佩戴通过 `Fumos.register` 注册的玩偶后，普通玩家可用 `/fumojump` 开始无音乐弹跳，再次执行即可停止。`/fumojump bgm` 和 `/fumojump bgm true` 可开始带音乐的弹跳，或为正在弹跳的玩偶打开音乐。`/fumojump bgm false` 会关闭音乐，或直接开始无音乐弹跳。未安装 GTLCore 时也可用 `/winejump`。
+
+附近玩家可看到弹跳，并在 16 格内听到玩偶的空间音效。同一音轨的佩戴玩偶和摆放玩偶共享播放进度。取下头部玩偶、死亡、离线或切换维度后，弹跳会结束。
+
 ## 右键奖励配置
 
 服务端每次有效空手右键有 20% 概率发放 1 件物品。每位玩家共用所有 Fumo 的 15 秒抽奖冷却。物品按相对权重抽取，例如权重 9 和 1 对应中奖后的 90% 和 10%。
@@ -116,9 +128,11 @@ Forge 的 `BLOCKS` 和 `ITEMS` 分别为 `DeferredRegister<Block>` 和 `Deferred
 
 在语言文件中加入 `block.example_mod.example_fumo`。掉落表放在 Forge 的 `data/example_mod/loot_tables/blocks/` 或 NeoForge 的 `data/example_mod/loot_table/blocks/`。合成配方可按游戏版本选用 `recipes/` 或 `recipe/`。
 
+要为注册的玩偶添加抬臂姿势，在四个 `facing` 变体上分别匹配 `holding=false` 和 `holding=true`，并沿用各方向的旋转角度。抬臂模型可继承 `sh_common_lib:block/fumo/skin_64_holding` 并提供同一张皮肤。
+
 ## 空间音效
 
-将单声道 Ogg Vorbis 保存在 `assets/example_mod/sounds/`。在 `assets/example_mod/sounds.json` 里用方块路径作为音效键，字幕键另写入语言文件。音效跟随「唱片机／音符盒」音量滑块，播放距离上限为 16 格。
+将单声道 Ogg Vorbis 保存在 `assets/example_mod/sounds/`。在 `assets/example_mod/sounds.json` 里用方块路径作为音效键，字幕键另写入语言文件。音效跟随「唱片机／音符盒」音量滑块，播放距离上限为 16 格。范围内播放同一个音频文件的 Fumo 共享播放进度，音量与声像随参与播放的玩偶数量、距离和位置变化。
 
 ```json
 {

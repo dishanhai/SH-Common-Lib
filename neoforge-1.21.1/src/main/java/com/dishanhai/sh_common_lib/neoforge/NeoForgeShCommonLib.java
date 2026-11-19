@@ -3,6 +3,11 @@ package com.dishanhai.sh_common_lib.neoforge;
 import com.dishanhai.sh_common_lib.api.ShCommonLib;
 import com.dishanhai.sh_common_lib.api.ulk.fumo.FumoRewards;
 import com.dishanhai.sh_common_lib.internal.block.FakeFumoBlock;
+import com.dishanhai.sh_common_lib.internal.block.FumoDisplay;
+import com.dishanhai.sh_common_lib.internal.block.FumoHeadPlatform;
+import net.minecraft.world.InteractionResult;
+import net.neoforged.bus.api.EventPriority;
+import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
 import com.dishanhai.sh_common_lib.api.ulk.fumo.Fumos;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -56,6 +61,15 @@ public final class NeoForgeShCommonLib {
     public NeoForgeShCommonLib(IEventBus modBus, ModContainer container) {
         NeoForgeArtisanConfig.register(container);
         NeoForgeRecipeBrewing.register();
+        FumoHeadPlatform.register(modBus);
+        com.dishanhai.sh_common_lib.internal.trash.TrashCanPlatform.register(modBus);
+        NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, (PlayerInteractEvent.RightClickBlock event) -> {
+            if (!event.getUseBlock().isFalse()
+                    && FumoDisplay.use(event.getLevel(), event.getPos(), event.getEntity(), event.getHand())) {
+                event.setCancellationResult(InteractionResult.sidedSuccess(event.getLevel().isClientSide()));
+                event.setCanceled(true);
+            }
+        });
         var fumoPoolResource = ResourceLocation.parse(FumoRewards.POOL_RESOURCE);
         NeoForge.EVENT_BUS.addListener((AddReloadListenerEvent event) -> event.addListener(FumoRewards.reloadListener(
                 FMLPaths.CONFIGDIR.get(), manager -> manager.getResource(fumoPoolResource),
@@ -103,6 +117,7 @@ public final class NeoForgeShCommonLib {
             modBus.addListener(NeoForgeJeiOrderableNetwork::register);
         }
         if (FMLEnvironment.dist == Dist.CLIENT) {
+            FumoHeadPlatform.registerClient();
             modBus.addListener(NeoForgeArtisanClient::registerModel);
             NeoForgeArtisanClient.registerQuickConfig(modBus);
             NeoForgeArtisanClient.registerBeaconMarkers();
