@@ -3,6 +3,55 @@
 
 支持 Forge 1.20.1、NeoForge 1.21.1 与 NeoForge 26.1.2。将对应版本的 SH-Common-Lib 添加为模组依赖，使用自己模组的延迟注册表和事件总线。
 
+## 右键奖励配置
+
+服务端每次有效空手右键有 20% 概率发放 1 件物品。每位玩家共用所有 Fumo 的 15 秒抽奖冷却。物品按相对权重抽取，例如权重 9 和 1 对应中奖后的 90% 和 10%。
+
+### JSON
+
+在实例目录新建 `config/sh_common_lib/fumo_rewards.json`。也可以在数据包中提供 `data/sh_common_lib/fumo_rewards/pool.json`，格式相同。
+
+```json
+{
+  "rewards": [
+    { "item": "minecraft:iron_ingot", "weight": 9 },
+    { "item": "minecraft:diamond", "weight": 1 }
+  ]
+}
+```
+
+填写已注册的完整物品 ID 和正整数权重，每个物品出现一次。`{"rewards":[]}` 会关闭发放。服务器启动时读取配置，也可执行 `/reload`。优先使用最高优先级的数据包资源，其次使用 `config` 文件，最后使用内置等权奖池。无效配置会写入服务端日志并回退。
+
+### KubeJS
+
+将对应版本的脚本保存到 `kubejs/server_scripts/fumo_rewards.js`。它会生成上述数据包资源，按数据包优先级替换整张奖池。
+
+**Forge 1.20.1**
+
+```js
+ServerEvents.highPriorityData(event => {
+  event.add('sh_common_lib:fumo_rewards/pool.json', JSON.stringify({
+    rewards: [
+      { item: 'minecraft:iron_ingot', weight: 9 },
+      { item: 'minecraft:diamond', weight: 1 }
+    ]
+  }))
+})
+```
+
+**NeoForge 1.21.1 与 26.1.2**
+
+```js
+ServerEvents.generateData('last', event => {
+  event.text('sh_common_lib:fumo_rewards/pool.json', JSON.stringify({
+    rewards: [
+      { item: 'minecraft:iron_ingot', weight: 9 },
+      { item: 'minecraft:diamond', weight: 1 }
+    ]
+  }))
+})
+```
+
 ## 注册
 
 ```java

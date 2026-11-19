@@ -1,6 +1,7 @@
 // Author: dishanhai
 package com.dishanhai.sh_common_lib.api.ulk.recipe;
 
+import com.dishanhai.sh_common_lib.api.ulk.fumo.FumoRewardDefinition;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonNull;
@@ -34,7 +35,7 @@ public final class RecipeImporter {
             RecipeTarget pinned = current.type() == RecipeType.GTCEU ? selected : current.customTarget();
             return imported.withCustomTarget(pinned);
         }
-        if (selected != clientTarget && imported.type() != RecipeType.GTCEU
+        if (selected != clientTarget && imported.type() != RecipeType.GTCEU && imported.type() != RecipeType.FUMO_REWARDS
                 && imported.type() != RecipeType.BREWING && imported.type() != RecipeType.BREWING_CONTAINER) {
             // The vanilla canvas always uses the running client format. Retain foreign JSON verbatim.
             return custom(current.id(), raw).withCustomTarget(selected);
@@ -49,6 +50,7 @@ public final class RecipeImporter {
         Objects.requireNonNull(target, "target");
         if (raw.length() > MAX_INPUT) throw new IllegalArgumentException("Recipe JSON is too large");
         JsonObject json = parse(raw);
+        if (!json.has("type") && json.has("rewards")) return fumo(recipeId, json, target);
         if (!json.has("type")) return brewing(recipeId, raw, json, target);
         JsonElement typeValue = json.get("type");
         if (!string(typeValue) || !RecipeGenerator.validId(typeValue.getAsString())) {
@@ -139,6 +141,19 @@ public final class RecipeImporter {
             return RecipeGenerator.validate(doc, target, RecipeFormat.JSON).isEmpty() ? doc : custom(recipeId, raw);
         } catch (UnsupportedOperationException exception) {
             return custom(recipeId, raw);
+        }
+    }
+
+    private static RecipeDocument fumo(String recipeId, JsonObject json, RecipeTarget target) {
+        try {
+            fields(json, "rewards");
+            for (var entry : array(json.get("rewards"))) fields(object(entry), "item", "weight");
+            var doc = RecipeDocument.fumo(recipeId, FumoRewardDefinition.read(json));
+            if (!RecipeGenerator.validate(doc, target, RecipeFormat.JSON).isEmpty())
+                throw new IllegalArgumentException("Invalid Fumo reward pool");
+            return doc;
+        } catch (RuntimeException exception) {
+            throw new IllegalArgumentException("Invalid Fumo reward pool", exception);
         }
     }
 

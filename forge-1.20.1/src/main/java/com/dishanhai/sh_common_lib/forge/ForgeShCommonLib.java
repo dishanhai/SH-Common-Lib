@@ -1,9 +1,11 @@
 package com.dishanhai.sh_common_lib.forge;
 
 import com.dishanhai.sh_common_lib.api.ShCommonLib;
+import com.dishanhai.sh_common_lib.api.ulk.fumo.FumoRewards;
 import com.dishanhai.sh_common_lib.internal.block.FakeFumoBlock;
 import com.dishanhai.sh_common_lib.api.ulk.fumo.FumoPack;
 import com.dishanhai.sh_common_lib.api.ulk.fumo.Fumos;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraftforge.registries.MissingMappingsEvent;
 import net.minecraft.world.level.block.entity.BlockEntityType;
@@ -13,6 +15,7 @@ import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.CreativeModeTabs;
 import net.minecraft.world.level.block.state.BlockBehaviour;
+import net.minecraftforge.event.AddReloadListenerEvent;
 import net.minecraftforge.event.BuildCreativeModeTabContentsEvent;
 import com.dishanhai.sh_common_lib.api.ulk.UnifiedLibKernel;
 import com.dishanhai.sh_common_lib.forge.ulk.ForgeUlkPlatform;
@@ -55,6 +58,10 @@ public final class ForgeShCommonLib {
         ForgeArtisanConfig.register(context);
         IEventBus modBus = context.getModEventBus();
         ForgeRecipeBrewing.register(modBus);
+        var fumoPoolResource = ResourceLocation.parse(FumoRewards.POOL_RESOURCE);
+        MinecraftForge.EVENT_BUS.addListener((AddReloadListenerEvent event) -> event.addListener(FumoRewards.reloadListener(
+                FMLPaths.CONFIGDIR.get(), manager -> manager.getResource(fumoPoolResource),
+                item -> BuiltInRegistries.ITEM.getOptional(ResourceLocation.parse(item)).orElse(null))));
         UnifiedLibKernel.install(new ForgeUlkPlatform());
         fumos = Fumos.register(modBus, BLOCKS, BLOCK_ITEMS, BLOCK_ENTITIES,
                 DISHANHAI_FUMO, DISHANHAI_FUMO, BEIBEIPUO_FUMO);
@@ -85,8 +92,10 @@ public final class ForgeShCommonLib {
             ForgeJeiOrderableNetwork.register();
         }
         ForgeCosmicModesNetwork.register();
-        MinecraftForge.EVENT_BUS.addListener((net.minecraftforge.event.server.ServerStoppedEvent event) ->
-                com.dishanhai.sh_common_lib.internal.ulk.ServerHotWords.clear(event.getServer()));
+        MinecraftForge.EVENT_BUS.addListener((net.minecraftforge.event.server.ServerStoppedEvent event) -> {
+            com.dishanhai.sh_common_lib.internal.ulk.ServerHotWords.clear(event.getServer());
+            FumoRewards.resetPool();
+        });
         if (FMLEnvironment.dist == Dist.CLIENT) {
             modBus.addListener(InfinityCellDecoration::register);
             modBus.addListener(InfinityCellDecoration::registerTooltip);

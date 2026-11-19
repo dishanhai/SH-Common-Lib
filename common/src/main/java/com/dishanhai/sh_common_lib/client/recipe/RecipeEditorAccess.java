@@ -47,4 +47,8 @@ public final class RecipeEditorAccess {
     public static void open(Screen parent, Supplier<? extends GuiEventListener> focus) {
         if (unavailable() == null) RecipeEditor.open(parent, focus);
     }
+
+    public static void openDeveloperSettings(Screen parent, Supplier<? extends GuiEventListener> focus) {
+        if (unavailable() == null) RecipeExportSettingsScreen.open(parent, focus);
+    }
 }

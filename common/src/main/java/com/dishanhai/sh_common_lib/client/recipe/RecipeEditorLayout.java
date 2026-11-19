@@ -64,6 +64,17 @@ public final class RecipeEditorLayout {
 
     public record FieldRow(Rect label, Rect field) {}
 
+    public record RewardList(int top, int footer, int rows) {
+        public int rowY(int index) { return top + index * 24; }
+    }
+
+    /** Keeps a full reward row and its paging controls visible below the type selector. */
+    public static RewardList rewards(Rect pane) {
+        int top = pane.y() + 26;
+        int footer = pane.bottom() - 20;
+        return new RewardList(top, footer, Math.max(1, (footer - top) / 24));
+    }
+
     /** Short windows use inline labels; regular windows leave a full line above each field. */
     public static FieldRow propertyRow(Rect pane, int row, int column, int columns, boolean compact) {
         int gap = 4;

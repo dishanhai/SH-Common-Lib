@@ -1,6 +1,7 @@
 // Author: dishanhai
 package com.dishanhai.sh_common_lib.api.ulk.recipe;
 
+import com.dishanhai.sh_common_lib.api.ulk.fumo.FumoRewardDefinition;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonArray;
@@ -11,6 +12,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
@@ -19,6 +21,9 @@ import java.util.Objects;
 
 /** Bounded UTF-8 drafts and explicit workspace-relative exports. */
 public final class RecipeWorkspace {
+    public static final String DEFAULT_DIRECTORY = "config/sh_common_lib/recipe_editor";
+    private static final String DEVELOPER_SETTINGS = "developer.json";
+    private static final int MAX_SETTINGS_BYTES = 32 * 1024;
     private static final long MAX_BYTES = 1024 * 1024;
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
     private final Path root;
@@ -48,6 +53,8 @@ public final class RecipeWorkspace {
         json.addProperty("group", doc.group());
         json.addProperty("rawJson", doc.rawJson());
         if (doc.customTarget() != null) json.addProperty("customTarget", doc.customTarget().name());
+        if (doc.type() == RecipeType.FUMO_REWARDS)
+            json.add("rewards", FumoRewardDefinition.json(doc.rewards()).get("rewards"));
         write(destination, GSON.toJson(json) + "\n", overwrite);
         return destination;
     }
@@ -59,9 +66,11 @@ public final class RecipeWorkspace {
         try {
             JsonObject json = JsonParser.parseString(Files.readString(file, StandardCharsets.UTF_8)).getAsJsonObject();
             if (json.get("schema").getAsInt() != 1 || !id.equals(json.get("id").getAsString())) throw new IOException("Invalid draft schema or ID");
+            var type = RecipeType.valueOf(json.get("type").getAsString());
+            if (type == RecipeType.FUMO_REWARDS) return RecipeDocument.fumo(id, FumoRewardDefinition.read(json));
             var inputs = new ArrayList<String>();
             json.getAsJsonArray("inputs").forEach(value -> inputs.add(value.getAsString()));
-            return new RecipeDocument(id, RecipeType.valueOf(json.get("type").getAsString()), inputs,
+            return new RecipeDocument(id, type, inputs,
                     json.get("result").getAsString(), json.get("count").getAsInt(), json.get("experience").getAsFloat(),
                     json.get("cookingTime").getAsInt(), json.get("group").getAsString(), json.get("rawJson").getAsString(),
                     json.has("customTarget") ? RecipeTarget.valueOf(json.get("customTarget").getAsString()) : null);
@@ -144,6 +153,69 @@ public final class RecipeWorkspace {
         Path file = resolve(artifact.relativePath());
         write(file, artifact.content(), overwrite);
         return file;
+    }
+
+    public RecipeExportSettings loadExportSettings() throws IOException {
+        Path file = resolve(DEVELOPER_SETTINGS);
+        checkLinks(file);
+        try (var input = Files.newInputStream(file)) {
+            byte[] bytes = input.readNBytes(MAX_SETTINGS_BYTES + 1);
+            if (bytes.length > MAX_SETTINGS_BYTES) throw new IOException("Developer settings file is too large");
+            var json = JsonParser.parseString(new String(bytes, StandardCharsets.UTF_8)).getAsJsonObject();
+            var enabled = json.getAsJsonPrimitive("customJsonExport");
+            var directory = json.getAsJsonPrimitive("jsonExportRoot");
+            if (enabled == null || !enabled.isBoolean() || directory == null || !directory.isString())
+                throw new IOException("Invalid JSON export settings");
+            return new RecipeExportSettings(enabled.getAsBoolean(), directory.getAsString());
+        } catch (NoSuchFileException missing) {
+            return RecipeExportSettings.DEFAULT;
+        } catch (RuntimeException invalid) {
+            throw new IOException("Invalid JSON export settings", invalid);
+        }
+    }
+
+    public void saveExportSettings(RecipeExportSettings settings) throws IOException {
+        var json = new JsonObject();
+        json.addProperty("customJsonExport", settings.customJsonExport());
+        json.addProperty("jsonExportRoot", settings.jsonExportRoot());
+        String value = GSON.toJson(json) + "\n";
+        if (value.getBytes(StandardCharsets.UTF_8).length > MAX_SETTINGS_BYTES)
+            throw new IOException("Developer settings file is too large");
+        write(resolve(DEVELOPER_SETTINGS), value, true);
+    }
+
+    /** Resolves the exact output once so confirmation and writing use the same destination. */
+    public PreparedExport prepareExport(RecipeArtifact artifact, RecipeFormat format, Path gameDirectory) throws IOException {
+        String relative = artifact.relativePath();
+        if (format == RecipeFormat.JSON) {
+            var settings = loadExportSettings();
+            if (settings.customJsonExport()) {
+                if (!relative.endsWith(".json")) throw new IllegalArgumentException("Expected a JSON artifact");
+                var destination = new RecipeWorkspace(settings.resolveRoot(gameDirectory));
+                if (relative.startsWith("exports/")) relative = relative.substring("exports/".length());
+                return new PreparedExport(destination, destination.resolve(relative), artifact.content());
+            }
+        }
+        return new PreparedExport(this, resolve(relative), artifact.content());
+    }
+
+    public static final class PreparedExport {
+        private final RecipeWorkspace workspace;
+        private final Path path;
+        private final String content;
+
+        private PreparedExport(RecipeWorkspace workspace, Path path, String content) {
+            this.workspace = workspace;
+            this.path = path;
+            this.content = content;
+        }
+
+        public Path path() { return path; }
+
+        public Path write(boolean overwrite) throws IOException {
+            workspace.write(path, content, overwrite);
+            return path;
+        }
     }
 
     private Path draftPath(String id) {

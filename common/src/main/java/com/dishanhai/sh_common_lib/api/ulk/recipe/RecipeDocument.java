@@ -1,16 +1,25 @@
 // Author: dishanhai
 package com.dishanhai.sh_common_lib.api.ulk.recipe;
 
+import com.dishanhai.sh_common_lib.api.ulk.fumo.FumoRewardDefinition;
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 
 /** Nine slots preserve grid positions; other layouts use the slots from index zero. */
 public record RecipeDocument(String id, RecipeType type, List<String> inputs, String result, int count,
-                             float experience, int cookingTime, String group, String rawJson, RecipeTarget customTarget) {
-    /** An unpinned recipe uses the caller's target. Preserves the original constructor for existing users. */
+                             float experience, int cookingTime, String group, String rawJson,
+                             RecipeTarget customTarget, List<FumoRewardDefinition.Entry> rewards) {
+    private static final List<String> EMPTY_INPUTS = Collections.nCopies(9, "");
+
     public RecipeDocument(String id, RecipeType type, List<String> inputs, String result, int count,
                           float experience, int cookingTime, String group, String rawJson) {
-        this(id, type, inputs, result, count, experience, cookingTime, group, rawJson, null);
+        this(id, type, inputs, result, count, experience, cookingTime, group, rawJson, null, List.of());
+    }
+
+    public RecipeDocument(String id, RecipeType type, List<String> inputs, String result, int count,
+                          float experience, int cookingTime, String group, String rawJson, RecipeTarget customTarget) {
+        this(id, type, inputs, result, count, experience, cookingTime, group, rawJson, customTarget, List.of());
     }
 
     public RecipeDocument {
@@ -21,6 +30,7 @@ public record RecipeDocument(String id, RecipeType type, List<String> inputs, St
         Objects.requireNonNull(result);
         Objects.requireNonNull(group);
         Objects.requireNonNull(rawJson);
+        rewards = List.copyOf(rewards);
         if (customTarget != null && type != RecipeType.CUSTOM)
             throw new IllegalArgumentException("Only generic recipes can pin a target");
     }
@@ -33,11 +43,15 @@ public record RecipeDocument(String id, RecipeType type, List<String> inputs, St
     }
 
     public RecipeDocument withCustomTarget(RecipeTarget selected) {
-        return new RecipeDocument(id, type, inputs, result, count, experience, cookingTime, group, rawJson, selected);
+        return new RecipeDocument(id, type, inputs, result, count, experience, cookingTime, group, rawJson, selected, rewards);
     }
 
     public static RecipeDocument empty() {
         return new RecipeDocument("example:recipe", RecipeType.SHAPED,
-                List.of("", "", "", "", "", "", "", "", ""), "", 1, 0, 200, "", "");
+                EMPTY_INPUTS, "", 1, 0, 200, "", "");
+    }
+
+    public static RecipeDocument fumo(String id, List<FumoRewardDefinition.Entry> rewards) {
+        return new RecipeDocument(id, RecipeType.FUMO_REWARDS, EMPTY_INPUTS, "", 1, 0, 200, "", "", null, rewards);
     }
 }

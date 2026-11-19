@@ -16,6 +16,7 @@ import com.dishanhai.sh_better_ui.client.gui.scaled.UiHistory;
 import com.dishanhai.sh_better_ui.client.gui.scaled.UiIngredientSlots;
 import com.dishanhai.sh_better_ui.client.gui.scaled.UiNavigationRail;
 import com.dishanhai.sh_better_ui.client.gui.scaled.UiTextField;
+import com.dishanhai.sh_common_lib.api.ulk.fumo.FumoRewardDefinition;
 import com.dishanhai.sh_common_lib.api.ulk.recipe.*;
 import com.dishanhai.sh_common_lib.api.client.ulk.RecipeRegistryValidation;
 import net.minecraft.client.Minecraft;
@@ -40,6 +41,7 @@ public final class RecipeEditor {
     private final RecipeTarget target;
     private final Screen parent;
     private final Supplier<? extends GuiEventListener> returnFocus;
+    private final Path gameDirectory;
     private final RecipeWorkspace workspace;
     private final UiHistory<RecipeDocument> undo = new UiHistory<>(128);
     private final UiHistory<RecipeDocument> redo = new UiHistory<>(128);
@@ -66,7 +68,7 @@ public final class RecipeEditor {
     private long registryValidationTime;
     private Component status = text("intro");
     private Component validationStatus;
-    private int view, codePage;
+    private int view, codePage, rewardPage;
     private RecipeEditorLayout.Layout layout;
     private RecipeEditorLayout.Slots slotLayout;
     private boolean busy;
@@ -75,8 +77,8 @@ public final class RecipeEditor {
         this.parent = parent;
         this.returnFocus = returnFocus;
         this.target = target;
-        workspace = new RecipeWorkspace(Minecraft.getInstance().gameDirectory.toPath()
-                .resolve("config/sh_common_lib/recipe_editor"));
+        gameDirectory = Minecraft.getInstance().gameDirectory.toPath();
+        workspace = new RecipeWorkspace(gameDirectory.resolve(RecipeWorkspace.DEFAULT_DIRECTORY));
     }
 
     public static void open(Screen parent, Supplier<? extends GuiEventListener> returnFocus, RecipeTarget target) {
@@ -261,6 +263,10 @@ public final class RecipeEditor {
             else genericCanvas(owner, pane);
             return;
         }
+        if (isFumo()) {
+            rewards(owner, x, width);
+            return;
+        }
         if (document.type() == RecipeType.SHAPED || document.type() == RecipeType.SHAPELESS) {
             int space = Math.min(136, width - typeWidth - 4);
             var sequence = button(owner, x + typeWidth + 4, y, space, 22, text("fill_sequence"), this::openSequence);
@@ -372,6 +378,110 @@ public final class RecipeEditor {
         };
     }
 
+    private boolean isFumo() { return document.type() == RecipeType.FUMO_REWARDS; }
+
+    private void rewards(UiScreen owner, int x, int width) {
+        var area = RecipeEditorLayout.rewards(layout.body(layout.editor()));
+        var rewards = document.rewards();
+        if (rewards.isEmpty()) canvasLabels.add(new CanvasLabel(text("fumo.empty"), x, area.top(), width, false));
+        int pages = Math.max(1, (rewards.size() + area.rows() - 1) / area.rows());
+        rewardPage = Math.max(0, Math.min(rewardPage, pages - 1));
+        int from = rewardPage * area.rows();
+        for (int i = from; i < Math.min(rewards.size(), from + area.rows()); i++) {
+            int index = i;
+            var reward = rewards.get(i);
+            var item = icons.get(reward.item());
+            Component name = item == null ? Component.literal(reward.item())
+                    : UiRichText.withItem(reward.item(), item.getHoverName());
+            button(owner, x, area.rowY(i - from), width, 22, text("fumo.row", reward.weight(), name),
+                    () -> openReward(index));
+        }
+        int y = area.footer();
+        if (pages == 1) {
+            button(owner, x, y, width, 20, text("fumo.add"), () -> openReward(rewards.size()));
+            return;
+        }
+        int nav = Math.min(60, width / 4);
+        button(owner, x, y, nav, 20, text("previous"), () -> { rewardPage--; refresh(); }).active = rewardPage > 0;
+        button(owner, x + nav + 4, y, width - nav * 2 - 8, 20, text("fumo.add"), () -> openReward(rewards.size()));
+        button(owner, x + width - nav, y, nav, 20, text("next"), () -> { rewardPage++; refresh(); }).active = rewardPage + 1 < pages;
+    }
+
+    private void openReward(int index) {
+        var rewards = document.rewards();
+        var entry = index < rewards.size() ? rewards.get(index) : new FumoRewardDefinition.Entry("", 1);
+        openReward(index, entry, new RewardDraft(entry.item(), Integer.toString(entry.weight())));
+    }
+
+    private void openReward(int index, FumoRewardDefinition.Entry original, RewardDraft draft) {
+        boolean existing = index < document.rewards().size();
+        Component title = text(existing ? "fumo.edit" : "fumo.add");
+        Runnable resume = () -> openReward(index, original, draft);
+        Runnable apply = () -> applyReward(index, draft, resume);
+        var currentInput = new UiTextField[1];
+        builder(title, pendingGuard(() -> !draft.item.equals(original.item())
+                || !draft.weight.equals(Integer.toString(original.weight())), apply, resume)).onInit(owner -> {
+            back(owner);
+            int x = 12, y = Math.max(38, owner.viewport().y() + 8), width = owner.width - 24;
+            currentInput[0] = field(owner, x, y, width, "fumo.item", draft.item, value -> draft.item = value);
+            int weightWidth = Math.min(110, width / 2);
+            field(owner, x, y + 26, weightWidth, "fumo.weight", draft.weight, value -> draft.weight = value);
+            button(owner, x + weightWidth + 4, y + 38, width - weightWidth - 4, 20, text("select_item"),
+                    () -> UiWorkbench.selectItem(owner, text("select_item"), () -> currentInput[0],
+                            icons.getOrDefault(draft.item, ItemStack.EMPTY).copy(), false, null, stack -> {
+                                draft.item = itemId(stack, draft.item);
+                                currentInput[0].setValue(draft.item);
+                            }));
+            int applyWidth = existing ? (width - 4) / 2 : width;
+            button(owner, x, y + 64, applyWidth, 22, text("apply"), apply).setSelected(true);
+            if (existing) button(owner, x + applyWidth + 4, y + 64, width - applyWidth - 4, 22,
+                    text("fumo.remove"), () -> {
+                        var updated = new ArrayList<>(document.rewards());
+                        updated.remove(index);
+                        change(RecipeDocument.fumo(document.id(), updated));
+                        refresh();
+                    });
+        }).onForeground((owner, frame) -> {
+            int y = Math.max(38, owner.viewport().y() + 8);
+            line(frame, text("fumo.item"), 12, y, owner.width - 24, UiWorkbench.secondaryTextColor());
+            line(frame, text("fumo.weight"), 12, y + 26, owner.width - 24, UiWorkbench.secondaryTextColor());
+            line(frame, status, 12, owner.height - 16, owner.width - 24, UiWorkbench.accentColor());
+        }).open();
+    }
+
+    private void applyReward(int index, RewardDraft draft, Runnable resume) {
+        int weight;
+        try { weight = Integer.parseInt(draft.weight.trim()); }
+        catch (NumberFormatException invalid) {
+            status = text("error.invalid_reward_weight");
+            resume.run();
+            return;
+        }
+        var updated = new ArrayList<>(document.rewards());
+        var entry = new FumoRewardDefinition.Entry(draft.item.trim(), weight);
+        if (index == updated.size()) updated.add(entry);
+        else updated.set(index, entry);
+        var problem = FumoRewardDefinition.firstProblem(updated);
+        if (problem != null) {
+            status = issueLabel(new RecipeIssue(problem.key(), "reward." + (problem.index() + 1)));
+            resume.run();
+            return;
+        }
+        change(RecipeDocument.fumo(document.id(), updated));
+        rewardPage = index / RecipeEditorLayout.rewards(layout.body(layout.editor())).rows();
+        refresh();
+    }
+
+    private static final class RewardDraft {
+        private String item;
+        private String weight;
+
+        private RewardDraft(String item, String weight) {
+            this.item = item;
+            this.weight = weight;
+        }
+    }
+
     private boolean isPotion(int slot) { return document.type() == RecipeType.BREWING && (slot == 0 || slot == 9); }
 
     private Component slotName(int slot) {
@@ -410,7 +520,7 @@ public final class RecipeEditor {
                 refresh();
             });
         }
-        if (structuredRecipe()) return;
+        if (structuredRecipe() || isFumo()) return;
         propertyField(owner, x, y + stride, width, "group", document.group(), value -> edit(document.id(), document.result(), document.count(),
                 document.experience(), document.cookingTime(), value));
         if (document.type() != RecipeType.BREWING && document.type() != RecipeType.SMITHING_TRIM) {
@@ -461,7 +571,7 @@ public final class RecipeEditor {
     private void edit(String id, String result, int count, float experience, int time, String group) {
         // A valid numeric edit clears only its own pending error in the field callback.
         change(new RecipeDocument(id, document.type(), document.inputs(), result, count, experience, time,
-                group, document.rawJson(), document.customTarget()));
+                group, document.rawJson(), document.customTarget(), document.rewards()));
     }
 
     private boolean dirty() { return !document.equals(saved) || !invalidNumbers.isEmpty(); }
@@ -480,7 +590,7 @@ public final class RecipeEditor {
             var artifact = artifact();
             if (artifact != null) { Minecraft.getInstance().keyboardHandler.setClipboard(artifact.content()); status = text("copied"); }
         });
-        export = button(owner, area.right() - actionWidth, y, actionWidth, 22, text("export"), () -> export(false));
+        export = button(owner, area.right() - actionWidth, y, actionWidth, 22, text("export"), this::export);
         if (compact) { copy.setIcon(GraphicIcon.COPY); export.setIcon(GraphicIcon.EXPORT); }
         else { copy.setLeadingIcon(GraphicIcon.COPY); export.setLeadingIcon(GraphicIcon.EXPORT); }
         int bottomRow = area.bottom() - 20;
@@ -507,6 +617,10 @@ public final class RecipeEditor {
             } else GtceuRecipeEditor.open(screen, document.rawJson(), icons, this::applyCustom);
         } else if (document.type() == RecipeType.CUSTOM) {
             GenericRecipeEditor.open(screen, document.rawJson(), this::applyCustom);
+        } else if (isFumo()) {
+            view = 0;
+            if (field.startsWith("reward.")) openReward(Integer.parseInt(field.substring("reward.".length())) - 1);
+            else refresh();
         } else if (field.equals("result")) {
             openSlot(9);
         } else if (field.startsWith("input")) {
@@ -533,11 +647,17 @@ public final class RecipeEditor {
         try {
             issues = new ArrayList<>(RecipeGenerator.validate(document, editingTarget, format));
             if (issues.isEmpty() && checkRegistry) issues.addAll(RecipeRegistryValidation.validate(document, editingTarget));
-            if (!issues.isEmpty()) { var issue = issues.get(0); validationStatus = text("issue", text("field." + issue.field()), text("error." + issue.key())); return null; }
+            if (!issues.isEmpty()) { validationStatus = issueLabel(issues.get(0)); return null; }
             generatedArtifact = RecipeGenerator.generate(document, editingTarget, format);
             if (!hadPreview) previewLines = generatedArtifact.content().stripTrailing().split("\n");
             return generatedArtifact;
         } catch (RuntimeException exception) { issues = List.of(); validationStatus = text("failed", exception.getMessage()); return null; }
+    }
+
+    private static Component issueLabel(RecipeIssue issue) {
+        String field = issue.field();
+        return text("issue", field.startsWith("reward.") ? text("field.reward", field.substring("reward.".length()))
+                : text("field." + field), text("error." + issue.key()));
     }
 
     private void draw(UiScreen owner, UiFrame frame) {
@@ -577,8 +697,8 @@ public final class RecipeEditor {
             var pane = layout.body(layout.editor()); int x = pane.x(), y = pane.y(), width = pane.width();
             int stride = owner.height < 220 ? 26 : 36;
             propertyLabel(owner, frame, x, y, width, "id");
-            if (!structuredRecipe()) propertyLabel(owner, frame, x, y + stride, width, "group");
-            if (!structuredRecipe() && document.type() != RecipeType.BREWING && document.type() != RecipeType.SMITHING_TRIM)
+            if (!structuredRecipe() && !isFumo()) propertyLabel(owner, frame, x, y + stride, width, "group");
+            if (!structuredRecipe() && !isFumo() && document.type() != RecipeType.BREWING && document.type() != RecipeType.SMITHING_TRIM)
                 propertyLabel(owner, frame, x, y + stride * 2, isCooking() ? width / 3 - 3 : width, "count");
             if (isCooking()) {
                 propertyLabel(owner, frame, x + width / 3, y + stride * 2, width / 3 - 3, "time");
@@ -615,7 +735,7 @@ public final class RecipeEditor {
                     line(frame, text("preview_issues").copy().withStyle(style -> style.withBold(true)), x, top, width, UiWorkbench.textColor());
                     for (int i = 0; i < Math.min(rows - 2, issues.size()); i++) {
                         var issue = issues.get(i);
-                        line(frame, text("issue", text("field." + issue.field()), text("error." + issue.key())),
+                        line(frame, issueLabel(issue),
                                 x, top + 16 + i * 11, width, UiWorkbench.secondaryTextColor());
                     }
                 }
@@ -642,6 +762,7 @@ public final class RecipeEditor {
         if (next.equals(document)) return;
         boolean sameLayout = next.type() == document.type();
         undo.remember(document); redo.clear(); document = next; codePage = 0;
+        if (!sameLayout) rewardPage = 0;
         status = text("modified");
         if (sameLayout) syncSlots();
     }
@@ -683,8 +804,7 @@ public final class RecipeEditor {
             if (!initial.isEmpty() && slot == 9) initial.setCount(Math.max(1, document.count()));
             UiWorkbench.selectItem(screen, slotName(slot), () -> slot == 9 ? output : inputs,
                     initial, slot == 9, () -> openSlotManual(slot), stack -> {
-                        String selectedId = icons.entrySet().stream().filter(entry -> entry.getValue().getItem() == stack.getItem())
-                                .map(Map.Entry::getKey).findFirst().orElse(id);
+                        String selectedId = itemId(stack, id);
                         var values = new ArrayList<>(document.inputs());
                         if (slot < 9) values.set(slot, selectedId);
                         if (slot == 9) { invalidNumbers.remove("count"); numberText.remove("count"); }
@@ -702,8 +822,7 @@ public final class RecipeEditor {
             var values = new ArrayList<>(document.inputs());
             for (int i = 0; i < stacks.size(); i++) {
                 var stack = stacks.get(i);
-                String id = icons.entrySet().stream().filter(entry -> entry.getValue().getItem() == stack.getItem())
-                        .map(Map.Entry::getKey).findFirst().orElse("");
+                String id = itemId(stack, "");
                 if (!id.isEmpty()) values.set(i, id);
             }
             change(new RecipeDocument(document.id(), document.type(), values, document.result(), document.count(),
@@ -730,8 +849,7 @@ public final class RecipeEditor {
             button(owner, 12, y + 46, w, 22, text("select_item"), () -> {
                 if (isPotion(slot)) { status = text("potion_hint"); return; }
                 UiWorkbench.selectItem(owner, text("select_item"), () -> currentInput[0], stack -> {
-                    value[0] = icons.entrySet().stream().filter(entry -> entry.getValue().getItem() == stack.getItem())
-                            .map(Map.Entry::getKey).findFirst().orElse(value[0]);
+                    value[0] = itemId(stack, value[0]);
                     currentInput[0].setValue(value[0]);
                 });
             }).active = !isPotion(slot) && !pattern;
@@ -739,6 +857,11 @@ public final class RecipeEditor {
         }).onForeground((owner, frame) -> {
             line(frame, text(slot == 9 && document.type() == RecipeType.SMITHING_TRIM ? "pattern_hint" : isPotion(slot) ? "potion_hint" : "ingredient_hint"), 12, owner.height - 22, owner.width - 24, UiWorkbench.secondaryTextColor());
         }).open();
+    }
+
+    private String itemId(ItemStack stack, String fallback) {
+        return icons.entrySet().stream().filter(entry -> entry.getValue().getItem() == stack.getItem())
+                .map(Map.Entry::getKey).findFirst().orElse(fallback);
     }
 
     private void openTypes() {
@@ -777,7 +900,9 @@ public final class RecipeEditor {
                     };
                     var empty = RecipeDocument.empty();
                     clearPendingNumbers();
-                    change(new RecipeDocument(document.id(), type, empty.inputs(), "", 1, 0, time,
+                    rewardPage = 0;
+                    change(type == RecipeType.FUMO_REWARDS ? RecipeDocument.fumo(document.id(), List.of())
+                            : new RecipeDocument(document.id(), type, empty.inputs(), "", 1, 0, time,
                             type == RecipeType.GTCEU || type == RecipeType.CUSTOM ? "" : document.group(),
                             type == RecipeType.GTCEU ? GtMachineRecipe.empty().toJson() : ""));
                 }
@@ -813,24 +938,27 @@ public final class RecipeEditor {
     private void importClipboard() {
         try {
             var loaded = RecipeImporter.importForEditing(document, Minecraft.getInstance().keyboardHandler.getClipboard(), target);
+            if (loaded.type() == RecipeType.FUMO_REWARDS) { view = 0; rewardPage = 0; }
             clearPendingNumbers(); change(loaded); savedId = null; status = text("imported"); refresh();
         } catch (Exception exception) { status = text("failed", exception.getMessage()); refresh(); }
     }
 
     private void help() {
         boolean brewing = document.type() == RecipeType.BREWING || document.type() == RecipeType.BREWING_CONTAINER;
-        String section = brewing ? "brewing" : format.name().toLowerCase(Locale.ROOT);
+        boolean fumo = isFumo();
+        String section = fumo ? "fumo" : brewing ? "brewing" : format.name().toLowerCase(Locale.ROOT);
         builder(text("help"), screen).onInit(owner -> {
             back(owner);
             button(owner, 12, owner.height - 32, owner.width - 24, 22, text("open_directory"), () -> {
                 try {
-                    var root = Minecraft.getInstance().gameDirectory.toPath().resolve("config/sh_common_lib/recipe_editor");
+                    var root = gameDirectory.resolve(RecipeWorkspace.DEFAULT_DIRECTORY);
                     java.nio.file.Files.createDirectories(root);
                     RecipeEditorPlatform.openDirectory(root);
                 } catch (Exception exception) { status = text("failed", exception.getMessage()); }
             });
         }).onForeground((owner, frame) -> {
-            for (int i = 0; i < 7; i++) line(frame, text("help." + section + "." + i), 12, 42 + i * 13, owner.width - 24, UiWorkbench.textColor());
+            for (int i = 0; i < (fumo ? 5 : 7); i++)
+                line(frame, text("help." + section + "." + i), 12, 42 + i * 13, owner.width - 24, UiWorkbench.textColor());
             line(frame, status, 12, owner.height - 46, owner.width - 24, UiWorkbench.accentColor());
         }).open();
     }
@@ -849,15 +977,24 @@ public final class RecipeEditor {
         catch (Exception exception) { status = text("failed", exception.getMessage()); return false; }
     }
 
-    private void export(boolean overwrite) {
+    private void export() {
         var artifact = artifact(); if (artifact == null || busy) return;
+        try { export(workspace.prepareExport(artifact, format, gameDirectory), false); }
+        catch (Exception exception) { status = text("failed", exception.getMessage()); }
+    }
+
+    private void export(RecipeWorkspace.PreparedExport prepared, boolean overwrite) {
+        Component previousStatus = status;
         busy = true; status = text("writing");
         try {
-            Path path = workspace.export(artifact, overwrite);
+            Path path = prepared.write(overwrite);
             status = text("exported", path.toString());
         } catch (java.nio.file.FileAlreadyExistsException exception) {
-            Minecraft.getInstance().setScreen(new ConfirmScreen(ok -> { refresh(); if (ok) export(true); },
-                    text("overwrite"), text("overwrite_hint", artifact.relativePath())));
+            Minecraft.getInstance().setScreen(new ConfirmScreen(ok -> {
+                refresh();
+                if (ok) export(prepared, true);
+                else status = previousStatus;
+            }, text("overwrite"), text("overwrite_hint", prepared.path().toString())));
         } catch (Exception exception) { status = text("failed", exception.getMessage()); }
         finally { busy = false; }
     }

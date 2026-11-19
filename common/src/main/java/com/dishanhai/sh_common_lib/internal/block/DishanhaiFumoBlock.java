@@ -1,8 +1,10 @@
 // Author: dishanhai
 package com.dishanhai.sh_common_lib.internal.block;
 
+import com.dishanhai.sh_common_lib.api.ulk.fumo.FumoRewards;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.player.Player;
@@ -117,12 +119,11 @@ public final class DishanhaiFumoBlock extends Block implements SimpleWaterlogged
     // NeoForge 1.21.1 interaction entry point.
     protected InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos, Player player, BlockHitResult hit) {
         if (!player.getMainHandItem().isEmpty() || player.isShiftKeyDown()) return InteractionResult.PASS;
-        toggleDance(state, level, pos);
+        if (level instanceof ServerLevel serverLevel) {
+            FumoRewards.tryGive(serverLevel, player);
+            serverLevel.setBlock(pos, state.cycle(DANCING), UPDATE_CLIENTS);
+        }
         return InteractionResult.sidedSuccess(level.isClientSide());
-    }
-
-    private void toggleDance(BlockState state, Level level, BlockPos pos) {
-        if (!level.isClientSide()) level.setBlock(pos, state.cycle(DANCING), UPDATE_CLIENTS);
     }
 
     @Override

@@ -219,7 +219,15 @@ tasks.named('check') {
     dependsOn 'accelerationPolicyTest', 'accelerationPersistenceTest', 'tickBudgetTest', 'mobAiLeasesTest'
     dependsOn 'jeiSearchLayoutTest'
     dependsOn 'recipeEditorTest', 'recipeImporterTest', 'brewingDefinitionsTest', 'brewingDatapackTest', 'brewingApiTest', 'brewingRuleCacheTest'
+    dependsOn 'fumoRewardPoolTest'
     dependsOn tasks.named('searchGiveShortcutTest'), tasks.named('cosmicArtisanGestureTest'), tasks.named('artisanSettingsTest'), tasks.named('controlCenterDraftTest'), tasks.named('clientSearchTest'), tasks.named('searchHistoryTest'), tasks.named('jeiSearchSettingsTest'), tasks.named('searchCompletionUndoTest'), tasks.named('recipePreviewBoundsTest'), tasks.named('searchPagingTest'), tasks.named('inventoryScanTrackerTest'), tasks.named('inventorySnapshotTest')
+}
+
+tasks.register('fumoRewardPoolTest', JavaExec) {
+    group = 'verification'
+    description = 'Checks Fumo reward weights, roll boundaries and JSON validation.'
+    classpath = sourceSets.controlCenterVerification.runtimeClasspath + sourceSets.main.runtimeClasspath
+    mainClass = 'com.dishanhai.sh_common_lib.api.ulk.fumo.FumoRewardPoolTest'
 }
 
 tasks.register('recipeEditorTest', JavaExec) {

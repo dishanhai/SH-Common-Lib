@@ -51,7 +51,7 @@
 
 - 0.4.0 跨版本工具事件要以实际依赖为准。NeoForge 26.1.2 将破坏事件迁移到 event.level.block.BreakBlockEvent，熔炼 assemble 只收输入，工具能力收到 ItemInstance。Forge 1.20.1 的 LivingChangeTargetEvent 使用 getNewTarget 和 setNewTarget。连锁任务从各端破坏事件登记，在玩家 tick 执行，可同时避免依赖新版已移除的服务器任务接口和在取消破坏时误触发。
 
-- Git Bash 通过 Unix Gradle wrapper 启动 Windows JVM 时，临时目录可能被解析为 `C:jtmp`。在 Git Bash 中用 `cmd.exe //d //c gradlew.bat` 启动 Windows wrapper，并传入 `TEMP=C:/jtmp TMP=C:/jtmp JAVA_TOOL_OPTIONS=-Djava.io.tmpdir=C:/jtmp` 后，三个 0.4.0 目标均能正常构建。
+- Git Bash 通过 Unix Gradle wrapper 启动 Windows JVM 时，临时目录可能被解析为 `C:jtmp`。在 Git Bash 中用 `cmd.exe //d //c gradlew.bat` 启动 Windows wrapper，并传入 `TEMP=C:/jtmp TMP=C:/jtmp JAVA_TOOL_OPTIONS=-Djava.io.tmpdir=C:/jtmp` 后，三个 0.4.0 目标均能正常构建。若环境已有反斜杠路径形式的 `GRADLE_OPTS`，本次启动也统一设为 `GRADLE_OPTS=-Djava.io.tmpdir=C:/jtmp`。
 
 - 玩家信息 HUD 使用当前页实际显示过的最大文字宽度。用理论最大坐标和所有群系名称预留空间会让正常内容右侧留白过大。宽度应按页记录，翻页时读取目标页的宽度，窗口空间不足时受可用宽度限制。
 
@@ -158,3 +158,4 @@
 - 百工目视传送按玩家当前 yaw/pitch 生成服务端射线。LivingEntity 的 pick 可能沿头部插值角度射线，在玩家刚转身时会指向旧朝向。测试 NeoForge 瞬移时 FakePlayer 的连接会吞掉 teleport，需为测试玩家提供能更新坐标的替代方法；验证受伤则要清除其出生无敌时间。
 - Minecraft 26.1.2 的实体类型标签通过 builtInRegistryHolder().is(tag) 查询。
 - NeoForge 26.1.2 构建使用 1.21.1 的 `NeoForgeJeiOrderableNetwork` 时，`ServerPlayer.canInteractWithBlock(BlockPos, int)` 无法解析；跨版本共享调用前应核对对应版本的实际 API。
+- 共用 UUK 页面调用 `UiScreenBuilder.returnFocus` 会在 NeoForge 26.1.2 编译失败，该版本把方法放在 `UiScreen` 上。可在三端共用的 `onCloseRequest` 中返回父页面，并在父页面重建后恢复焦点。

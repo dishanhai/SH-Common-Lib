@@ -1,6 +1,8 @@
 // Author: dishanhai
 package com.dishanhai.sh_common_lib.api.ulk.recipe;
 
+import com.dishanhai.sh_common_lib.api.ulk.fumo.FumoRewardDefinition;
+import com.dishanhai.sh_common_lib.api.ulk.fumo.FumoRewardDefinition.Entry;
 import com.google.gson.JsonParser;
 import com.dishanhai.sh_common_lib.internal.recipe.BrewingDefinitions;
 import java.nio.file.Files;
@@ -122,8 +124,88 @@ public final class RecipeGeneratorTest {
         catch (java.nio.file.FileAlreadyExistsException expected) { }
         try { workspace.export(new RecipeArtifact("../outside", "x"), false); throw new AssertionError("traversal accepted"); }
         catch (IllegalArgumentException expected) { }
+        fumo(workspace);
+        customExports(dir.resolve("instance"), shaped, brew, workspace);
         deleteTree(javaDir);
         deleteTree(dir);
+    }
+
+    private static void customExports(Path instance, RecipeDocument recipe, RecipeDocument brew, RecipeWorkspace workspace) throws Exception {
+        var target = RecipeTarget.NEOFORGE_1_21_1;
+        var json = RecipeGenerator.generate(recipe, target, RecipeFormat.JSON);
+        var settings = new RecipeExportSettings(true, "config/custom recipe root");
+        expect(workspace.loadExportSettings().equals(RecipeExportSettings.DEFAULT), "custom JSON export disabled by default");
+        expect(workspace.prepareExport(json, RecipeFormat.JSON, instance).path()
+                .equals(instance.getParent().resolve(json.relativePath())), "default JSON workspace path");
+        workspace.saveExportSettings(settings);
+        expect(workspace.loadExportSettings().equals(settings), "developer settings round trip");
+        var prepared = workspace.prepareExport(json, RecipeFormat.JSON, instance);
+        Path destination = instance.resolve("config/custom recipe root/data/example/recipe/test.json");
+        expect(prepared.path().equals(destination), "relative custom root and versioned JSON hierarchy");
+        expect(prepared.write(false).equals(destination) && Files.readString(destination).equals(json.content()),
+                "custom relative JSON export");
+        try { prepared.write(false); throw new AssertionError("custom destination overwritten without confirmation"); }
+        catch (java.nio.file.FileAlreadyExistsException expected) { }
+        prepared.write(true);
+
+        Path absolute = instance.resolve("absolute target").toAbsolutePath();
+        workspace.saveExportSettings(new RecipeExportSettings(true, absolute.toString()));
+        var brewing = RecipeGenerator.generate(brew, target, RecipeFormat.JSON);
+        expect(workspace.prepareExport(brewing, RecipeFormat.JSON, instance).write(false)
+                .equals(absolute.resolve("brewing/example/potion.json")), "absolute root retains brewing hierarchy");
+        var fumo = RecipeDocument.fumo("example:fumo_export", List.of(new Entry("minecraft:apple", 1)));
+        var fumoJson = RecipeGenerator.generate(fumo, target, RecipeFormat.JSON);
+        expect(workspace.prepareExport(fumoJson, RecipeFormat.JSON, instance).write(false)
+                .equals(absolute.resolve(FumoRewardDefinition.DATA_PATH)), "custom root retains Fumo resource path");
+        for (var format : List.of(RecipeFormat.KUBEJS, RecipeFormat.JAVA)) {
+            var artifact = RecipeGenerator.generate(recipe, target, format);
+            expect(workspace.prepareExport(artifact, format, instance).path()
+                    .equals(instance.getParent().resolve(artifact.relativePath())), "non-JSON export uses workspace");
+        }
+        try {
+            workspace.prepareExport(new RecipeArtifact("exports/../outside/../../x.json", "{}"), RecipeFormat.JSON, instance);
+            throw new AssertionError("custom root accepted traversal");
+        } catch (IllegalArgumentException expected) { }
+
+        workspace.saveExportSettings(new RecipeExportSettings(false, settings.jsonExportRoot()));
+        expect(workspace.prepareExport(json, RecipeFormat.JSON, instance).path()
+                .equals(instance.getParent().resolve(json.relativePath())), "disabling restores workspace destination");
+    }
+
+    private static void fumo(RecipeWorkspace workspace) throws Exception {
+        var pool = RecipeDocument.fumo("example:fumo_draft", List.of(
+                new Entry("minecraft:iron_ingot", 9), new Entry("example:gem", 1)));
+        workspace.save(pool);
+        expect(workspace.load(pool.id()).equals(pool), "weighted Fumo draft round trip");
+        for (var target : RecipeTarget.values()) {
+            var json = RecipeGenerator.generate(pool, target, RecipeFormat.JSON);
+            expect(json.relativePath().equals("exports/" + FumoRewardDefinition.DATA_PATH), "fixed Fumo resource path");
+            expect(RecipeImporter.fromJson(pool.id(), json.content(), target).equals(pool), "Fumo JSON round trip");
+            var script = RecipeGenerator.generate(pool, target, RecipeFormat.KUBEJS);
+            expect(script.relativePath().endsWith("server_scripts/sh_common_lib/fumo_rewards.js"), "Fumo script destination");
+            String expected = target == RecipeTarget.FORGE_1_20_1 ? "event.add(" : "event.text(";
+            expect(script.content().contains(expected + "\"" + FumoRewardDefinition.RESOURCE_ID + "\""), "versioned Fumo script");
+            expect(RecipeGenerator.generate(pool, target, RecipeFormat.JAVA).content().contains(FumoRewardDefinition.DATA_PATH),
+                    "Fumo Java writer uses data pack path");
+        }
+        var target = RecipeTarget.NEOFORGE_1_21_1;
+        var empty = RecipeImporter.fromJson("example:empty", "{\"rewards\":[]}", target);
+        expect(empty.type() == RecipeType.FUMO_REWARDS && empty.rewards().isEmpty(), "empty pool import");
+        var duplicate = RecipeDocument.fumo("example:duplicate", List.of(pool.rewards().getFirst(), pool.rewards().getFirst()));
+        expect(RecipeGenerator.validate(duplicate, target, RecipeFormat.JSON)
+                .equals(List.of(new RecipeIssue("duplicate_reward_item", "reward.2"))), "duplicate Fumo item validation");
+        var oversized = RecipeDocument.fumo("example:oversized", List.of(new Entry("example:" + "a".repeat(65536), 1)));
+        expect(RecipeGenerator.validate(oversized, target, RecipeFormat.JSON)
+                .equals(List.of(new RecipeIssue("reward_pool_too_large", "rewards"))), "server pool size limit in editor");
+        expect(RecipeReferences.validate(pool, target, (kind, id) -> {
+            expect(kind == RecipeReferences.Kind.ITEM, "Fumo registry lookup only checks items");
+            return id.equals("example:gem") ? RecipeReferences.Presence.MISSING : RecipeReferences.Presence.PRESENT;
+        }).equals(List.of(new RecipeIssue("unknown_item", "reward.2"))), "unknown Fumo item validation");
+        try {
+            RecipeImporter.fromJson(pool.id(),
+                    "{\"rewards\":[{\"item\":\"minecraft:stone\",\"weight\":1,\"extra\":true}]}", target);
+            throw new AssertionError("Fumo import discarded unknown fields");
+        } catch (IllegalArgumentException expected) { }
     }
 
     private static void expect(boolean condition, String message) {

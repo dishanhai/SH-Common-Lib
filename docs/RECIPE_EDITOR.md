@@ -20,6 +20,7 @@
 | 药水瓶型转换 | 输入瓶型物品、原料、输出瓶型物品；保留药水数据 |
 | GTCEu 机器 | Forge 1.20.1 格式的机器类型、时长、EU/t、多项物品和流体输入输出 |
 | 通用配方 | 任意序列化器的字段表、对象、数组、值和完整 JSON 源码 |
+| Fumo 奖池 | 奖励物品、正整数权重；支持增删、分页和空奖池 |
 
 物品选择器仅选取物品注册 ID。需要 NBT、数据组件、多选原料或模组专属属性时，使用自定义 JSON；工具不会把 JEI 物品变体的附加数据隐式写入普通物品槽。26.1.2 选择器使用注册表默认物品形态，旧版本优先使用 SHBUI 提供的 JEI 目录。
 
@@ -57,6 +58,14 @@
 
 ![通用配方的行内字段和 JSON 预览](images/recipe-editor/generic.png)
 
+### Fumo 奖池
+
+在画布的类型选择器中选「Fumo 奖池」。点击「添加奖励」，使用物品选择器或手填物品 ID，再填写权重。点击已有条目可修改或移除，主工具栏可撤销和重做。每个物品只出现一次，空奖池会关闭奖励发放。
+
+现有奖池可将 JSON 复制到剪贴板，再使用编辑器的「操作 → 导入」。草稿 ID 用于工作区存取。JSON、KubeJS 和 Java 生成器写入的是同一个服务端奖池路径。
+
+JSON 产物为 `exports/data/sh_common_lib/fumo_rewards/pool.json`。把 `data/` 装入数据包，也可以把 JSON 保存为服务端的 `config/sh_common_lib/fumo_rewards.json`。KubeJS 产物为 `exports/kubejs/server_scripts/sh_common_lib/fumo_rewards.js`，复制到服务端的 `kubejs/server_scripts/`。Java 生成器的 `save(Path root)` 接收数据包资源根目录。安装后执行 `/reload`，来源优先级见 [Fumo API](FUMO_API.md)。
+
 ## 工作区与安装
 
 默认根目录为实例内 `config/sh_common_lib/recipe_editor/`。
@@ -66,6 +75,8 @@
 | `drafts/<namespace>/<path>.json` | 带 schema 版本的编辑草稿 |
 | `exports/data/<namespace>/recipes/<path>.json` | 1.20.1 普通配方 |
 | `exports/data/<namespace>/recipe/<path>.json` | 1.21.1／26.1.2 普通配方 |
+| `exports/data/sh_common_lib/fumo_rewards/pool.json` | Fumo 奖池数据包资源 |
+| `exports/kubejs/server_scripts/sh_common_lib/fumo_rewards.js` | Fumo 奖池的 KubeJS 脚本 |
 | `exports/kubejs/server_scripts/<namespace>/<path>.js` | 普通配方的 KubeJS 脚本 |
 | `exports/kubejs/startup_scripts/<namespace>/<path>.js` | 生成 SHCLIB 酿造配置的 KubeJS 启动脚本 |
 | `exports/java/<namespace>/<path>/Recipe_<hash>.java` | 每个配方独立的 Java 资源生成器 |
@@ -91,6 +102,14 @@ Java 导出是可直接编译的资源生成工具类，调用其 `save(Path roo
 客户端酿造原料槽 Mixin 允许将材料送交服务端检查，实际合法性仍由服务端快照决定，不改变燃料、瓶位或消耗规则。损坏／超限 JSON 逐条记录并跳过；资源管理器／配置目录整体读取失败会保留该监听器原快照，不保证整个服务端所有重载监听器的全局回滚。
 
 草稿与导出有大小及路径边界检查。导出已有同名文件时需要确认，写入失败保留当前编辑内容。
+
+### 自定义 JSON 导出根目录
+
+在「F10 → 设置 → 开发者 → 开发者配置」开启「自定义 JSON 导出」，填写目录并保存。支持绝对路径和相对当前游戏实例的路径，默认关闭。
+
+例如将根目录设为 `config/sh_common_lib/recipe_editor`，普通配方与 Fumo 奖池的 JSON 会直接写到该根目录下的 `data/`，酿造配置写到 `brewing/`。也可以指定已有数据包的根目录。已有文件时，覆盖确认会显示实际目标路径。
+
+开关和路径保存在 `config/sh_common_lib/recipe_editor/developer.json`。这项设置写入当前客户端可访问的目录，独立服务器的数据包需放到服务器使用的目录。
 
 ## ULK 与 UUK 边界
 

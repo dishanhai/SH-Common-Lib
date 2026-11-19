@@ -46,6 +46,12 @@ public final class RecipeReferences {
             for (var entry : recipe.fluidOutputs()) check(entry.id(), "gt_fluid_outputs", Kind.FLUID, lookup, issues);
             return List.copyOf(issues);
         }
+        if (doc.type() == RecipeType.FUMO_REWARDS) {
+            for (int i = 0; i < doc.rewards().size(); i++) {
+                check(doc.rewards().get(i).item(), "reward." + (i + 1), Kind.ITEM, lookup, issues);
+            }
+            return List.copyOf(issues);
+        }
         int slots = switch (doc.type()) {
             case SHAPED, SHAPELESS -> 9;
             case SMITHING_TRANSFORM, SMITHING_TRIM -> 3;

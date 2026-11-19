@@ -1,12 +1,14 @@
 // Author: dishanhai
 package com.dishanhai.sh_common_lib.api.ulk.recipe;
 
+import com.dishanhai.sh_common_lib.api.ulk.fumo.FumoRewardDefinition;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -34,6 +36,14 @@ public final class RecipeGenerator {
             } catch (IllegalArgumentException exception) {
                 issues.add(new RecipeIssue("invalid_json", "rawJson"));
             }
+            return List.copyOf(issues);
+        }
+        if (doc.type() == RecipeType.FUMO_REWARDS) {
+            var problem = FumoRewardDefinition.firstProblem(doc.rewards());
+            if (problem != null) issues.add(new RecipeIssue(problem.key(), "reward." + (problem.index() + 1)));
+            else if ((GSON.toJson(FumoRewardDefinition.json(doc.rewards())) + "\n")
+                    .getBytes(StandardCharsets.UTF_8).length > FumoRewardDefinition.MAX_BYTES)
+                issues.add(new RecipeIssue("reward_pool_too_large", "rewards"));
             return List.copyOf(issues);
         }
         if (doc.type() == RecipeType.CUSTOM) {
@@ -103,11 +113,15 @@ public final class RecipeGenerator {
         List<RecipeIssue> issues = validate(doc, target, format);
         if (!issues.isEmpty()) throw new IllegalArgumentException("Invalid recipe: " + issues);
         String[] id = doc.id().split(":", 2);
-        JsonObject json = doc.type() == RecipeType.CUSTOM || doc.type() == RecipeType.GTCEU
-                ? RecipeImporter.parse(doc.rawJson())
-                : isBrewing(doc.type()) ? brewing(doc) : recipe(doc, target);
+        boolean fumo = doc.type() == RecipeType.FUMO_REWARDS;
+        JsonObject json = switch (doc.type()) {
+            case CUSTOM, GTCEU -> RecipeImporter.parse(doc.rawJson());
+            case FUMO_REWARDS -> FumoRewardDefinition.json(doc.rewards());
+            case BREWING, BREWING_CONTAINER -> brewing(doc);
+            default -> recipe(doc, target);
+        };
         String body = GSON.toJson(json) + "\n";
-        String dataPath = isBrewing(doc.type())
+        String dataPath = fumo ? FumoRewardDefinition.DATA_PATH : isBrewing(doc.type())
                 ? "config/sh_common_lib/recipe_editor/brewing/" + id[0] + "/" + id[1] + ".json"
                 : "data/" + id[0] + "/" + (target == RecipeTarget.FORGE_1_20_1 ? "recipes/" : "recipe/") + id[1] + ".json";
         if (format == RecipeFormat.JSON) {
@@ -115,6 +129,7 @@ public final class RecipeGenerator {
             return new RecipeArtifact(path, body);
         }
         if (format == RecipeFormat.KUBEJS) {
+            if (fumo) return fumoScript(target, body);
             if (doc.type() == RecipeType.GTCEU || (doc.type() == RecipeType.CUSTOM && target == RecipeTarget.FORGE_1_20_1
                     && json.get("type").getAsString().startsWith("gtceu:"))) {
                 // GTRecipeJS.id prepends a machine path. Supplying the datapack resource directly preserves
@@ -144,7 +159,8 @@ public final class RecipeGenerator {
         }
         String source = "import java.io.IOException;\nimport java.nio.charset.StandardCharsets;\nimport java.nio.file.Files;\n"
                 + "import java.nio.file.Path;\n\n/** Writes one generated "
-                + (isBrewing(doc.type()) ? "SHCLIB brewing configuration into a game directory" : "recipe into a resources root") + ". */\n"
+                + (fumo ? "Fumo reward pool into a resources root"
+                : isBrewing(doc.type()) ? "SHCLIB brewing configuration into a game directory" : "recipe into a resources root") + ". */\n"
                 + "public final class " + className + " {\n    private " + className + "() {}\n"
                 + "    public static void save(Path root) throws IOException {\n"
                 + "        Path target = root.resolve(" + GSON.toJson(dataPath) + ");\n"
@@ -153,6 +169,16 @@ public final class RecipeGenerator {
                 + "        Files.writeString(target, json.toString(), StandardCharsets.UTF_8);\n"
                 + "    }\n}\n";
         return new RecipeArtifact("exports/java/" + id[0] + "/" + id[1] + "/" + className + ".java", source);
+    }
+
+    private static RecipeArtifact fumoScript(RecipeTarget target, String body) {
+        boolean forge = target == RecipeTarget.FORGE_1_20_1;
+        String event = forge ? "highPriorityData(" : "generateData('last', ";
+        String method = forge ? "add" : "text";
+        String script = "ServerEvents." + event + "event => {\n  event." + method
+                + "(" + GSON.toJson(FumoRewardDefinition.RESOURCE_ID) + ", JSON.stringify("
+                + body.stripTrailing().replace("\n", "\n  ") + "))\n})\n";
+        return new RecipeArtifact("exports/kubejs/server_scripts/sh_common_lib/fumo_rewards.js", script);
     }
 
     private static String className(String id) {

@@ -109,6 +109,11 @@ public final class RecipeBatchTest {
         expect(RecipeImporter.importForEditing(RecipeDocument.empty(), nativeJson, forge).type() == RecipeType.SMELTING,
                 "native import keeps the vanilla canvas");
 
+        String rewards = "{\"rewards\":[{\"item\":\"minecraft:apple\",\"weight\":7}]}";
+        var pool = RecipeImporter.importForEditing(reopened, rewards, client);
+        expect(pool.type() == RecipeType.FUMO_REWARDS && pool.rewards().size() == 1
+                && pool.editingTarget(client) == client, "platform-independent rewards use their visual editor");
+
         var automatic = generic.withCustomTarget(null);
         workspace.save(automatic);
         var legacy = workspace.load(automatic.id());

@@ -142,7 +142,8 @@ public final class ControlCenterModule implements UIModule {
                         com.dishanhai.sh_common_lib.client.recipe.RecipeEditorAccess::unavailable,
                         com.dishanhai.sh_common_lib.client.recipe.RecipeEditorAccess::open),
                 new SettingsGroup.Page(label("developer_settings"), GraphicIcon.SETTINGS,
-                        () -> null, ControlCenterScreen::openDeveloperSettings)));
+                        com.dishanhai.sh_common_lib.client.recipe.RecipeEditorAccess::unavailable,
+                        com.dishanhai.sh_common_lib.client.recipe.RecipeEditorAccess::openDeveloperSettings)));
         var loading = new SettingsGroup(label("loading"), GraphicIcon.TICK, List.of(
                 new SettingsGroup.Toggle(enabled -> label(enabled ? "loading_animation_on" : "loading_animation_off"),
                         draft::animation, draft::setAnimation),

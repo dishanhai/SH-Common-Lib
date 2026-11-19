@@ -1,9 +1,11 @@
 package com.dishanhai.sh_common_lib.neoforge;
 
 import com.dishanhai.sh_common_lib.api.ShCommonLib;
+import com.dishanhai.sh_common_lib.api.ulk.fumo.FumoRewards;
 import com.dishanhai.sh_common_lib.internal.block.FakeFumoBlock;
 import com.dishanhai.sh_common_lib.api.ulk.fumo.Fumos;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
@@ -15,6 +17,7 @@ import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.CreativeModeTabs;
 import net.minecraft.world.level.block.state.BlockBehaviour;
+import net.neoforged.neoforge.event.AddServerReloadListenersEvent;
 import net.neoforged.neoforge.event.BuildCreativeModeTabContentsEvent;
 import com.dishanhai.sh_common_lib.api.ulk.UnifiedLibKernel;
 import com.dishanhai.sh_common_lib.neoforge.ulk.NeoForgeUlkPlatform;
@@ -52,6 +55,10 @@ public final class NeoForgeShCommonLib {
     public NeoForgeShCommonLib(IEventBus modBus, ModContainer container) {
         NeoForgeArtisanConfig.register(container);
         NeoForgeRecipeBrewing.register();
+        var fumoPoolResource = Identifier.parse(FumoRewards.POOL_RESOURCE);
+        NeoForge.EVENT_BUS.addListener((AddServerReloadListenersEvent event) -> event.addListener(Identifier.parse("sh_common_lib:fumo_rewards"), FumoRewards.reloadListener(
+                FMLPaths.CONFIGDIR.get(), manager -> manager.getResource(fumoPoolResource),
+                item -> BuiltInRegistries.ITEM.getOptional(Identifier.parse(item)).orElse(null))));
         UnifiedLibKernel.install(new NeoForgeUlkPlatform());
         var fumos = Fumos.register(modBus, BLOCKS, BLOCK_ITEMS, BLOCK_ENTITIES,
                 DISHANHAI_FUMO, DISHANHAI_FUMO, BEIBEIPUO_FUMO);
@@ -86,8 +93,10 @@ public final class NeoForgeShCommonLib {
         com.dishanhai.sh_common_lib.internal.ulk.ServerHotWords.initialize(FMLPaths.CONFIGDIR.get());
         modBus.addListener(NeoForgeHotWordsNetwork::register);
         modBus.addListener(NeoForgeCosmicModesNetwork::register);
-        NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.event.server.ServerStoppedEvent event) ->
-                com.dishanhai.sh_common_lib.internal.ulk.ServerHotWords.clear(event.getServer()));
+        NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.event.server.ServerStoppedEvent event) -> {
+            com.dishanhai.sh_common_lib.internal.ulk.ServerHotWords.clear(event.getServer());
+            FumoRewards.resetPool();
+        });
         if (ModList.get().isLoaded("ae2")) {
             Ae2InfinityCellStorage.register(modBus);
             modBus.addListener(NeoForgeJeiOrderableNetwork::register);

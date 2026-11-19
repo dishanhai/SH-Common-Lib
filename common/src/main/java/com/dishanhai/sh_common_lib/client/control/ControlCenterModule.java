@@ -3,7 +3,6 @@ package com.dishanhai.sh_common_lib.client.control;
 
 import com.dishanhai.sh_better_ui.client.api.UiScreenBuilder;
 import com.dishanhai.sh_better_ui.client.gui.display.GraphicIcon;
-import com.dishanhai.sh_better_ui.client.gui.scaled.DarkModeTheme;
 import com.dishanhai.sh_better_ui.kernel.api.ModuleContext;
 import com.dishanhai.sh_better_ui.kernel.api.ServiceDescriptor;
 import com.dishanhai.sh_common_lib.api.client.ulk.UnifiedLibUiService;
@@ -185,7 +184,8 @@ public final class ControlCenterModule implements UIModule {
                         com.dishanhai.sh_common_lib.client.recipe.RecipeEditorAccess::unavailable,
                         com.dishanhai.sh_common_lib.client.recipe.RecipeEditorAccess::open),
                 new SettingsGroup.Page(label("developer_settings"), GraphicIcon.SETTINGS,
-                        () -> null, this::openDeveloperSettings)));
+                        com.dishanhai.sh_common_lib.client.recipe.RecipeEditorAccess::unavailable,
+                        com.dishanhai.sh_common_lib.client.recipe.RecipeEditorAccess::openDeveloperSettings)));
         var loading = new SettingsGroup(label("loading"), GraphicIcon.TICK, List.of(
                 new SettingsGroup.Toggle(enabled -> label(enabled ? "loading_animation_on" : "loading_animation_off"),
                         draft::animation, draft::setAnimation),
@@ -252,24 +252,6 @@ public final class ControlCenterModule implements UIModule {
                 label("hud_item." + item.id()), label(enabled ? "item_shown" : "item_hidden")),
                 () -> draft.hud().shows(item), enabled -> draft.setHudItem(item, enabled),
                 () -> hud.available(item));
-    }
-
-    private void openDeveloperSettings(Screen parent, Supplier<? extends GuiEventListener> returnFocus) {
-        var builder = new UiScreenBuilder(label("developer_settings")).parent(parent).returnFocus(returnFocus)
-                .dynamicTheme().onForeground((screen, frame) -> {
-                    var viewport = frame.viewport();
-                    if (viewport.width() <= 16) return;
-                    var font = Minecraft.getInstance().font;
-                    var lines = font.split(label("developer_empty"), viewport.width() - 16);
-                    int y = viewport.y() + Math.max(0, (viewport.height() - lines.size() * font.lineHeight) / 2);
-                    int center = viewport.x() + viewport.width() / 2;
-                    for (var line : lines) {
-                        frame.graphics().drawString(font, line, center - font.width(line) / 2, y,
-                                DarkModeTheme.secondaryTextColor(), false);
-                        y += font.lineHeight;
-                    }
-                });
-        screens.create(module, builder).open();
     }
 
     static Component label(String name) {

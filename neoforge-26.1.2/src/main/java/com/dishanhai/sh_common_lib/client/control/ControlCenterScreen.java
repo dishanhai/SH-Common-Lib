@@ -40,7 +40,6 @@ import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.function.Supplier;
 
 import static com.dishanhai.sh_common_lib.client.control.ControlCenterModule.label;
 
@@ -594,32 +593,6 @@ final class ControlCenterScreen extends Screen {
         super.removed();
     }
 
-    static void openDeveloperSettings(Screen parent, Supplier<? extends GuiEventListener> returnFocus) {
-        var client = Minecraft.getInstance();
-        client.setScreen(new Screen(label("developer_settings")) {
-            @Override
-            protected void init() {
-                setInitialFocus(addRenderableWidget(ClientPanels.button((width - 120) / 2,
-                        height - ControlCenterLayout.ROW - 8, 120, ControlCenterLayout.ROW,
-                        CommonComponents.GUI_BACK, button -> onClose())));
-            }
-
-            @Override
-            public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
-                ClientPanels.panel(graphics, 4, 4, Math.max(1, width - 8), Math.max(1, height - 8));
-                graphics.centeredText(font, title, width / 2, 10, ClientPanels.TEXT);
-                graphics.textWithWordWrap(font, label("developer_empty"), 12, Math.max(24, height / 2 - 8),
-                        Math.max(1, width - 24), ClientPanels.secondaryText());
-                super.extractRenderState(graphics, mouseX, mouseY, partialTick);
-            }
-
-            @Override
-            public void onClose() {
-                client.setScreen(parent);
-                ClientPanels.restoreFocus(parent, returnFocus);
-            }
-        });
-    }
 
     @Override
     public void onClose() {

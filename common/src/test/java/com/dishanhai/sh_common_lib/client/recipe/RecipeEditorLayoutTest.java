@@ -64,6 +64,10 @@ public final class RecipeEditorLayoutTest {
             var slotArea = RecipeEditorLayout.slotArea(pane, size[1] >= 220);
             require(pane.contains(slotArea) && slotArea.height() <= 98, "grid stays beside controls on large displays");
             require(pane.y() + 44 + 20 <= pane.bottom(), "machine inputs and outputs fit");
+            var rewardList = RecipeEditorLayout.rewards(pane);
+            require(rewardList.top() >= pane.y() + 22, "rewards below type selector");
+            require(rewardList.rowY(rewardList.rows() - 1) + 22 <= rewardList.footer(), "reward rows above paging");
+            require(rewardList.footer() + 20 <= pane.bottom(), "reward paging in canvas");
             for (int count : new int[] {1, 2, 3, 9}) for (boolean output : new boolean[] {false, true}) {
                 var slots = RecipeEditorLayout.slots(slotArea, count, output);
                 require(slotArea.contains(slots.inputs()), "input grid in canvas");
