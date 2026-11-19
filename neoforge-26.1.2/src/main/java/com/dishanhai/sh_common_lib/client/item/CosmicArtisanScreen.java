@@ -13,6 +13,7 @@ import com.dishanhai.sh_better_ui.kernel.api.layout.RadialMenuLayout;
 import com.dishanhai.sh_better_ui.kernel.api.layout.VerticalScroll;
 import com.dishanhai.sh_better_ui.kernel.api.screen.LayeredScreen;
 import com.dishanhai.sh_common_lib.client.beacon.BeaconClient;
+import com.dishanhai.sh_common_lib.client.control.ArtisanConfigPage;
 import com.dishanhai.sh_common_lib.client.item.CosmicArtisanMenu.Group;
 import com.dishanhai.sh_common_lib.client.item.CosmicArtisanMenu.Option;
 import com.dishanhai.sh_common_lib.internal.item.CosmicArtisanModes;
@@ -291,8 +292,12 @@ public final class CosmicArtisanScreen extends LayeredScreen {
     private void activate(Option option) {
         if (!available(option) || pending.containsKey(option)) return;
         if (!option.toggle()) {
-            if (option.kind() == CosmicArtisanMenu.Kind.BEACONS) BeaconClient.openDestinations(wheel ? null : this);
-            else AccelerationClient.open(minecraft);
+            switch (option.kind()) {
+                case BEACONS -> BeaconClient.openDestinations(wheel ? null : this);
+                case ACCELERATION -> AccelerationClient.open(minecraft);
+                case MINING_SPEED -> ArtisanConfigPage.openMiningSpeed(this, optionTitle(option), () -> actionButtons.get(option));
+                default -> throw new IllegalStateException("Not an action");
+            }
             return;
         }
         pending.put(option, new Pending(!enabled(option), now() + CONFIRM_MS));
@@ -321,7 +326,11 @@ public final class CosmicArtisanScreen extends LayeredScreen {
         };
     }
     private boolean available(Option option) {
-        return option.kind() != CosmicArtisanMenu.Kind.BOSS || Mode.HOSTILE_FRIENDLY.enabled(flags);
+        return switch (option.kind()) {
+            case BOSS -> Mode.HOSTILE_FRIENDLY.enabled(flags);
+            case MINING_SPEED -> ArtisanConfigPage.miningSpeedEditable();
+            default -> true;
+        };
     }
     private Component optionTitle(Option option) {
         if (option.mode() == Mode.HOE_PRIORITY) return label(Mode.HOE_PRIORITY.enabled(flags) ? "hoe_priority" : "shovel_priority");
@@ -332,7 +341,9 @@ public final class CosmicArtisanScreen extends LayeredScreen {
     }
     private Component status(Option option) {
         if (pending.containsKey(option)) return label("sync_waiting");
-        if (!available(option)) return label("requires_friendship");
+        if (!available(option)) return option.kind() == CosmicArtisanMenu.Kind.MINING_SPEED
+                ? Component.translatable("screen.sh_common_lib.control_center.artisan_server_owned")
+                : label("requires_friendship");
         return option.toggle() ? Component.translatable(enabled(option) ? "options.on" : "options.off") : label("open_action");
     }
     private void readState() {

@@ -9,11 +9,16 @@ import java.util.List;
 
 /** One catalog shared by the settings list and the quick wheel. */
 final class CosmicArtisanMenu {
-    enum Kind { MODE, BOSS, EMPTY_TELEPORT, BEACONS, ACCELERATION }
+    enum Kind { MODE, BOSS, EMPTY_TELEPORT, BEACONS, ACCELERATION, MINING_SPEED }
     record Option(String key, Kind kind, Mode mode, BossPolicy policy) {
         static Option mode(Mode mode) { return new Option(mode.translationKey(), Kind.MODE, mode, null); }
         static Option extra(String key, Kind kind) { return new Option(prefix(key), kind, null, null); }
-        boolean toggle() { return kind != Kind.BEACONS && kind != Kind.ACCELERATION; }
+        boolean toggle() {
+            return switch (kind) {
+                case MODE, BOSS, EMPTY_TELEPORT -> true;
+                case BEACONS, ACCELERATION, MINING_SPEED -> false;
+            };
+        }
     }
     record Group(String name, GraphicIcon icon, List<Option> options) {
         Group { options = List.copyOf(options); }
@@ -49,6 +54,9 @@ final class CosmicArtisanMenu {
                     options.add(Option.extra("beacon_destinations", Kind.BEACONS));
                 }
                 case "auxiliary" -> options.add(Option.extra("acceleration_config", Kind.ACCELERATION));
+                case "mining" -> {
+                    if (!wheel) options.add(0, Option.extra("mining_speed", Kind.MINING_SPEED));
+                }
                 default -> {}
             }
             return new Group(group.name(), group.icon(), options);

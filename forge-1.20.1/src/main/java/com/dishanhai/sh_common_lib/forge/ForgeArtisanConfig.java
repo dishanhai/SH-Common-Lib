@@ -54,11 +54,15 @@ final class ForgeArtisanConfig {
         Values(ForgeConfigSpec.Builder builder, ArtisanSettings defaults) {
             this(builder.define("enabled", true), builder.define("infiniteDurability", defaults.infiniteDurability()),
                     builder.define("unlimitedMiningLevel", defaults.unlimitedMiningLevel()),
-                    builder.defineInRange("pickaxeSpeed", 1.0, 0.25, 16.0), builder.defineInRange("axeSpeed", 1.0, 0.25, 16.0),
-                    builder.defineInRange("shovelSpeed", 1.0, 0.25, 16.0), builder.defineInRange("hoeSpeed", 1.0, 0.25, 16.0),
+                    miningSpeed(builder, "pickaxeSpeed"), miningSpeed(builder, "axeSpeed"),
+                    miningSpeed(builder, "shovelSpeed"), miningSpeed(builder, "hoeSpeed"),
                     builder.defineInRange("maxDurability", 250, 1, 100000),
                     builder.defineInRange("attackDamage", 9.0, 0.0, 1024.0), builder.defineInRange("attackSpeed", 0.9, 0.1, 16.0),
                     builder.defineInRange("useDurabilityCost", 1, 0, 1000));
+        }
+
+        private static ForgeConfigSpec.DoubleValue miningSpeed(ForgeConfigSpec.Builder builder, String key) {
+            return builder.defineInRange(key, 1.0, ArtisanSettings.MIN_MINING_SPEED, ArtisanSettings.MAX_MINING_SPEED);
         }
 
         ArtisanSettings read() {

@@ -6,6 +6,7 @@ import org.slf4j.LoggerFactory;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
+import java.util.function.UnaryOperator;
 import com.dishanhai.sh_common_lib.internal.item.ArtisanSettings.Profiles;
 
 public final class ArtisanConfig {
@@ -44,14 +45,18 @@ public final class ArtisanConfig {
     }
 
     public static boolean save(Profiles settings) {
-        if (!available()) return false;
-        return config.write(settings);
+        return update(ignored -> settings);
     }
 
-    private synchronized boolean write(Profiles settings) {
+    public static boolean update(UnaryOperator<Profiles> edit) {
+        if (!available()) return false;
+        return config.write(edit);
+    }
+
+    private synchronized boolean write(UnaryOperator<Profiles> edit) {
         Profiles previous = readValues.get();
         try {
-            writeValues.accept(settings);
+            writeValues.accept(edit.apply(previous));
             saveFile.run();
             return true;
         } catch (RuntimeException failure) {

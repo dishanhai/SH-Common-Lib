@@ -3,6 +3,9 @@ package com.dishanhai.sh_common_lib.internal.item;
 public record ArtisanSettings(boolean infiniteDurability, boolean unlimitedMiningLevel,
                               double pickaxe, double axe, double shovel, double hoe,
                               int maxDurability, double attackDamage, double attackSpeed, int useCost, boolean enabled) {
+    public static final double MIN_MINING_SPEED = 0.25;
+    public static final double MAX_MINING_SPEED = 20.0;
+
     public static final ArtisanSettings DEFAULT = new ArtisanSettings(false, false);
     public static final ArtisanSettings COSMIC_DEFAULT = new ArtisanSettings(true, true);
 
