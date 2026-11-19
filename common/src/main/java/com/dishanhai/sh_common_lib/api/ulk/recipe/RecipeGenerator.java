@@ -16,7 +16,7 @@ import java.util.regex.Pattern;
 
 /** Stateless validation and version-specific recipe generation. */
 public final class RecipeGenerator {
-    private static final Gson GSON = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
+    static final Gson GSON = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().serializeNulls().create();
     private static final Pattern ID = Pattern.compile("[a-z0-9_.-]+:[a-z0-9_./-]+");
 
     private RecipeGenerator() { }
@@ -27,7 +27,18 @@ public final class RecipeGenerator {
         Objects.requireNonNull(format);
         var issues = new ArrayList<RecipeIssue>();
         if (!validId(doc.id())) issues.add(new RecipeIssue("invalid_id", "id"));
+        if (doc.type() == RecipeType.GTCEU) {
+            if (target != RecipeTarget.FORGE_1_20_1) issues.add(new RecipeIssue("unsupported_target", "gt_target"));
+            try {
+                issues.addAll(GtMachineRecipe.parse(doc.rawJson()).validate());
+            } catch (IllegalArgumentException exception) {
+                issues.add(new RecipeIssue("invalid_json", "rawJson"));
+            }
+            return List.copyOf(issues);
+        }
         if (doc.type() == RecipeType.CUSTOM) {
+            if (doc.customTarget() != null && doc.customTarget() != target)
+                issues.add(new RecipeIssue("target_mismatch", "custom_target"));
             try {
                 JsonElement value = RecipeImporter.parse(doc.rawJson());
                 if (!value.isJsonObject() || !value.getAsJsonObject().has("type")
@@ -92,7 +103,7 @@ public final class RecipeGenerator {
         List<RecipeIssue> issues = validate(doc, target, format);
         if (!issues.isEmpty()) throw new IllegalArgumentException("Invalid recipe: " + issues);
         String[] id = doc.id().split(":", 2);
-        JsonObject json = doc.type() == RecipeType.CUSTOM
+        JsonObject json = doc.type() == RecipeType.CUSTOM || doc.type() == RecipeType.GTCEU
                 ? RecipeImporter.parse(doc.rawJson())
                 : isBrewing(doc.type()) ? brewing(doc) : recipe(doc, target);
         String body = GSON.toJson(json) + "\n";
@@ -104,6 +115,16 @@ public final class RecipeGenerator {
             return new RecipeArtifact(path, body);
         }
         if (format == RecipeFormat.KUBEJS) {
+            if (doc.type() == RecipeType.GTCEU || (doc.type() == RecipeType.CUSTOM && target == RecipeTarget.FORGE_1_20_1
+                    && json.get("type").getAsString().startsWith("gtceu:"))) {
+                // GTRecipeJS.id prepends a machine path. Supplying the datapack resource directly preserves
+                // the user's exact recipe ID and avoids passing 64-bit energy through JavaScript numbers.
+                String path = id[0] + ":recipes/" + id[1] + ".json";
+                String literal = body.replace("\\", "\\\\").replace("`", "\\`").replace("${", "\\${");
+                String script = "ServerEvents.highPriorityData(event => {\n  event.add(" + GSON.toJson(path)
+                        + ", `" + literal + "`)\n})\n";
+                return new RecipeArtifact("exports/kubejs/server_scripts/" + id[0] + "/" + id[1] + ".js", script);
+            }
             if (isBrewing(doc.type())) {
                 String script = "// SHCLIB brewing configuration; restart or reload the server after execution.\n"
                         + "JsonIO.write(" + GSON.toJson(dataPath) + ", " + GSON.toJson(json) + ")\n";

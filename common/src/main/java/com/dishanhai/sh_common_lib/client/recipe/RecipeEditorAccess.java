@@ -13,10 +13,21 @@ public final class RecipeEditorAccess {
     public static Component unavailable() {
         try {
             var loader = RecipeEditorAccess.class.getClassLoader();
-            Class.forName("com.dishanhai.sh_better_ui.client.api.UiWorkbench", false, loader).getMethod("textColor");
-            Class.forName("com.dishanhai.sh_better_ui.client.api.UiWorkbench", false, loader)
-                    .getMethod("selectItemSequence", Class.forName("com.dishanhai.sh_better_ui.client.api.UiScreen", false, loader),
+            var screen = Class.forName("com.dishanhai.sh_better_ui.client.api.UiScreen", false, loader);
+            screen.getMethod("onCloseRequest", java.util.function.BooleanSupplier.class);
+            var workbench = Class.forName("com.dishanhai.sh_better_ui.client.api.UiWorkbench", false, loader);
+            workbench.getMethod("textColor");
+            workbench.getMethod("selectItemSequence", screen,
                             Component.class, Supplier.class, int.class, java.util.function.Consumer.class);
+            String scaled = "com.dishanhai.sh_better_ui.client.gui.scaled.";
+            Class.forName("com.dishanhai.sh_better_ui.client.api.ControlsApi", false, loader)
+                    .getMethod("navigationRail", net.minecraft.client.gui.Font.class,
+                            Class.forName("com.dishanhai.sh_better_ui.client.gui.display.GraphicDisplayLayout$Bounds", false, loader),
+                            Component.class, java.util.List.class, int.class,
+                            Class.forName(scaled + "UiNavigationRail$Orientation", false, loader),
+                            Class.forName(scaled + "UiPreferences", false, loader), java.util.function.IntConsumer.class);
+            Class.forName(scaled + "UiTextField", false, loader)
+                    .getMethod("setAppearance", Class.forName(scaled + "UiTextField$Appearance", false, loader));
             Class.forName("com.dishanhai.sh_better_ui.client.gui.scaled.UiIngredientSlots", false, loader)
                     .getMethod("setAllowDrag", boolean.class);
             Class.forName("com.dishanhai.sh_better_ui.client.gui.scaled.UiCodeEditor", false, loader);

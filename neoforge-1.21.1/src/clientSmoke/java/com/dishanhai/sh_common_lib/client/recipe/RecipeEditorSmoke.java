@@ -3,6 +3,7 @@ package com.dishanhai.sh_common_lib.client.recipe;
 
 import com.dishanhai.sh_better_ui.client.gui.scaled.UiButton;
 import com.dishanhai.sh_better_ui.client.gui.scaled.UiIngredientSlots;
+import com.dishanhai.sh_better_ui.client.gui.scaled.UiNavigationRail;
 import com.dishanhai.sh_better_ui.client.gui.scaled.UiTextField;
 import com.dishanhai.sh_common_lib.api.ulk.recipe.RecipeTarget;
 import net.minecraft.client.Minecraft;
@@ -52,7 +53,8 @@ public final class RecipeEditorSmoke {
                 require(com.dishanhai.sh_common_lib.api.ulk.recipe.BrewingRecipes.find(recipe.id()).orElseThrow().equals(recipe), "Public brewing registration failed");
                 com.dishanhai.sh_common_lib.api.ulk.recipe.BrewingRecipes.remove(recipe.id());
                 Class.forName("net.minecraft.world.inventory.BrewingStandMenu$IngredientsSlot");
-                RecipeEditor.open(client.screen, () -> null, RecipeTarget.NEOFORGE_1_21_1);
+                require(RecipeEditorAccess.unavailable() == null, "Recipe editor capability check rejected this UUK");
+                RecipeEditorAccess.open(client.screen, () -> null);
             } else if (step == 1) {
                 canvas = client.screen;
                 require(canvas.width >= 320 && canvas.height >= 180, "Unexpected viewport");
@@ -92,6 +94,7 @@ public final class RecipeEditorSmoke {
                 click(client.screen, pickerButton(client.screen, "confirm"));
             } else if (step == 7) {
                 require(stack(slots(client.screen).get(1), 0).getCount() == 64, "Output quantity did not apply");
+                capture(output, "workspace-" + scale);
                 click(client.screen, slots(client.screen).get(1));
             } else if (step == 8) {
                 require(fields(client.screen).get(1).getValue().equals("64"), "Preselected quantity was lost");
@@ -107,7 +110,10 @@ public final class RecipeEditorSmoke {
                 type(fields(client.screen).get(0), "#minecraft:logs");
                 click(client.screen, button(client.screen, "apply"));
             } else if (step == 12) {
-                click(client.screen, button(client.screen, "view.1"));
+                var rail = client.screen.children().stream().filter(UiNavigationRail.class::isInstance)
+                        .map(UiNavigationRail.class::cast).findFirst().orElseThrow();
+                // The middle entry is Properties in both the horizontal segments and the sidebar.
+                clickAt(client.screen, rail.getX() + rail.getWidth() / 2.0, rail.getY() + rail.getHeight() / 2.0);
             } else if (step == 13) {
                 require(fields(client.screen).size() >= 3, "Properties fields did not initialize");
                 assertBounds(client.screen);
@@ -123,12 +129,16 @@ public final class RecipeEditorSmoke {
                     setScale(client);
                     RecipeEditor.open(client.screen, () -> null, RecipeTarget.NEOFORGE_1_21_1);
                     step = 0;
-                } else {
-                    Files.writeString(Path.of(output, "success.txt"), viewports + "Native slot click, staged/repeated selection, confirm, output quantity/invalid input/cancel, manual tag ID, properties initialized; compact/wide/action bounds at scales 4/3/1/5\n");
-                    finished = true;
-                    client.stop();
-                    return;
-                }
+                } else RecipeEditor.open(client.screen, () -> null, RecipeTarget.NEOFORGE_1_21_1);
+            } else if (step == 15) {
+                if (!GenericRecipeSmoke.run(client, output)) return;
+                RecipeEditor.open(client.screen, () -> null, RecipeTarget.NEOFORGE_1_21_1);
+            } else if (step == 16) {
+                if (!GtMachineSmoke.run(client, output)) return;
+                Files.writeString(Path.of(output, "success.txt"), viewports + "Native picker, workspace navigation, generic field editing and Forge GTCEu authoring passed.\n");
+                finished = true;
+                client.stop();
+                return;
             }
             step++;
             if (step == 0) step = 1;
@@ -145,7 +155,7 @@ public final class RecipeEditorSmoke {
         }
     }
 
-    private static void assertBounds(Screen screen) {
+    static void assertBounds(Screen screen) {
         for (var child : screen.children()) if (child instanceof AbstractWidget widget && widget.visible) {
             require(widget.getX() >= 0 && widget.getY() >= 0
                     && widget.getX() + widget.getWidth() <= screen.width
@@ -162,19 +172,19 @@ public final class RecipeEditorSmoke {
     private static List<UiIngredientSlots> slots(Screen screen) {
         return screen.children().stream().filter(UiIngredientSlots.class::isInstance).map(UiIngredientSlots.class::cast).toList();
     }
-    private static List<UiTextField> fields(Screen screen) {
+    static List<UiTextField> fields(Screen screen) {
         return screen.children().stream().filter(UiTextField.class::isInstance).map(UiTextField.class::cast).toList();
     }
-    private static UiButton button(Screen screen, String key) {
+    static UiButton button(Screen screen, String key) {
         String label = Component.translatable("screen.sh_common_lib.recipe_editor." + key).getString();
         return screen.children().stream().filter(UiButton.class::isInstance).map(UiButton.class::cast)
                 .filter(button -> button.getMessage().getString().equals(label)).findFirst().orElseThrow();
     }
-    private static void click(Screen screen, AbstractWidget widget) {
+    static void click(Screen screen, AbstractWidget widget) {
         double x = widget.getX() + 5, y = widget.getY() + 5;
         clickAt(screen, x, y);
     }
-    private static void clickAt(Screen screen, double x, double y) {
+    static void clickAt(Screen screen, double x, double y) {
         var press = new ScreenEvent.MouseButtonPressed.Pre(screen, x, y, 0);
         NeoForge.EVENT_BUS.post(press);
         if (!press.isCanceled()) screen.mouseClicked(x, y, 0);
@@ -191,18 +201,18 @@ public final class RecipeEditorSmoke {
         var field = UiIngredientSlots.class.getDeclaredField("items"); field.setAccessible(true);
         return (net.minecraft.world.item.ItemStack) ((List<?>) field.get(slots)).get(index);
     }
-    private static void type(UiTextField field, String value) {
+    static void type(UiTextField field, String value) {
         Minecraft.getInstance().screen.setFocused(field);
         int length = field.getValue().length();
         for (int i = 0; i < length; i++) field.keyPressed(org.lwjgl.glfw.GLFW.GLFW_KEY_BACKSPACE, 0, 0);
         for (char c : value.toCharArray()) require(field.charTyped(c, 0), "Text input rejected");
     }
-    private static void capture(String output, String name) throws Exception {
+    static void capture(String output, String name) throws Exception {
         try (var image = Screenshot.takeScreenshot(Minecraft.getInstance().getMainRenderTarget())) {
             image.writeToFile(Path.of(output, name + ".png"));
         }
     }
-    private static void require(boolean condition, String message) {
+    static void require(boolean condition, String message) {
         if (!condition) throw new AssertionError(message);
     }
 }

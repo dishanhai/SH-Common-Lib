@@ -11,7 +11,7 @@ public final class RecipeReferences {
 
     /** UNAVAILABLE is not MISSING: an unloaded registry must not be reported as an unknown item. */
     public enum Presence { PRESENT, MISSING, UNAVAILABLE }
-    public enum Kind { ITEM, POTION_CONTAINER, ITEM_TAG, POTION, TRIM_PATTERN }
+    public enum Kind { ITEM, POTION_CONTAINER, ITEM_TAG, POTION, TRIM_PATTERN, FLUID, GT_MACHINE }
 
     /** Called only with structurally valid, namespaced identifiers, without a leading '#'. */
     @FunctionalInterface
@@ -30,6 +30,22 @@ public final class RecipeReferences {
         Objects.requireNonNull(lookup, "lookup");
         if (doc.type() == RecipeType.CUSTOM) return List.of();
         var issues = new ArrayList<RecipeIssue>();
+        if (doc.type() == RecipeType.GTCEU) {
+            GtMachineRecipe recipe;
+            try {
+                recipe = GtMachineRecipe.parse(doc.rawJson());
+            } catch (IllegalArgumentException ignored) {
+                return List.of(); // The structural validator reports the unreadable document.
+            }
+            check(recipe.machine(), "gt_machine", Kind.GT_MACHINE, lookup, issues);
+            for (var entry : recipe.itemInputs()) {
+                check(entry.id(), "gt_item_inputs", entry.id().startsWith("#") ? Kind.ITEM_TAG : Kind.ITEM, lookup, issues);
+            }
+            for (var entry : recipe.itemOutputs()) check(entry.id(), "gt_item_outputs", Kind.ITEM, lookup, issues);
+            for (var entry : recipe.fluidInputs()) check(entry.id(), "gt_fluid_inputs", Kind.FLUID, lookup, issues);
+            for (var entry : recipe.fluidOutputs()) check(entry.id(), "gt_fluid_outputs", Kind.FLUID, lookup, issues);
+            return List.copyOf(issues);
+        }
         int slots = switch (doc.type()) {
             case SHAPED, SHAPELESS -> 9;
             case SMITHING_TRANSFORM, SMITHING_TRIM -> 3;
@@ -73,11 +89,21 @@ public final class RecipeReferences {
             case ITEM_TAG -> "empty_tag";
             case POTION -> "unknown_potion";
             case TRIM_PATTERN -> "unknown_pattern";
+            case FLUID -> "unknown_fluid";
+            case GT_MACHINE -> "unknown_machine";
         };
         issues.add(new RecipeIssue(code, field));
     }
 
     private static Presence require(Lookup lookup, Kind kind, String id) {
         return Objects.requireNonNull(lookup.find(kind, id), "Lookup returned null");
+    }
+
+    /** Shared by the platform registry adapters without linking the optional GTCEu classes. */
+    static boolean isGtMachine(Object registeredType) {
+        for (Class<?> type = registeredType.getClass(); type != null; type = type.getSuperclass()) {
+            if (type.getName().equals("com.gregtechceu.gtceu.api.recipe.GTRecipeType")) return true;
+        }
+        return false;
     }
 }

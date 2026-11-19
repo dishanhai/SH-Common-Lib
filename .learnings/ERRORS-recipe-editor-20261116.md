@@ -119,3 +119,9 @@ Minecraft 的容器在点击已聚焦控件后仍先调用旧焦点 `setFocused(
 - Related Files: SHBUI client/gui/scaled/UiIngredientSlots.java、SHBUI client/gui/text/UiRichText.java、RecipeEditorSmoke.java
 - Tags: uuk, focus, pointer-capture, rich-text
 - See Also: ERR-20261116-004
+
+## 2026-11-19 • 配方工作区的可读性与编辑效率
+
+状态为 resolved。第一版客户端截图中，560×320 的画布把九宫格放在大块空白中央，通用配方需要打开一个子页才能修改一个数值。交互断言通过后，用户仍指出界面低效。此类页面应使用填好材料和参数的真实配方复核，检查改一个值到看见结果所需的点击次数，并检查中等视口能否同时显示正在编辑的数据及预览。
+
+跨版本配色应检查各端实际 SHBUI JAR。NeoForge 26.1.2 的 UiTheme 提供 surface()，本次使用的版本缺少 secondarySurface()。

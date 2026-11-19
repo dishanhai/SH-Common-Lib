@@ -17,29 +17,49 @@ public final class RecipeEditorLayout {
     }
 
     public record Layout(Rect toolbar, Rect navigation, Rect content, Rect status,
-                         Rect canvas, Rect properties, Rect result, boolean wide) {
-        public Rect pane(int view) {
-            return switch (view) {
-                case 0 -> canvas;
-                case 1 -> properties;
-                case 2 -> result;
-                default -> throw new IllegalArgumentException("Unknown editor view: " + view);
-            };
+                         Rect editor, Rect preview, boolean sidebar, boolean split) {
+        public Rect navigationControls() {
+            return sidebar ? new Rect(navigation.x, navigation.y + 18, navigation.width, 84) : navigation;
+        }
+
+        public Rect body(Rect panel) {
+            int header = split || sidebar ? 20 : 0;
+            int pad = header == 0 ? 0 : 6;
+            return new Rect(panel.x + pad, panel.y + header, panel.width - pad * 2, panel.height - header - pad);
+        }
+
+        public Rect result(int view) {
+            return view == 2 ? content : preview;
         }
     }
 
     /** The game's supported minimum logical viewport is 320 x 180. */
     public static Layout compute(int width, int height) {
-        var toolbar = new Rect(12, 8, width - 24, 24);
-        var navigation = new Rect(12, 40, width - 24, 22);
-        var content = new Rect(12, 72, width - 24, height - 98);
-        var status = new Rect(12, height - 22, width - 24, 18);
-        boolean wide = width >= 760;
-        if (!wide) return new Layout(toolbar, navigation, content, status, content, content, content, false);
-        var canvas = new Rect(content.x, content.y, 230, content.height);
-        var properties = new Rect(canvas.right() + 12, content.y, 200, content.height);
-        var result = new Rect(properties.right() + 12, content.y, content.right() - properties.right() - 12, content.height);
-        return new Layout(toolbar, navigation, content, status, canvas, properties, result, true);
+        int windowWidth = Math.min(940, width), windowHeight = Math.min(400, height);
+        int x = (width - windowWidth) / 2 + 12, y = (height - windowHeight) / 2;
+        boolean roomy = height >= 240;
+        var toolbar = new Rect(x, y + 8, windowWidth - 24, roomy ? 32 : 24);
+        var status = new Rect(x, y + windowHeight - 22, windowWidth - 24, 18);
+        boolean sidebar = width >= 840 && roomy;
+        int navTop = toolbar.bottom() + 8;
+        int top = sidebar ? navTop + 4 : navTop + 32;
+        int heightAvailable = status.y - 4 - top;
+        var navigation = sidebar
+                ? new Rect(x, top, 119, heightAvailable)
+                : new Rect(x, navTop, Math.min(356, windowWidth - 24), 22);
+        int left = sidebar ? navigation.right() + 14 : x;
+        var content = new Rect(left, top, toolbar.right() - left, heightAvailable);
+        boolean split = width >= 520 && roomy;
+        if (!split) return new Layout(toolbar, navigation, content, status, content, content, sidebar, false);
+        int editorWidth = (content.width - 16) * 55 / 100;
+        var editor = new Rect(content.x, top, editorWidth, heightAvailable);
+        var preview = new Rect(editor.right() + 16, top, content.width - editorWidth - 16, heightAvailable);
+        return new Layout(toolbar, navigation, content, status, editor, preview, sidebar, true);
+    }
+
+    public static Rect slotArea(Rect canvas, boolean labelled) {
+        int offset = labelled ? 40 : 24;
+        return new Rect(canvas.x, canvas.y + offset, canvas.width, Math.min(98, canvas.height - offset));
     }
 
     public record FieldRow(Rect label, Rect field) {}

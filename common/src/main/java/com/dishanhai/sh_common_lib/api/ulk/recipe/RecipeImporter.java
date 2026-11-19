@@ -26,6 +26,22 @@ public final class RecipeImporter {
 
     private RecipeImporter() {}
 
+    /** Keeps a foreign serializer's original source and target together when a visual import falls back. */
+    public static RecipeDocument importForEditing(RecipeDocument current, String raw, RecipeTarget clientTarget) {
+        RecipeTarget selected = current.editingTarget(clientTarget);
+        var imported = fromJson(current.id(), raw, selected);
+        if (imported.type() == RecipeType.CUSTOM) {
+            RecipeTarget pinned = current.type() == RecipeType.GTCEU ? selected : current.customTarget();
+            return imported.withCustomTarget(pinned);
+        }
+        if (selected != clientTarget && imported.type() != RecipeType.GTCEU
+                && imported.type() != RecipeType.BREWING && imported.type() != RecipeType.BREWING_CONTAINER) {
+            // The vanilla canvas always uses the running client format. Retain foreign JSON verbatim.
+            return custom(current.id(), raw).withCustomTarget(selected);
+        }
+        return imported;
+    }
+
     /** Unknown fields and serializers remain a CUSTOM document containing the original JSON. */
     public static RecipeDocument fromJson(String recipeId, String raw, RecipeTarget target) {
         if (!RecipeGenerator.validId(recipeId)) throw new IllegalArgumentException("Invalid recipe ID");
@@ -50,7 +66,18 @@ public final class RecipeImporter {
             case "minecraft:smithing_trim" -> RecipeType.SMITHING_TRIM;
             default -> null;
         };
-        if (type == null) return custom(recipeId, raw);
+        if (type == null) {
+            if (target == RecipeTarget.FORGE_1_20_1 && typeValue.getAsString().startsWith("gtceu:")) {
+                try {
+                    if (GtMachineRecipe.decode(json).validate().isEmpty()) {
+                        return new RecipeDocument(recipeId, RecipeType.GTCEU, Collections.nCopies(9, ""), "", 1, 0, 200, "", raw);
+                    }
+                } catch (IllegalArgumentException ignored) {
+                    // Unknown mechanics and ingredients are kept intact in the generic editor.
+                }
+            }
+            return custom(recipeId, raw);
+        }
         try {
             var slots = new ArrayList<>(Collections.nCopies(9, ""));
             String result = "";
@@ -244,13 +271,19 @@ public final class RecipeImporter {
     }
 
     static JsonObject parse(String raw) {
+        JsonElement value = parseValue(raw);
+        if (!value.isJsonObject()) throw new IllegalArgumentException("Expected one JSON object");
+        return value.getAsJsonObject();
+    }
+
+    static JsonElement parseValue(String raw) {
         Objects.requireNonNull(raw, "raw");
         if (raw.length() > MAX_INPUT) throw new IllegalArgumentException("Recipe JSON is too large");
         try (var reader = new JsonReader(new StringReader(raw))) {
             reader.setLenient(false);
             JsonElement value = read(reader, 0);
-            if (reader.peek() != JsonToken.END_DOCUMENT || !value.isJsonObject()) throw new IllegalArgumentException("Expected one JSON object");
-            return value.getAsJsonObject();
+            if (reader.peek() != JsonToken.END_DOCUMENT) throw new IllegalArgumentException("Expected one JSON value");
+            return value;
         } catch (IOException | IllegalStateException | NumberFormatException exception) {
             throw new IllegalArgumentException("Invalid recipe JSON", exception);
         }
