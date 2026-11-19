@@ -159,3 +159,14 @@
 - Minecraft 26.1.2 的实体类型标签通过 builtInRegistryHolder().is(tag) 查询。
 - NeoForge 26.1.2 构建使用 1.21.1 的 `NeoForgeJeiOrderableNetwork` 时，`ServerPlayer.canInteractWithBlock(BlockPos, int)` 无法解析；跨版本共享调用前应核对对应版本的实际 API。
 - 共用 UUK 页面调用 `UiScreenBuilder.returnFocus` 会在 NeoForge 26.1.2 编译失败，该版本把方法放在 `UiScreen` 上。可在三端共用的 `onCloseRequest` 中返回父页面，并在父页面重建后恢复焦点。
+- Windows 中文系统的 Python 默认文本编码可能是 GBK。运行读取 UTF-8 语言文件的 `tools/verify_fake_fumo.py` 时使用 `python -X utf8`，避免把解码失败误判为资源格式错误。
+- Forge 1.20.1 的方块实体更新包会把空 CompoundTag 转成 null，NeoForge 1.21.1 的客户端会直接跳过空标签。同步 Fumo 取下物品时，在这两端显式发送空的 `held_item`，让客户端清除旧物品。
+- NeoForge 1.21.1 隔离客户端如果在早期窗口接管时遇到 `UnionFileSystemProvider` 的 `FileSystemNotFoundException`，可在隔离实例的 `config/fml.toml` 设置 `earlyWindowControl = false` 后重试。后台自动验收同时关闭失焦暂停，避免单人世界停止滴答。
+- Fumo 展示模组方块时，优先从实际物品堆解析三维物品模型和渲染层。仅有平面图标的方块仍需要方块模型。ExtendedAE 鱼大实测模型高 20.5 个单位，选取框为 16；放大选取框无法验证缩小后的手持模型，需在持物位置检查实际渲染。
+- Create 6 的动力方块实体引用内嵌在运行包中的 Ponder API。开发期显式加入 Ponder 的 `compileOnly` 依赖。ForgeGradle 在 `fg.deobf(...)` 的配置闭包内关闭传递依赖，避免 Ponder 的 Flywheel 运行时坐标使整个反混淆配置解析失败。
+- 垃圾桶安装模块走 SHBUI 面板内的四个服务端容器槽。原版槽位负责实际物品转移、堆叠校验和存档同步，UUK 提供外观与控件。用户在首轮设计后明确了这个安装入口。
+- 垃圾桶应力模块的独立图标需要引用原版的具体钟表帧 `minecraft:item/clock_00`。原版资源包含分帧贴图，`minecraft:item/clock` 不是有效贴图路径。
+- NeoForge 1.21.1 隔离开发客户端使用当前 SHBUI 1.0.11 构建时，`GuiTextureBlendMixin` 注入 `ShaderInstance` 的回调组可能在初始化阶段失败。验收垃圾桶时，通过 `-PshBetterUiJar` 指向仅在测试目录内关闭该注入的副本，保留其余 UUK 依赖。正式 SHBUI 产物仍需单独复验。
+- Forge 1.20.1 的服务端玩家网络连接使用 `player.connection.connection`，NeoForge 两端用 `player.connection.getConnection()`。跨版本加可选网络包时，沿用各端现有的连接查询和频道协商检查。
+- Forge 1.20.1 开发客户端加载 Curios 5.14.1 时，若 `AccessorEntity` 找不到 `f_19803_`，在隔离启动配置打开 `mixin.env.remapRefMap`，并把 `mixin.env.refMapRemappingFile` 指向该模块的 `build/createSrgToMcp/output.srg`。本次用此配置通过 Fumo 头饰测试。
+- 世界标记和玩家 HUD 的折射底板应使用 UUK 的 CLEAR 光学材质。通用弹窗的高吸收底色会遮掉雨线和地形细节。Forge 1.20.1 与 NeoForge 1.21.1 的信标应在同一批次取样场景，NeoForge 26.1.2 则沿用 GUI 提取器的共享背景快照。
