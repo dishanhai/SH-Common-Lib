@@ -296,6 +296,7 @@ public final class CosmicArtisanScreen extends LayeredScreen {
                 case BEACONS -> BeaconClient.openDestinations(wheel ? null : this);
                 case ACCELERATION -> AccelerationClient.open(minecraft);
                 case MINING_SPEED -> ArtisanConfigPage.openMiningSpeed(this, optionTitle(option), () -> actionButtons.get(option));
+                case FLIGHT_SPEED -> ArtisanConfigPage.openFlightSpeed(this, optionTitle(option), () -> actionButtons.get(option));
                 default -> throw new IllegalStateException("Not an action");
             }
             return;
@@ -328,7 +329,7 @@ public final class CosmicArtisanScreen extends LayeredScreen {
     private boolean available(Option option) {
         return switch (option.kind()) {
             case BOSS -> Mode.HOSTILE_FRIENDLY.enabled(flags);
-            case MINING_SPEED -> ArtisanConfigPage.miningSpeedEditable();
+            case MINING_SPEED, FLIGHT_SPEED -> ArtisanConfigPage.serverSettingsEditable();
             default -> true;
         };
     }
@@ -341,9 +342,10 @@ public final class CosmicArtisanScreen extends LayeredScreen {
     }
     private Component status(Option option) {
         if (pending.containsKey(option)) return label("sync_waiting");
-        if (!available(option)) return option.kind() == CosmicArtisanMenu.Kind.MINING_SPEED
-                ? Component.translatable("screen.sh_common_lib.control_center.artisan_server_owned")
-                : label("requires_friendship");
+        if (!available(option)) return switch (option.kind()) {
+            case MINING_SPEED, FLIGHT_SPEED -> Component.translatable("screen.sh_common_lib.control_center.artisan_server_owned");
+            default -> label("requires_friendship");
+        };
         return option.toggle() ? Component.translatable(enabled(option) ? "options.on" : "options.off") : label("open_action");
     }
     private void readState() {

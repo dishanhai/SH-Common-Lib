@@ -28,16 +28,19 @@ final class ForgeArtisanConfig {
     }
 
     private record PassiveValues(ForgeConfigSpec.BooleanValue flight, ForgeConfigSpec.BooleanValue immunity,
-                                 ForgeConfigSpec.BooleanValue food, ForgeConfigSpec.BooleanValue saturation) {
+                                 ForgeConfigSpec.BooleanValue food, ForgeConfigSpec.BooleanValue saturation,
+                                 ForgeConfigSpec.DoubleValue flightSpeedMultiplier) {
         PassiveValues(ForgeConfigSpec.Builder builder) {
             this(builder.define("flight", Passives.DEFAULT.flight()),
                     builder.define("damageImmunity", Passives.DEFAULT.damageImmunity()),
                     builder.define("fullFood", Passives.DEFAULT.fullFood()),
-                    builder.define("fullSaturation", Passives.DEFAULT.fullSaturation()));
+                    builder.define("fullSaturation", Passives.DEFAULT.fullSaturation()),
+                    builder.defineInRange("flightSpeedMultiplier", Passives.DEFAULT.flightSpeedMultiplier(),
+                            Passives.MIN_FLIGHT_SPEED, Passives.MAX_FLIGHT_SPEED));
         }
 
         Passives read() {
-            return new Passives(flight.get(), immunity.get(), food.get(), saturation.get());
+            return new Passives(flight.get(), immunity.get(), food.get(), saturation.get(), flightSpeedMultiplier.get());
         }
 
         void write(Passives settings) {
@@ -45,6 +48,7 @@ final class ForgeArtisanConfig {
             immunity.set(settings.damageImmunity());
             food.set(settings.fullFood());
             saturation.set(settings.fullSaturation());
+            flightSpeedMultiplier.set(settings.flightSpeedMultiplier());
         }
     }
 

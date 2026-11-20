@@ -12,6 +12,7 @@ import net.minecraft.world.entity.animal.Bee;
 import net.minecraft.world.entity.animal.Chicken;
 import net.minecraft.world.entity.animal.Sheep;
 import net.neoforged.neoforge.event.entity.living.LivingChangeTargetEvent;
+import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
 import net.neoforged.neoforge.event.level.BlockEvent;
 import net.minecraft.world.phys.Vec3;
@@ -66,6 +67,9 @@ final class NeoForgeCosmicArtisanEffects {
             }
         });
         NeoForge.EVENT_BUS.addListener(NeoForgeCosmicArtisanEffects::tick);
+        NeoForge.EVENT_BUS.addListener((PlayerEvent.PlayerLoggedOutEvent event) -> {
+            if (event.getEntity() instanceof ServerPlayer player) CosmicArtisanEffects.clearFlightSpeed(player);
+        });
         NeoForge.EVENT_BUS.addListener(NeoForgeCosmicArtisanEffects::protect);
         NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, NeoForgeCosmicArtisanEffects::attack);
         NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, (BlockEvent.BreakEvent event) -> {
@@ -134,13 +138,15 @@ final class NeoForgeCosmicArtisanEffects {
         if (settings != null && CosmicArtisanEffects.heldBy(player, NeoForgeArtisan.cosmicItem())) CosmicArtisanEffects.replenishFood(player, settings);
 
         var flight = player.getAttribute(NeoForgeMod.CREATIVE_FLIGHT);
-        if (flight == null) return;
-        if (settings != null && settings.flight()) {
+        boolean enabled = flight != null && settings != null && settings.flight();
+        boolean changed = CosmicArtisanEffects.updateFlightSpeed(player, enabled ? settings : null);
+        if (enabled) {
             if (!flight.hasModifier(FLIGHT.id())) flight.addTransientModifier(FLIGHT);
-        } else if (flight.removeModifier(FLIGHT.id()) && !player.mayFly() && player.getAbilities().flying) {
+        } else if (flight != null && flight.removeModifier(FLIGHT.id()) && !player.mayFly() && player.getAbilities().flying) {
             player.getAbilities().flying = false;
-            player.onUpdateAbilities();
+            changed = true;
         }
+        if (changed) player.onUpdateAbilities();
     }
 
     private static void forceMine(PlayerInteractEvent.LeftClickBlock event) {

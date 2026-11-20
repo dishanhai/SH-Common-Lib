@@ -33,13 +33,26 @@ public record ArtisanSettings(boolean infiniteDurability, boolean unlimitedMinin
                 maxDurability, attackDamage, attackSpeed, useCost, this.enabled);
     }
 
-    public record Passives(boolean flight, boolean damageImmunity, boolean fullFood, boolean fullSaturation) {
+    public record Passives(boolean flight, boolean damageImmunity, boolean fullFood, boolean fullSaturation,
+                           double flightSpeedMultiplier) {
+        public static final double MIN_FLIGHT_SPEED = 0.25;
+        public static final double MAX_FLIGHT_SPEED = 4.0;
         public static final Passives DEFAULT = new Passives(true, true, true, true);
 
-        public Passives withFlight(boolean enabled) { return new Passives(enabled, damageImmunity, fullFood, fullSaturation); }
-        public Passives withDamageImmunity(boolean enabled) { return new Passives(flight, enabled, fullFood, fullSaturation); }
-        public Passives withFullFood(boolean enabled) { return new Passives(flight, damageImmunity, enabled, fullSaturation); }
-        public Passives withFullSaturation(boolean enabled) { return new Passives(flight, damageImmunity, fullFood, enabled); }
+        public Passives {
+            flightSpeedMultiplier = Double.isFinite(flightSpeedMultiplier)
+                    ? Math.max(MIN_FLIGHT_SPEED, Math.min(MAX_FLIGHT_SPEED, flightSpeedMultiplier)) : 1.0;
+        }
+
+        public Passives(boolean flight, boolean damageImmunity, boolean fullFood, boolean fullSaturation) {
+            this(flight, damageImmunity, fullFood, fullSaturation, 1.0);
+        }
+
+        public Passives withFlight(boolean enabled) { return new Passives(enabled, damageImmunity, fullFood, fullSaturation, flightSpeedMultiplier); }
+        public Passives withDamageImmunity(boolean enabled) { return new Passives(flight, enabled, fullFood, fullSaturation, flightSpeedMultiplier); }
+        public Passives withFullFood(boolean enabled) { return new Passives(flight, damageImmunity, enabled, fullSaturation, flightSpeedMultiplier); }
+        public Passives withFullSaturation(boolean enabled) { return new Passives(flight, damageImmunity, fullFood, enabled, flightSpeedMultiplier); }
+        public Passives withFlightSpeedMultiplier(double value) { return new Passives(flight, damageImmunity, fullFood, fullSaturation, value); }
     }
 
     public record Profiles(ArtisanSettings regular, ArtisanSettings cosmic, Passives passives) {

@@ -6,6 +6,7 @@ import com.dishanhai.sh_better_ui.kernel.api.config.ConfigPage.NumberOption;
 import com.dishanhai.sh_better_ui.kernel.api.config.ConfigPage.Preset;
 import com.dishanhai.sh_common_lib.internal.item.ArtisanConfig;
 import com.dishanhai.sh_common_lib.internal.item.ArtisanSettings;
+import com.dishanhai.sh_common_lib.internal.item.ArtisanSettings.Passives;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.events.GuiEventListener;
@@ -28,6 +29,10 @@ public final class ArtisanConfigPage {
             List.of(preset(1), preset(2), preset(4), preset(10), preset(20));
     private static final List<NumberOption<ArtisanSettings>> COSMIC_OPTIONS = List.of(
             OPTIONS.get(0), OPTIONS.get(1), OPTIONS.get(2), OPTIONS.get(3), OPTIONS.get(4), OPTIONS.get(7));
+    private static final NumberOption<Passives> FLIGHT_SPEED = new NumberOption<>(
+            "flight_speed", label("artisan_field_flight_speed"), label("artisan_number_hint_flight_speed"),
+            Passives.MIN_FLIGHT_SPEED, Passives.MAX_FLIGHT_SPEED, false,
+            Passives::flightSpeedMultiplier, Passives::withFlightSpeedMultiplier);
 
     private ArtisanConfigPage() {}
 
@@ -38,16 +43,26 @@ public final class ArtisanConfigPage {
                 .screen(parent, original, stage, returnFocus);
     }
 
-    public static boolean miningSpeedEditable() {
+    public static boolean serverSettingsEditable() {
         return ArtisanControlSettings.editable();
     }
 
+    public static void openFlightSpeed(Screen parent, Component title, Supplier<? extends GuiEventListener> returnFocus) {
+        if (!serverSettingsEditable()) return;
+        var original = ArtisanConfig.profiles().passives();
+        var description = Component.translatable("screen.sh_common_lib.cosmic_artisan.flight_speed_hint");
+        var page = new ConfigPage<>(title, description, List.of(FLIGHT_SPEED), List.of());
+        Minecraft.getInstance().setScreen(page.screen(parent, original, edited -> serverSettingsEditable()
+                && ArtisanConfig.update(profiles -> profiles.withPassives(
+                        profiles.passives().withFlightSpeedMultiplier(edited.flightSpeedMultiplier()))), returnFocus));
+    }
+
     public static void openMiningSpeed(Screen parent, Component title, Supplier<? extends GuiEventListener> returnFocus) {
-        if (!miningSpeedEditable()) return;
+        if (!serverSettingsEditable()) return;
         var original = ArtisanConfig.current(true);
         var description = Component.translatable("screen.sh_common_lib.cosmic_artisan.mining_speed_hint");
         var page = new ConfigPage<>(title, description, MINING_OPTIONS, PRESETS);
-        Minecraft.getInstance().setScreen(page.screen(parent, original, edited -> miningSpeedEditable()
+        Minecraft.getInstance().setScreen(page.screen(parent, original, edited -> serverSettingsEditable()
                 && ArtisanConfig.update(profiles -> profiles.with(true, mergeMiningSpeed(profiles.cosmic(), original, edited))),
                 returnFocus));
     }

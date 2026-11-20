@@ -79,8 +79,8 @@ tasks.register('controlCenterDraftTest', JavaExec) {
 
 tasks.register('artisanSettingsTest', JavaExec) {
     group = 'verification'
-    description = 'Checks independent Artisan enable settings and preservation during edits.'
-    classpath = sourceSets.controlCenterVerification.runtimeClasspath
+    description = 'Checks independent Artisan settings and flight speed application, sync and restoration.'
+    classpath = sourceSets.controlCenterVerification.runtimeClasspath + sourceSets.main.runtimeClasspath
     mainClass = 'com.dishanhai.sh_common_lib.internal.item.ArtisanSettingsTest'
 }
 

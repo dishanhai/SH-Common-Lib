@@ -148,25 +148,29 @@ final class ForgeCosmicArtisanEffects {
             revokeFlight(player);
             return;
         }
+        boolean changed = CosmicArtisanEffects.updateFlightSpeed(player, settings);
         if (!player.getAbilities().mayfly) {
             // Persist ownership in case the player data is saved before normal logout cleanup.
             player.getPersistentData().putBoolean(FLIGHT_GRANT, true);
             player.getAbilities().mayfly = true;
-            player.onUpdateAbilities();
+            changed = true;
         }
+        if (changed) player.onUpdateAbilities();
     }
 
     private static void revokeFlight(ServerPlayer player) {
         var data = player.getPersistentData();
-        if (!data.getBoolean(FLIGHT_GRANT)) return;
-        data.remove(FLIGHT_GRANT);
-        if (player.isCreative() || player.isSpectator()) return;
-        var abilities = player.getAbilities();
-        if (abilities.mayfly || abilities.flying) {
-            abilities.mayfly = false;
-            abilities.flying = false;
-            player.onUpdateAbilities();
+        boolean changed = CosmicArtisanEffects.clearFlightSpeed(player);
+        if (data.getBoolean(FLIGHT_GRANT)) {
+            data.remove(FLIGHT_GRANT);
+            if (!player.isCreative() && !player.isSpectator()) {
+                var abilities = player.getAbilities();
+                changed |= abilities.mayfly || abilities.flying;
+                abilities.mayfly = false;
+                abilities.flying = false;
+            }
         }
+        if (changed) player.onUpdateAbilities();
     }
 
     private static void forceMine(PlayerInteractEvent.LeftClickBlock event) {

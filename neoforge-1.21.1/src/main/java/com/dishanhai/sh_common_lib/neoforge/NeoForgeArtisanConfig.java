@@ -28,16 +28,19 @@ final class NeoForgeArtisanConfig {
     }
 
     private record PassiveValues(ModConfigSpec.BooleanValue flight, ModConfigSpec.BooleanValue immunity,
-                                 ModConfigSpec.BooleanValue food, ModConfigSpec.BooleanValue saturation) {
+                                 ModConfigSpec.BooleanValue food, ModConfigSpec.BooleanValue saturation,
+                                 ModConfigSpec.DoubleValue flightSpeedMultiplier) {
         PassiveValues(ModConfigSpec.Builder builder) {
             this(builder.define("flight", Passives.DEFAULT.flight()),
                     builder.define("damageImmunity", Passives.DEFAULT.damageImmunity()),
                     builder.define("fullFood", Passives.DEFAULT.fullFood()),
-                    builder.define("fullSaturation", Passives.DEFAULT.fullSaturation()));
+                    builder.define("fullSaturation", Passives.DEFAULT.fullSaturation()),
+                    builder.defineInRange("flightSpeedMultiplier", Passives.DEFAULT.flightSpeedMultiplier(),
+                            Passives.MIN_FLIGHT_SPEED, Passives.MAX_FLIGHT_SPEED));
         }
 
         Passives read() {
-            return new Passives(flight.get(), immunity.get(), food.get(), saturation.get());
+            return new Passives(flight.get(), immunity.get(), food.get(), saturation.get(), flightSpeedMultiplier.get());
         }
 
         void write(Passives settings) {
@@ -45,6 +48,7 @@ final class NeoForgeArtisanConfig {
             immunity.set(settings.damageImmunity());
             food.set(settings.fullFood());
             saturation.set(settings.fullSaturation());
+            flightSpeedMultiplier.set(settings.flightSpeedMultiplier());
         }
     }
 
