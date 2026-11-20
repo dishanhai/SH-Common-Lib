@@ -12,6 +12,18 @@ import javax.tools.ToolProvider;
 
 public final class RecipeGeneratorTest {
     public static void main(String[] args) throws Exception {
+        var draft = RecipeDocument.empty();
+        var inferred = draft.withEditedResult("sh_common_lib:cosmic_beacon", 3, true);
+        expect(inferred.id().equals(inferred.result()) && inferred.count() == 3, "draft takes the full output ID and count");
+        expect(inferred.withEditedResult("minecraft:diamond", 1, true).id().equals(inferred.id()), "existing recipe ID is preserved");
+        expect(draft.withEditedResult("#minecraft:logs", 1, true).id().equals(draft.id()), "tags are not output IDs");
+        expect(draft.withEditedResult("minecraft:air", 1, true).id().equals(draft.id()), "empty item does not set a recipe ID");
+        expect(draft.withEditedResult("minecraft:diamond", 1, false).id().equals(draft.id()), "loaded placeholder ID stays stable");
+        var emptyId = new RecipeDocument("", RecipeType.SMELTING, draft.inputs(), "", 1, 0, 200, "", "");
+        expect(emptyId.withEditedResult("minecraft:iron_ingot", 1, true).id().equals("minecraft:iron_ingot"), "blank ID takes output ID");
+        var trimDraft = new RecipeDocument(draft.id(), RecipeType.SMITHING_TRIM, draft.inputs(), "", 1, 0, 200, "", "");
+        expect(trimDraft.withEditedResult("minecraft:sentry", 1, true).id().equals(trimDraft.id()), "trim pattern is not a produced item");
+
         var shaped = new RecipeDocument("example:test", RecipeType.SHAPED,
                 List.of("", "", "", "", "minecraft:stick", "", "", "#minecraft:planks", ""),
                 "minecraft:torch", 4, 0, 200, "", "");

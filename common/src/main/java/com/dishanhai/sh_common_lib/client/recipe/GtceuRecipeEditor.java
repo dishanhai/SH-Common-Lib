@@ -9,11 +9,11 @@ import com.dishanhai.sh_better_ui.client.gui.display.GraphicIcon;
 import com.dishanhai.sh_better_ui.client.gui.scaled.GuiMotion;
 import com.dishanhai.sh_better_ui.client.gui.scaled.RoundedCorners;
 import com.dishanhai.sh_better_ui.client.gui.scaled.UiIngredientSlots;
+import com.dishanhai.sh_better_ui.client.gui.scaled.UiScrollingRows;
 import com.dishanhai.sh_better_ui.client.gui.scaled.UiTextField;
 import com.dishanhai.sh_better_ui.client.gui.scaled.UiTheme;
 import com.dishanhai.sh_common_lib.api.ulk.recipe.GtMachineRecipe;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.screens.ConfirmScreen;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
@@ -52,10 +52,10 @@ final class GtceuRecipeEditor {
 
     private static final class Side {
         final List<Row> rows = new ArrayList<>();
-        int page;
+        int start;
     }
 
-    private record VisibleRow(Row row, int x, int y, int nameWidth, int unitX) {}
+    private record VisibleRow(Side side, Row row, int x, int y, int nameWidth, int unitX) {}
     private record Sheet(int x, int y, int width, int paramsY, int tablesY, int panelWidth,
                          int gap, int visible, int panelHeight) {
         static Sheet fit(int w, int h, int rowCount) {
@@ -151,17 +151,17 @@ final class GtceuRecipeEditor {
         button(owner, right - 60, y + 2, 60, 22, text("apply"), this::commit).setSelected(true);
         owner.onCloseRequest(() -> {
             if (original.equals(readModel(false))) return true;
-            Minecraft.getInstance().setScreen(new ConfirmScreen(ok -> {
-                if (ok) parent.open(); else owner.open();
-            }, text("unsaved"), gt("discard_hint")));
+            RecipeEditor.confirm(text("unsaved"), gt("discard_hint"), text("discard"), parent::open);
             return false;
         });
         int column = Math.min(155, (width - 16) / 4), paramY = sheet.paramsY() + 15;
         param(owner, x + 6, paramY, width - 2 * column - 19, "machine_id", machine, next -> machine = next);
         param(owner, right - 2 * column - 6, paramY, column - 4, "duration", duration, next -> duration = next);
         param(owner, right - column - 6, paramY, column, "eut", eut, next -> eut = next);
-        panel(owner, inputs, false);
-        panel(owner, outputs, true);
+        var inputList = panel(owner, inputs, false);
+        var outputList = panel(owner, outputs, true);
+        owner.onScroll((mouseX, mouseY, horizontal, vertical) ->
+                inputList.scroll(mouseX, mouseY, vertical) || outputList.scroll(mouseX, mouseY, vertical));
         focusRow = null;
         focusParam = null;
         focusAmount = false;
@@ -178,32 +178,26 @@ final class GtceuRecipeEditor {
         }
     }
 
-    private void panel(UiScreen owner, Side side, boolean output) {
+    private UiScrollingRows panel(UiScreen owner, Side side, boolean output) {
         int x = sheet.panelX(output) + 6, width = sheet.panelWidth() - 12, y = sheet.tablesY();
-        int pages = Math.max(1, (side.rows.size() + sheet.visible() - 1) / sheet.visible());
         int pending = focusRow == null ? -1 : side.rows.indexOf(focusRow);
-        if (pending >= 0) side.page = pending / sheet.visible();
-        side.page = Math.min(side.page, pages - 1);
-        if (pages > 1) {
-            var previous = button(owner, x + width - 38, y + 4, 18, 18, text("previous"), () -> {
-                side.page--; show();
-            });
-            previous.setIcon(GraphicIcon.PREVIOUS);
-            previous.active = side.page > 0;
-            var next = button(owner, x + width - 18, y + 4, 18, 18, text("next"), () -> {
-                side.page++; show();
-            });
-            next.setIcon(GraphicIcon.NEXT);
-            next.active = side.page + 1 < pages;
-        }
-        int start = side.page * sheet.visible();
-        for (int i = start; i < Math.min(side.rows.size(), start + sheet.visible()); i++)
-            resource(owner, side, output, side.rows.get(i), i, x, y + 28 + (i - start) * ROW_HEIGHT, width);
+        int visible = sheet.visible();
+        if (pending >= 0) side.start = Math.min(pending, Math.max(side.start, pending - visible + 1));
+        var list = new UiScrollingRows(owner, new Bounds(x, y + 28, width, visible * ROW_HEIGHT),
+                gt(output ? "outputs" : "inputs"), ROW_HEIGHT, visible, side.rows.size(), side.start, first -> {
+            side.start = first;
+            visibleRows.removeIf(row -> row.side() == side);
+            for (int i = first; i < Math.min(side.rows.size(), first + visible); i++) {
+                resource(owner, side, output, side.rows.get(i), i, x, y + 28 + (i - first) * ROW_HEIGHT,
+                        width - UiScrollingRows.TRACK_SPACE);
+            }
+        });
         int footer = y + sheet.panelHeight() - 23, half = (width - 4) / 2;
         button(owner, x, footer, half, 18, gt("add_item"), () -> { append(side, false); show(); }).setLeadingIcon(GraphicIcon.ADD);
         button(owner, x + half + 4, footer, width - half - 4, 18, gt("add_fluid"), () -> {
             append(side, true); show();
         }).setLeadingIcon(GraphicIcon.ADD);
+        return list;
     }
 
     private void append(Side side, boolean fluid) {
@@ -250,7 +244,7 @@ final class GtceuRecipeEditor {
             show();
         });
         remove.setIcon(GraphicIcon.REMOVE);
-        visibleRows.add(new VisibleRow(row, x, y, qtyX - x - 26, unitX));
+        visibleRows.add(new VisibleRow(side, row, x, y, qtyX - x - 26, unitX));
         if (focusRow == row) {
             owner.setFocused(focusAmount ? amount : id);
             if (focusAmount) amount.setError(status);
@@ -321,9 +315,10 @@ final class GtceuRecipeEditor {
             icon.draw(frame.graphics(), left + 7, top + 4, 1, frame.preferences().highContrast() ? ink : accent, frame.preferences());
             line(frame, gt(output ? "outputs" : "inputs").copy().withStyle(s -> s.withBold(true)),
                     left + 28, top + 8, sheet.panelWidth() / 2 - 22, ink);
-            int pages = (side.rows.size() + sheet.visible() - 1) / sheet.visible();
-            if (pages > 1) line(frame, gt("page", side.page + 1, pages), left + sheet.panelWidth() / 2 - 12,
-                    top + 8, sheet.panelWidth() / 2 - 36, muted);
+            if (side.rows.size() > sheet.visible()) {
+                line(frame, text("generic.range", side.start + 1, Math.min(side.start + sheet.visible(), side.rows.size()), side.rows.size()),
+                        left + sheet.panelWidth() / 2, top + 8, sheet.panelWidth() / 2 - 6, muted);
+            }
             if (side.rows.isEmpty()) line(frame, gt("empty"), left + 10, top + 37, sheet.panelWidth() - 20, muted);
         }
         for (var v : visibleRows) {

@@ -15,8 +15,11 @@ public final class RecipeEditorAccess {
             var loader = RecipeEditorAccess.class.getClassLoader();
             var screen = Class.forName("com.dishanhai.sh_better_ui.client.api.UiScreen", false, loader);
             screen.getMethod("onCloseRequest", java.util.function.BooleanSupplier.class);
+            screen.getMethod("currentScreen");
             var workbench = Class.forName("com.dishanhai.sh_better_ui.client.api.UiWorkbench", false, loader);
             workbench.getMethod("textColor");
+            workbench.getMethod("popup", Component.class, Screen.class, int.class, int.class);
+            workbench.getMethod("showChoices", screen, Component.class, Component.class, java.util.List.class, Component.class);
             workbench.getMethod("selectItemSequence", screen,
                             Component.class, Supplier.class, int.class, java.util.function.Consumer.class);
             String scaled = "com.dishanhai.sh_better_ui.client.gui.scaled.";

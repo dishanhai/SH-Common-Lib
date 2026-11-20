@@ -907,7 +907,7 @@
   "screen.sh_common_lib.recipe_editor.export": "Export file",
   "screen.sh_common_lib.recipe_editor.previous": "Previous",
   "screen.sh_common_lib.recipe_editor.next": "Next",
-  "screen.sh_common_lib.recipe_editor.code_page": "Code preview %s / %s",
+  "screen.sh_common_lib.recipe_editor.code_range": "Lines %s–%s of %s",
   "screen.sh_common_lib.recipe_editor.copied": "Copied the complete generated content.",
   "screen.sh_common_lib.recipe_editor.issue": "%s: %s",
   "screen.sh_common_lib.recipe_editor.failed": "Operation failed: %s",

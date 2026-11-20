@@ -38,7 +38,7 @@ final class RecipeExportSettingsScreen {
 
     static void open(Screen parent, Supplier<? extends GuiEventListener> focus) {
         var settings = new RecipeExportSettingsScreen();
-        UiWorkbench.builder(Component.translatable("screen.sh_common_lib.control_center.developer_settings"), parent)
+        UiWorkbench.popup(Component.translatable("screen.sh_common_lib.control_center.developer_settings"), parent, 520, 162)
                 .onInit(screen -> {
                     screen.onCloseRequest(() -> {
                         Minecraft.getInstance().setScreen(parent);
@@ -55,7 +55,6 @@ final class RecipeExportSettingsScreen {
     private void init(UiScreen screen) {
         var area = area(screen);
         int x = area.x(), y = area.y(), width = area.width();
-        UiWorkbench.button(screen, 12, 8, 82, 22, CommonComponents.GUI_BACK, screen::onClose);
         var toggle = new UiToggleButton(new Bounds(x, y, width, 22), enabled, UiWorkbench.preferences(screen),
                 UiStyle.DEFAULT, value -> text(value ? "custom_on" : "custom_off"), value -> {
                     enabled = value;
@@ -66,7 +65,9 @@ final class RecipeExportSettingsScreen {
                 text("directory"), 4096, UiWorkbench.preferences(screen)));
         field.setValue(directory);
         field.setOnChange(value -> { directory = value; status = null; });
-        UiWorkbench.button(screen, x, y + 69, width, 22, text("save"), this::save);
+        int half = (width - 4) / 2;
+        UiWorkbench.button(screen, x, y + 69, half, 22, text("save"), this::save);
+        UiWorkbench.button(screen, x + half + 4, y + 69, width - half - 4, 22, CommonComponents.GUI_BACK, screen::onClose);
     }
 
     private void draw(UiScreen screen, UiFrame frame) {
@@ -77,8 +78,8 @@ final class RecipeExportSettingsScreen {
     }
 
     private static Bounds area(UiScreen screen) {
-        int width = Math.min(520, screen.width - 24);
-        return new Bounds((screen.width - width) / 2, Math.max(38, screen.viewport().y() + 8), width, 0);
+        var panel = UiWorkbench.popupBounds(screen, 520, 162);
+        return new Bounds(panel.x() + 12, panel.y() + 26, panel.width() - 24, panel.height() - 26);
     }
 
     private static void drawLine(UiFrame frame, Component label, int x, int y, int width, int color) {

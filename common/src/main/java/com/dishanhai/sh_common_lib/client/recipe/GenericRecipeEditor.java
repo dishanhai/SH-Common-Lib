@@ -10,11 +10,11 @@ import com.dishanhai.sh_better_ui.client.gui.scaled.RoundedCorners;
 import com.dishanhai.sh_better_ui.client.gui.scaled.UiTheme;
 import com.dishanhai.sh_better_ui.client.gui.text.UiRichText;
 import com.dishanhai.sh_better_ui.client.gui.scaled.UiCodeEditor;
+import com.dishanhai.sh_better_ui.client.gui.scaled.UiScrollingRows;
 import com.dishanhai.sh_better_ui.client.gui.scaled.UiTextField;
 import com.dishanhai.sh_common_lib.api.ulk.recipe.RecipeJsonTree;
 import com.google.gson.JsonPrimitive;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.screens.ConfirmScreen;
 import net.minecraft.network.chat.Component;
 
 import java.util.ArrayList;
@@ -102,7 +102,7 @@ final class GenericRecipeEditor {
 
     private final class Table {
         private final List<String> path;
-        private final int offset;
+        private int offset;
         private final List<String> keys;
         private final Map<List<String>, UiTextField> inputs = new LinkedHashMap<>();
         private int x, width, tableWidth, keyWidth, rows, start, end;
@@ -133,19 +133,21 @@ final class GenericRecipeEditor {
             tableWidth = split ? Math.round(width * 0.59f) : width;
             keyWidth = Math.min(142, Math.max(70, tableWidth / 3));
             rows = Math.max(1, (owner.height - 108) / 24);
-            start = Math.min(offset / rows, Math.max(0, keys.size() - 1) / rows) * rows;
-            end = Math.min(keys.size(), start + rows);
+            if (focusKey != null) {
+                int focused = keys.indexOf(focusKey);
+                if (focused >= 0) offset = Math.min(focused, Math.max(offset, focused - rows + 1));
+            }
             heading = path.isEmpty() ? text("generic.fields") : Component.literal(String.join(" › ", path));
             owner.onCloseRequest(() -> {
                 if (!path.isEmpty()) {
                     if (flush()) {
                         var up = path.subList(0, path.size() - 1);
                         browse(up, Math.max(0, tree.keys(up).indexOf(path.get(path.size() - 1))));
-                    } else confirmDiscard(owner, () -> { pending.clear(); invalidPath = null; browse(path.subList(0, path.size() - 1), 0); });
+                    } else confirmDiscard(() -> { pending.clear(); invalidPath = null; browse(path.subList(0, path.size() - 1), 0); });
                     return false;
                 }
                 if (source.equals(original) && pending.isEmpty()) return true;
-                confirmDiscard(owner, parent::open);
+                confirmDiscard(parent::open);
                 return false;
             });
             button(owner, x, 8, 24, 22, text("back"), owner::onClose).setIcon(GraphicIcon.BACK);
@@ -158,26 +160,24 @@ final class GenericRecipeEditor {
             button(owner, x + tableWidth - 48, 41, 48, 18, text("generic.add"), () -> {
                 if (flush()) addField(owner, path, start);
             }).setLeadingIcon(GraphicIcon.ADD);
-            for (int i = start; i < end; i++) row(owner, keys.get(i), 73 + (i - start) * 24);
-            int bottom = 77 + Math.max(1, end - start) * 24;
-            if (keys.size() > rows) {
-                var prev = button(owner, x + tableWidth - 50, bottom, 22, 18, text("previous"), () -> {
-                    if (flush()) browse(path, start - rows);
-                });
-                prev.setIcon(GraphicIcon.BACK); prev.active = start > 0;
-                var next = button(owner, x + tableWidth - 24, bottom, 22, 18, text("next"), () -> {
-                    if (flush()) browse(path, start + rows);
-                });
-                next.setIcon(GraphicIcon.FORWARD); next.active = end < keys.size();
-            }
+            var list = new UiScrollingRows(owner, new Bounds(x, 73, tableWidth, rows * 24), heading,
+                    24, rows, keys.size(), offset, first -> {
+                offset = start = first;
+                end = Math.min(keys.size(), start + rows);
+                inputs.clear();
+                displayedError = null;
+                for (int i = start; i < end; i++) row(owner, keys.get(i), 73 + (i - start) * 24);
+            });
+            owner.onScroll((mouseX, mouseY, horizontal, vertical) -> list.scroll(mouseX, mouseY, vertical));
             focusKey = null;
         }
 
         private void row(UiScreen owner, String key, int y) {
             var child = child(path, key);
             boolean container = tree.isContainer(child);
-            int vx = x + keyWidth, vw = tableWidth - keyWidth - 28;
-            var edit = button(owner, x + tableWidth - 22, y + 1, 22, 19, text("generic.field", key), () -> {
+            int contentWidth = tableWidth - UiScrollingRows.TRACK_SPACE;
+            int vx = x + keyWidth, vw = contentWidth - keyWidth - 28;
+            var edit = button(owner, x + contentWidth - 22, y + 1, 22, 19, text("generic.field", key), () -> {
                 if (flush()) member(path, key, start, null);
             });
             edit.setIcon(GraphicIcon.EDIT);
@@ -228,7 +228,7 @@ final class GenericRecipeEditor {
                 int y = 73 + (i - start) * 24;
                 String key = keys.get(i);
                 line(frame, Component.literal(key), x + 4, y + 6, keyWidth - 8, ink);
-                RoundedCorners.draw(frame.graphics(), x + 3, y + 22, tableWidth - 6, 1, 0, 0, 0, theme.border());
+                RoundedCorners.draw(frame.graphics(), x + 3, y + 22, tableWidth - UiScrollingRows.TRACK_SPACE - 6, 1, 0, 0, 0, theme.border());
             }
             if (!Objects.equals(displayedError, invalidPath)) {
                 displayedError = invalidPath;
@@ -239,7 +239,7 @@ final class GenericRecipeEditor {
             var count = keys.size() > rows ? text("generic.range", start + 1, end, keys.size())
                     : text("generic.total", keys.size());
             line(frame, invalidPath == null ? count : text("generic.invalid_value"), x + 4, foot,
-                    tableWidth - (keys.size() > rows ? 60 : 8), invalidPath == null ? muted : ink);
+                    tableWidth - 8, invalidPath == null ? muted : ink);
             if (split) drawPreview(owner, frame, ink, muted);
         }
 
@@ -301,16 +301,20 @@ final class GenericRecipeEditor {
     private void addField(UiScreen previous, List<String> path, int offset) {
         String[] kinds = {"string", "number", "boolean", "object", "array", "null"};
         String[] examples = {"\"\"", "0", "true", "{}", "[]", "null"};
-        builder(text("generic.add"), previous).onInit(owner -> {
-            int x = left(owner), w = owner.width - x * 2;
-            button(owner, x, 8, 58, 22, text("back"), owner::onClose);
+        UiWorkbench.popup(text("generic.add"), previous, 340, 148).onInit(owner -> {
+            var panel = UiWorkbench.popupBounds(owner, 340, 148);
+            int x = panel.x() + 12, w = panel.width() - 24;
             for (int i = 0; i < kinds.length; i++) {
                 String value = examples[i];
-                button(owner, x + (i % 2) * (w / 2), 52 + (i / 2) * 26, w / 2 - 4, 22,
+                button(owner, x + (i % 2) * (w / 2), panel.y() + 39 + (i / 2) * 24, w / 2 - 4, 20,
                         text("generic.kind." + kinds[i]), () -> member(path, null, offset, value));
             }
-        }).onForeground((owner, frame) -> line(frame, text("generic.kind"), left(owner), 38,
-                owner.width - 2 * left(owner), UiWorkbench.textColor())).open();
+            button(owner, x, panel.bottom() - 30, w, 20, text("back"), owner::onClose);
+        }).onForeground((owner, frame) -> {
+            var panel = UiWorkbench.popupBounds(owner, 340, 148);
+            line(frame, text("generic.kind"), panel.x() + 12, panel.y() + 25,
+                    panel.width() - 24, UiWorkbench.textColor());
+        }).open();
     }
 
     private void member(List<String> path, String key, int page, String seed) {
@@ -329,7 +333,7 @@ final class GenericRecipeEditor {
             owner.onCloseRequest(() -> {
                 Runnable back = () -> browse(path, page);
                 if (initial.equals(input[0]) && name[0].isEmpty()) back.run();
-                else confirmDiscard(owner, back);
+                else confirmDiscard(back);
                 return false;
             });
             button(owner, x, 8, 64, 22, text("back"), owner::onClose);
@@ -373,7 +377,7 @@ final class GenericRecipeEditor {
             int x = left(owner), w = owner.width - x * 2;
             owner.onCloseRequest(() -> {
                 Runnable back = tree == null ? parent::open : () -> browse(List.of(), 0);
-                if (source.equals(input[0])) back.run(); else confirmDiscard(owner, back);
+                if (source.equals(input[0])) back.run(); else confirmDiscard(back);
                 return false;
             });
             button(owner, x, 8, 64, 22, text("back"), owner::onClose);
@@ -403,10 +407,8 @@ final class GenericRecipeEditor {
 
     private void update(RecipeJsonTree next) { tree = next; source = tree.json(); }
 
-    private static void confirmDiscard(UiScreen owner, Runnable discard) {
-        Minecraft.getInstance().setScreen(new ConfirmScreen(ok -> {
-            if (ok) discard.run(); else owner.open();
-        }, text("unsaved"), text("generic.discard")));
+    private static void confirmDiscard(Runnable discard) {
+        RecipeEditor.confirm(text("unsaved"), text("generic.discard"), text("discard"), discard);
     }
 
     private static int left(UiScreen owner) { return Math.max(12, (owner.width - 540) / 2); }

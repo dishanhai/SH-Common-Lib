@@ -11,6 +11,7 @@ public record RecipeDocument(String id, RecipeType type, List<String> inputs, St
                              float experience, int cookingTime, String group, String rawJson,
                              RecipeTarget customTarget, List<FumoRewardDefinition.Entry> rewards) {
     private static final List<String> EMPTY_INPUTS = Collections.nCopies(9, "");
+    private static final String DEFAULT_ID = "example:recipe";
 
     public RecipeDocument(String id, RecipeType type, List<String> inputs, String result, int count,
                           float experience, int cookingTime, String group, String rawJson) {
@@ -46,8 +47,22 @@ public record RecipeDocument(String id, RecipeType type, List<String> inputs, St
         return new RecipeDocument(id, type, inputs, result, count, experience, cookingTime, group, rawJson, selected, rewards);
     }
 
+    /** Updates the single output and may use its ID to fill an empty or placeholder recipe ID. */
+    public RecipeDocument withEditedResult(String result, int count, boolean inferId) {
+        boolean hasSingleOutput = switch (type) {
+            case SMITHING_TRIM, CUSTOM, GTCEU, FUMO_REWARDS -> false;
+            default -> true;
+        };
+        String recipeId = id;
+        if (inferId && hasSingleOutput && (id.isBlank() || id.equals(DEFAULT_ID))
+                && RecipeGenerator.validId(result) && !result.equals("minecraft:air")) {
+            recipeId = result;
+        }
+        return new RecipeDocument(recipeId, type, inputs, result, count, experience, cookingTime, group, rawJson, customTarget, rewards);
+    }
+
     public static RecipeDocument empty() {
-        return new RecipeDocument("example:recipe", RecipeType.SHAPED,
+        return new RecipeDocument(DEFAULT_ID, RecipeType.SHAPED,
                 EMPTY_INPUTS, "", 1, 0, 200, "", "");
     }
 

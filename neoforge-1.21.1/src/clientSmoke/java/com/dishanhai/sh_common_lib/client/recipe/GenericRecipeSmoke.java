@@ -24,14 +24,21 @@ final class GenericRecipeSmoke {
                 client.keyboardHandler.setClipboard("""
                         {"type":"example:press","ingredients":[{"tag":"c:ingots/iron","count":2}],
                          "result":{"item":"example:iron_plate","count":1},"duration":80,
-                         "energy_per_tick":32,"meta":{"values":[null,42]}}
+                         "energy_per_tick":32,"meta":{"values":[null,42]},
+                         "extra_1":1,"extra_2":2,"extra_3":3,"extra_4":4,"extra_5":5,
+                         "extra_6":6,"extra_7":7,"extra_8":8,"extra_9":9}
                         """);
                 click(current, button(current, "actions"));
             }
-            case 1 -> click(current, button(current, "import"));
+            case 1 -> chooseOverlay(current, 2);
             case 2 -> click(current, button(current, "generic_edit"));
             case 3 -> {
                 capture(output, "generic-fields");
+                var field = fields(current).getFirst();
+                require(scroll(current, field.getX() + 4, field.getY() + 4, -1), "Generic field list did not scroll");
+                require(fields(current).stream().noneMatch(candidate -> candidate.getValue().equals("example:press")),
+                        "Generic field list still showed its first row");
+                require(scroll(current, field.getX() + 4, field.getY() + 4, 1), "Generic field list could not scroll back");
                 openContainer(current, "meta");
             }
             case 4 -> openContainer(current, "values");
@@ -59,6 +66,11 @@ final class GenericRecipeSmoke {
                 rail.keyPressed(GLFW.GLFW_KEY_ENTER, 0, 0);
             }
             case 9 -> {
+                var bar = current.children().stream()
+                        .filter(com.dishanhai.sh_better_ui.client.gui.scaled.UiVerticalScrollBar.class::isInstance)
+                        .map(com.dishanhai.sh_better_ui.client.gui.scaled.UiVerticalScrollBar.class::cast)
+                        .filter(widget -> widget.visible).findFirst().orElseThrow();
+                require(scroll(current, bar.getX() + 2, bar.getY() + 2, -1), "Code preview did not scroll");
                 click(current, button(current, "copy"));
                 var result = JsonParser.parseString(client.keyboardHandler.getClipboard()).getAsJsonObject();
                 var values = result.getAsJsonObject("meta").getAsJsonArray("values");

@@ -68,7 +68,7 @@ public final class RecipeEditorLayout {
         public int rowY(int index) { return top + index * 24; }
     }
 
-    /** Keeps a full reward row and its paging controls visible below the type selector. */
+    /** Keeps a full reward row and the add action visible below the type selector. */
     public static RewardList rewards(Rect pane) {
         int top = pane.y() + 26;
         int footer = pane.bottom() - 20;

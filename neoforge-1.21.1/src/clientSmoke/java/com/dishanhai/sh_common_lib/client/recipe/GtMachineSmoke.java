@@ -6,10 +6,7 @@ import com.dishanhai.sh_better_ui.client.gui.scaled.UiButton;
 import com.dishanhai.sh_better_ui.client.gui.scaled.UiTextField;
 import com.dishanhai.sh_common_lib.api.ulk.recipe.GtMachineRecipe;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.components.Button;
-import net.minecraft.client.gui.screens.ConfirmScreen;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.network.chat.CommonComponents;
 import net.minecraft.network.chat.Component;
 import org.lwjgl.glfw.GLFW;
 
@@ -45,8 +42,14 @@ final class GtMachineSmoke {
                 type(machine.get(2), "-128");
                 add(client, false, false, "#minecraft:logs", "2");
                 add(client, false, true, "minecraft:water", "500");
+                add(client, false, false, "minecraft:redstone", "3");
                 add(client, true, true, "minecraft:lava", "250");
                 add(client, true, false, "minecraft:diamond", "3");
+                var left = fields(client.screen).stream().filter(field -> field.getValue().equals("minecraft:redstone")).findFirst().orElseThrow();
+                require(scroll(client.screen, left.getX() + 5, left.getY() + 5, 1), "GT input panel did not scroll");
+                require(fields(client.screen).stream().anyMatch(field -> field.getValue().equals("#minecraft:logs"))
+                        && fields(client.screen).stream().anyMatch(field -> field.getValue().equals("minecraft:diamond")),
+                        "Scrolling the input panel changed the output panel");
                 assertBounds(client.screen);
                 client.screen.setFocused(null);
             }
@@ -77,7 +80,8 @@ final class GtMachineSmoke {
                 var recipe = GtMachineRecipe.parse(client.keyboardHandler.getClipboard());
                 require(recipe.machine().equals("gtceu:mixer") && recipe.duration() == 360 && recipe.eut() == -128,
                         "Copied machine parameters differ from the applied values");
-                require(recipe.itemInputs().equals(List.of(new GtMachineRecipe.Entry("#minecraft:logs", 2)))
+                require(recipe.itemInputs().equals(List.of(new GtMachineRecipe.Entry("#minecraft:logs", 2),
+                                new GtMachineRecipe.Entry("minecraft:redstone", 3)))
                                 && recipe.itemOutputs().equals(List.of(new GtMachineRecipe.Entry("minecraft:diamond", 3)))
                                 && recipe.fluidInputs().equals(List.of(new GtMachineRecipe.Entry("minecraft:water", 500)))
                                 && recipe.fluidOutputs().equals(List.of(new GtMachineRecipe.Entry("minecraft:lava", 250))),
@@ -120,10 +124,6 @@ final class GtMachineSmoke {
     }
 
     private static void confirm(Screen screen) {
-        require(screen instanceof ConfirmScreen, "Expected a confirmation dialog");
-        var yes = screen.children().stream().filter(Button.class::isInstance).map(Button.class::cast)
-                .filter(control -> control.getMessage().getString().equals(CommonComponents.GUI_YES.getString()))
-                .findFirst().orElseThrow();
-        click(screen, yes);
+        clickChoice(screen, true);
     }
 }

@@ -939,7 +939,7 @@
   "screen.sh_common_lib.recipe_editor.export": "导出文件",
   "screen.sh_common_lib.recipe_editor.previous": "上一页",
   "screen.sh_common_lib.recipe_editor.next": "下一页",
-  "screen.sh_common_lib.recipe_editor.code_page": "代码预览 %s / %s",
+  "screen.sh_common_lib.recipe_editor.code_range": "第 %s–%s 行，共 %s 行",
   "screen.sh_common_lib.recipe_editor.copied": "已复制全部生成内容。",
   "screen.sh_common_lib.recipe_editor.issue": "%s：%s",
   "screen.sh_common_lib.recipe_editor.failed": "操作失败：%s",

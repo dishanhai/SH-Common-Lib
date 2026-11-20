@@ -3,6 +3,7 @@ package com.dishanhai.sh_common_lib.client.recipe;
 
 import com.dishanhai.sh_common_lib.api.ulk.fumo.FumoRewardDefinition;
 import com.dishanhai.sh_common_lib.api.ulk.recipe.RecipeExportSettings;
+import com.dishanhai.sh_common_lib.api.ulk.recipe.RecipeDocument;
 import com.dishanhai.sh_common_lib.api.ulk.recipe.RecipeWorkspace;
 import com.dishanhai.sh_better_ui.client.gui.scaled.UiButton;
 import com.dishanhai.sh_better_ui.client.gui.scaled.UiIngredientSlots;
@@ -35,6 +36,8 @@ public final class RecipeEditorSmoke {
     private static long deadline, next;
     private static boolean finished;
     private static Screen canvas;
+    private static Object itemCatalog, itemSearchIndex;
+    private static String expectedResultId;
     private static String expectedId;
     private static final StringBuilder viewports = new StringBuilder();
 
@@ -70,7 +73,19 @@ public final class RecipeEditorSmoke {
             } else if (step == 2) {
                 require(slots(client.screen).size() == 2, "Slot did not open resource grid and selection preview");
                 require(!fields(client.screen).isEmpty(), "Resource search field is missing");
+                assertBounds(client.screen);
+                itemCatalog = fieldValue(com.dishanhai.sh_better_ui.client.gui.scaled.UiResourcePicker.class, "cachedItems", null);
+                var grid = slots(client.screen).getFirst();
+                var first = stack(grid, 0);
+                var nextRow = stack(grid, (grid.getWidth() + 2) / 20);
+                require(scroll(client.screen, grid.getX() + 5, grid.getY() + 5, -1), "Picker did not handle the wheel");
+                require(net.minecraft.world.item.ItemStack.isSameItemSameComponents(nextRow, stack(grid, 0)), "Wheel did not advance by one row");
+                require(scroll(client.screen, grid.getX() + 5, grid.getY() + 5, 1), "Picker did not scroll back");
+                require(net.minecraft.world.item.ItemStack.isSameItemSameComponents(first, stack(grid, 0)), "Reverse scrolling did not restore the grid");
+                verifyPickerScrollEnd(client.screen, grid);
                 type(fields(client.screen).get(0), "minecraft:stone");
+                itemSearchIndex = fieldValue(itemCatalog.getClass(), "searchIndex", itemCatalog);
+                require(itemSearchIndex != null, "Search did not build the item index");
             } else if (step == 3) {
                 var picker = client.screen;
                 click(picker, slots(picker).get(0));
@@ -91,6 +106,10 @@ public final class RecipeEditorSmoke {
                 capture(output, "selected-" + scale);
                 click(client.screen, slots(client.screen).get(1));
             } else if (step == 6) {
+                require(itemCatalog == fieldValue(com.dishanhai.sh_better_ui.client.gui.scaled.UiResourcePicker.class, "cachedItems", null),
+                        "Opening another slot rebuilt the item catalog");
+                require(itemSearchIndex == fieldValue(itemCatalog.getClass(), "searchIndex", itemCatalog),
+                        "Opening another slot rebuilt the search index");
                 type(fields(client.screen).get(0), "minecraft:stone");
                 click(client.screen, slots(client.screen).get(0));
                 type(fields(client.screen).get(1), "0");
@@ -99,6 +118,8 @@ public final class RecipeEditorSmoke {
                 click(client.screen, pickerButton(client.screen, "confirm"));
             } else if (step == 7) {
                 require(stack(slots(client.screen).get(1), 0).getCount() == 64, "Output quantity did not apply");
+                expectedResultId = net.minecraft.core.registries.BuiltInRegistries.ITEM
+                        .getKey(stack(slots(client.screen).get(1), 0).getItem()).toString();
                 capture(output, "workspace-" + scale);
                 click(client.screen, slots(client.screen).get(1));
             } else if (step == 8) {
@@ -121,14 +142,23 @@ public final class RecipeEditorSmoke {
                 clickAt(client.screen, rail.getX() + rail.getWidth() / 2.0, rail.getY() + rail.getHeight() / 2.0);
             } else if (step == 13) {
                 require(fields(client.screen).size() >= 3, "Properties fields did not initialize");
+                require(fields(client.screen).getFirst().getValue().equals(expectedResultId), "Recipe ID did not use the selected output ID");
                 assertBounds(client.screen);
                 capture(output, "properties-" + scale);
                 click(client.screen, button(client.screen, "actions"));
             } else if (step == 14) {
                 assertBounds(client.screen);
-                require(button(client.screen, "fill_sequence").active, "Sequence action missing from actions page");
+                require(overlay(client.screen).isModalOpen(), "Actions did not open as an overlay");
                 capture(output, "actions-" + scale);
-                click(client.screen, button(client.screen, "back"));
+                pressOverlay(client.screen, GLFW.GLFW_KEY_ESCAPE);
+                var editor = client.screen;
+                editor.onClose();
+                require(client.screen == editor && overlay(editor).isModalOpen(), "Unsaved prompt replaced the editor");
+                pressOverlay(editor, GLFW.GLFW_KEY_ENTER);
+                require(client.screen == editor, "Continue editing closed the recipe");
+                verifySequenceDrag(editor);
+                verifyManualResultId(client.screen);
+                if (scale == 4) verifyDraftScroll(client.screen, output);
                 if (scale != 5) {
                     scale = scale == 4 ? 3 : scale == 3 ? 1 : 5;
                     setScale(client);
@@ -143,7 +173,7 @@ public final class RecipeEditorSmoke {
                 RecipeEditor.open(client.screen, () -> null, RecipeTarget.NEOFORGE_1_21_1);
             } else if (step >= 17 && fumo(client, output, step - 17)) {
                 Files.writeString(Path.of(output, "success.txt"), viewports
-                        + "Native picker, workspace navigation, generic field editing and Forge GTCEu authoring passed; Fumo item selection, weight validation and editing,"
+                        + "Native picker cache reuse, row scrolling, sequence drag and cancel, output ID, workspace navigation, generic field editing and Forge GTCEu authoring passed; Fumo item selection, weight validation and editing,"
                         + " removal, undo, default and custom JSON export, and overwrite confirmation passed.\n");
                 finished = true;
                 client.stop();
@@ -274,12 +304,131 @@ public final class RecipeEditorSmoke {
         return false;
     }
 
-    private static void clickChoice(Screen screen, boolean yes) {
-        require(screen instanceof net.minecraft.client.gui.screens.ConfirmScreen, "Expected confirmation screen");
-        String label = Component.translatable(yes ? "gui.yes" : "gui.no").getString();
-        var choice = screen.children().stream().filter(AbstractWidget.class::isInstance).map(AbstractWidget.class::cast)
-                .filter(widget -> widget.getMessage().getString().equals(label)).findFirst().orElseThrow();
-        click(screen, choice);
+    static void clickChoice(Screen screen, boolean yes) {
+        chooseOverlay(screen, yes ? 1 : 0);
+    }
+
+    static void chooseOverlay(Screen screen, int tabs) {
+        require(overlay(screen).isModalOpen(), "Expected a confirmation overlay");
+        for (int i = 0; i < tabs; i++) pressOverlay(screen, GLFW.GLFW_KEY_TAB);
+        pressOverlay(screen, GLFW.GLFW_KEY_ENTER);
+    }
+
+    private static com.dishanhai.sh_better_ui.client.gui.scaled.UiOverlayHost overlay(Screen screen) {
+        var layer = com.dishanhai.sh_better_ui.client.gui.scaled.UiOverlayHost.current(screen);
+        require(layer != null, "Expected a workbench overlay");
+        return layer;
+    }
+
+    private static void pressOverlay(Screen screen, int key) {
+        var layer = overlay(screen);
+        require(layer.keyPressed(key, 0, 0), "Overlay did not capture the key");
+        layer.keyReleased(key, 0, 0);
+    }
+
+    private static Object fieldValue(Class<?> type, String name, Object owner) throws ReflectiveOperationException {
+        var field = type.getDeclaredField(name);
+        field.setAccessible(true);
+        return field.get(owner);
+    }
+
+    private static void verifySequenceDrag(Screen editor) throws Exception {
+        click(editor, button(editor, "actions"));
+        chooseOverlay(editor, 3);
+        var picker = Minecraft.getInstance().screen;
+        require(picker != editor && slots(picker).size() == 2, "Sequence action did not open the resource picker");
+        var grid = slots(picker).getFirst();
+        var preview = slots(picker).get(1);
+        for (int i = 0; i < 3; i++) clickAt(picker, grid.getX() + 5 + i * 20, grid.getY() + 5);
+        var first = stack(preview, 0).getItem();
+        var second = stack(preview, 1).getItem();
+        var third = stack(preview, 2).getItem();
+        double x = preview.getX() + 5, y = preview.getY() + 5;
+        drag(picker, x, y, x + 20, y, true);
+        require(Minecraft.getInstance().screen == picker && stack(preview, 0).getItem() == first,
+                "Escape during drag discarded or reordered the selection");
+        drag(picker, x, y, x + 20, y, false);
+        require(stack(preview, 0).getItem() == second && stack(preview, 1).getItem() == first, "Drag did not reorder the preview");
+        drag(picker, x, y, x, y + 20, false);
+        require(stack(preview, 0).getItem() == first && stack(preview, 1).getItem() == third
+                && stack(preview, 2).getItem() == second && stack(preview, 3).isEmpty(), "Dropping on an empty cell did not move to the end");
+        click(picker, pickerButton(picker, "confirm"));
+        var updated = workspaceView(Minecraft.getInstance().screen, GLFW.GLFW_KEY_HOME);
+        var ingredients = slots(updated).getFirst();
+        require(stack(ingredients, 0).getItem() == first && stack(ingredients, 1).getItem() == third
+                && stack(ingredients, 2).getItem() == second, "Confirmed recipe lost the dragged order");
+    }
+
+    private static void verifyManualResultId(Screen screen) {
+        var properties = workspaceView(screen, GLFW.GLFW_KEY_HOME, GLFW.GLFW_KEY_RIGHT, GLFW.GLFW_KEY_DOWN);
+        type(fields(properties).getFirst(), "");
+        var canvas = workspaceView(properties, GLFW.GLFW_KEY_HOME);
+        click(canvas, slots(canvas).get(1));
+        var picker = Minecraft.getInstance().screen;
+        click(picker, pickerButton(picker, "manual"));
+        var form = Minecraft.getInstance().screen;
+        type(fields(form).getFirst(), "minecraft:diamond");
+        click(form, button(form, "apply"));
+        var edited = workspaceView(Minecraft.getInstance().screen, GLFW.GLFW_KEY_HOME, GLFW.GLFW_KEY_RIGHT, GLFW.GLFW_KEY_DOWN);
+        require(fields(edited).getFirst().getValue().equals("minecraft:diamond"), "Manual output did not fill the blank recipe ID");
+    }
+
+    private static void verifyPickerScrollEnd(Screen screen, UiIngredientSlots grid) throws Exception {
+        var bar = screen.children().stream().filter(com.dishanhai.sh_better_ui.client.gui.scaled.UiVerticalScrollBar.class::isInstance)
+                .map(com.dishanhai.sh_better_ui.client.gui.scaled.UiVerticalScrollBar.class::cast)
+                .filter(widget -> widget.visible && widget.getX() > grid.getX() && widget.getY() == grid.getY())
+                .findFirst().orElseThrow();
+        screen.setFocused(bar);
+        require(bar.keyPressed(GLFW.GLFW_KEY_END, 0, 0), "Scrollbar did not accept End");
+        var last = stack(grid, 0);
+        scroll(screen, grid.getX() + 5, grid.getY() + 5, -1);
+        require(net.minecraft.world.item.ItemStack.isSameItemSameComponents(last, stack(grid, 0)), "Grid wrapped at the end");
+        require(bar.keyPressed(GLFW.GLFW_KEY_HOME, 0, 0), "Scrollbar did not accept Home");
+    }
+
+    private static void verifyDraftScroll(Screen screen, String output) throws Exception {
+        var workspace = new RecipeWorkspace(Path.of(output, RecipeWorkspace.DEFAULT_DIRECTORY));
+        var draft = RecipeDocument.empty();
+        for (int i = 0; i < 9; i++) {
+            workspace.save(new RecipeDocument("recipe_smoke:scroll/" + i, draft.type(), draft.inputs(), "",
+                    1, 0, 200, "", ""), true);
+        }
+        click(screen, button(screen, "drafts"));
+        var dialog = Minecraft.getInstance().screen;
+        var row = draftRow(dialog, "recipe_smoke:scroll/0");
+        require(row != null && scroll(dialog, row.getX() + 5, row.getY() + 5, -1), "Draft list did not scroll");
+        require(draftRow(dialog, "recipe_smoke:scroll/0") == null && draftRow(dialog, "recipe_smoke:scroll/1") != null,
+                "Draft list did not shift by one row");
+        click(dialog, button(dialog, "back"));
+        require(Minecraft.getInstance().screen == screen, "Draft dialog did not return to its editor");
+    }
+
+    private static UiButton draftRow(Screen screen, String id) {
+        return screen.children().stream().filter(UiButton.class::isInstance).map(UiButton.class::cast)
+                .filter(row -> row.getMessage().getString().equals(id)).findFirst().orElse(null);
+    }
+
+    private static Screen workspaceView(Screen screen, int edge, int... directions) {
+        var rail = screen.children().stream().filter(UiNavigationRail.class::isInstance)
+                .map(UiNavigationRail.class::cast).findFirst().orElseThrow();
+        screen.setFocused(rail);
+        require(rail.keyPressed(edge, 0, 0), "Could not focus the workspace view");
+        for (int direction : directions) if (rail.keyPressed(direction, 0, 0)) break;
+        require(rail.keyPressed(GLFW.GLFW_KEY_ENTER, 0, 0), "Could not open the workspace view");
+        return Minecraft.getInstance().screen;
+    }
+
+    private static void drag(Screen screen, double x, double y, double toX, double toY, boolean cancel) {
+        var press = new ScreenEvent.MouseButtonPressed.Pre(screen, x, y, 0);
+        NeoForge.EVENT_BUS.post(press);
+        if (!press.isCanceled()) screen.mouseClicked(x, y, 0);
+        var movement = new ScreenEvent.MouseDragged.Pre(screen, toX, toY, 0, toX - x, toY - y);
+        NeoForge.EVENT_BUS.post(movement);
+        if (!movement.isCanceled()) screen.mouseDragged(toX, toY, 0, toX - x, toY - y);
+        if (cancel) screen.keyPressed(GLFW.GLFW_KEY_ESCAPE, 0, 0);
+        var release = new ScreenEvent.MouseButtonReleased.Pre(screen, toX, toY, 0);
+        NeoForge.EVENT_BUS.post(release);
+        if (!release.isCanceled()) screen.mouseReleased(toX, toY, 0);
     }
 
     private static boolean isFumoRow(Object child) {
@@ -327,6 +476,9 @@ public final class RecipeEditorSmoke {
         var release = new ScreenEvent.MouseButtonReleased.Pre(screen, x, y, 0);
         NeoForge.EVENT_BUS.post(release);
         if (!release.isCanceled()) screen.mouseReleased(x, y, 0);
+    }
+    static boolean scroll(Screen screen, double x, double y, double vertical) {
+        return screen.mouseScrolled(x, y, 0, vertical);
     }
     private static UiButton pickerButton(Screen screen, String key) {
         String label = Component.translatable("sh_better_ui.resource_picker." + key).getString();
