@@ -1,0 +1,90 @@
+name: Build SH-Common-Lib
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: ${{ matrix.target }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: forge-1.20.1
+            java: '21'
+            wrapper: forge-1.20.1
+            ui-project: SH-Better-UI
+            ui-task: devJar
+          - target: neoforge-1.21.1
+            java: '21'
+            wrapper: neoforge-1.21.1
+            ui-project: SH-Better-UI/neoforge-1.21.1
+            ui-task: verifyLibraryJar
+          - target: neoforge-26.1.2
+            java: '25'
+            wrapper: neoforge-1.21.1
+            ui-project: SH-Better-UI/neoforge-26.1.2
+            ui-task: verifyLibraryJar
+    steps:
+      - name: Check out SH-Common-Lib
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          path: SH-Common-Lib
+          persist-credentials: false
+
+      - name: Check out compatible SH-Better-UI
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          repository: dishanhai/SH-Better-UI
+          ref: d91e3bd8feb67b2ca9be96ec3446193779ccaaee
+          path: SH-Better-UI
+          persist-credentials: false
+
+      - name: Set up Java
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: ${{ matrix.java }}
+          cache: gradle
+
+      - name: Fetch verified Forge build dependencies
+        if: matrix.target == 'forge-1.20.1'
+        working-directory: SH-Better-UI
+        run: |
+          mkdir -p libs
+          cd libs
+          curl --fail --location --retry 3 --max-time 120 -o kotlinforforge-4.12.0-all.jar https://cdn.modrinth.com/data/ordsPcFz/versions/Zsh14XeQ/kotlinforforge-4.12.0-all.jar
+          curl --fail --location --retry 3 --max-time 120 -o ldlib-forge-1.20.1-1.0.33.b.jar https://cdn.modrinth.com/data/B1CBVXHX/versions/FX8CaaJ8/ldlib-forge-1.20.1-1.0.33.b.jar
+          sha512sum --check <<'CHECKSUMS'
+          767f40030ed4b370a3838fa65ae1b79974f31979342fff7cc834a0d5f39eb28612642519352ff2a1dd5226ce1f745f8b3156ee3625ffde01219137d064c1ee40  kotlinforforge-4.12.0-all.jar
+          dc35720db23003c41d5df7c8365c5a2962e952b45da1349f3e3896864aa1b9c6b5871eb8d2e662583c5297ee1539c914f6530e845e9a015f6eaf97c67e4dd602  ldlib-forge-1.20.1-1.0.33.b.jar
+          CHECKSUMS
+
+      - name: Build SH-Better-UI dependency
+        run: bash "SH-Common-Lib/${{ matrix.wrapper }}/gradlew" -p "${{ matrix.ui-project }}" --no-daemon --console=plain ${{ matrix.ui-task }}
+
+      - name: Build and test SH-Common-Lib
+        run: bash "SH-Common-Lib/${{ matrix.wrapper }}/gradlew" -p "SH-Common-Lib/${{ matrix.target }}" --no-daemon --console=plain build
+
+      - name: Upload mod JAR
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: sh-common-lib-${{ matrix.target }}
+          path: |
+            SH-Common-Lib/${{ matrix.target }}/build/libs/sh-common-lib-${{ matrix.target }}-*.jar
+            !SH-Common-Lib/${{ matrix.target }}/build/libs/*-sources.jar
+          if-no-files-found: error
+          retention-days: 14
