@@ -30,16 +30,12 @@ import net.minecraft.world.phys.shapes.VoxelShape;
 
 public final class TrashCanBlock extends Block implements EntityBlock {
     private static final EnumProperty<Direction> FACING = BlockStateProperties.HORIZONTAL_FACING;
-    private static final VoxelShape SOUTH_SHAPE = Shapes.or(
-            box(2, 0, 5.75, 14, 12.25, 10.25),
-            box(2.75, 0, 4, 13.25, 12.25, 12),
-            box(4, 0, 2.75, 12, 12.25, 13.25),
-            box(5.75, 0, 2, 10.25, 12.25, 14),
-            box(3.4, 12.25, 4.5, 12.6, 15.9, 12.5),
-            box(5.68, 0, 12.5, 10.32, 2.4, 15.15));
-    private static final VoxelShape WEST_SHAPE = rotateShapeClockwise(SOUTH_SHAPE);
-    private static final VoxelShape NORTH_SHAPE = rotateShapeClockwise(WEST_SHAPE);
-    private static final VoxelShape EAST_SHAPE = rotateShapeClockwise(NORTH_SHAPE);
+    private static final VoxelShape NORTH_SOUTH_SHAPE = Shapes.or(
+            box(4.75, 0, 5, 11.25, 8, 11),
+            box(4.35, 8, 4.6, 11.65, 8.7, 11.4));
+    private static final VoxelShape EAST_WEST_SHAPE = Shapes.or(
+            box(5, 0, 4.75, 11, 8, 11.25),
+            box(4.6, 8, 4.35, 11.4, 8.7, 11.65));
 
     private final Supplier<? extends BlockEntityType<?>> entityType;
 
@@ -55,21 +51,7 @@ public final class TrashCanBlock extends Block implements EntityBlock {
 
     @Override
     public VoxelShape getShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {
-        return switch (state.getValue(FACING)) {
-            case WEST -> WEST_SHAPE;
-            case NORTH -> NORTH_SHAPE;
-            case EAST -> EAST_SHAPE;
-            default -> SOUTH_SHAPE;
-        };
-    }
-
-    private static VoxelShape rotateShapeClockwise(VoxelShape shape) {
-        VoxelShape rotated = Shapes.empty();
-        for (var bounds : shape.toAabbs()) {
-            rotated = Shapes.or(rotated, Shapes.box(1 - bounds.maxZ, bounds.minY, bounds.minX,
-                    1 - bounds.minZ, bounds.maxY, bounds.maxX));
-        }
-        return rotated;
+        return state.getValue(FACING).getAxis() == Direction.Axis.X ? EAST_WEST_SHAPE : NORTH_SOUTH_SHAPE;
     }
 
     @Override
