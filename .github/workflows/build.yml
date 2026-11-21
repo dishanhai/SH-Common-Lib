@@ -1,11 +1,12 @@
-name: Build SH-Common-Lib
+name: Build SH-Common-Lib (Push)
 
 on:
   push:
-    branches: [main]
+    branches: ['**']
+  # A fork's push is not a push to this repository.
   pull_request:
     branches: [main]
-  workflow_dispatch:
+  workflow_call:
 
 permissions:
   contents: read
@@ -16,6 +17,8 @@ concurrency:
 
 jobs:
   build:
+    # Same-repository PR commits already build on push. Keep CI for forks.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository
     name: ${{ matrix.target }}
     runs-on: ubuntu-latest
     timeout-minutes: 50
