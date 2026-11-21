@@ -46,6 +46,15 @@ Windows 命令提示符可用 `gradlew.bat build`。成品在对应目录的 `bu
 
 Windows 下可在项目根目录运行 `build-all.bat` 构建三个版本。将 `JAVA_HOME` 设为 Java 21，如果 Gradle 无法自动发现 Java 25，则用 `JAVA25_HOME` 指定其安装目录。脚本会把通用参数传给三个构建。单独指定 SH-Better-UI 版本或 JAR 时，请调用对应版本的 Gradle 构建命令。
 
+### GitHub Actions
+
+- **Build SH-Common-Lib (Manual)**：在 [Actions](https://github.com/dishanhai/SH-Common-Lib/actions) 选择工作流，点击 **Run workflow** 后选择分支。不需要创建 PR。工作流须先进入默认分支，旧分支须同步默认分支上的 CI 配置再运行。
+- **Build SH-Common-Lib (Push)**：推送提交到本仓库任意分支时自动构建；本地提交或推送标签不会触发。Fork 提交到 `main` 的 PR 仍会检查，同仓库 PR 不重复构建。
+
+构建并测试 Forge 1.20.1、NeoForge 1.21.1 和 NeoForge 26.1.2。工作流会先从固定的 SH-Better-UI 提交构建匹配的依赖；升级 SH-Better-UI 基线时，同时更新工作流内的提交引用。
+
+每个成功的任务在 **Artifacts** 提供对应平台的模组 JAR，保留 14 天，不自动发布 Release。SH-Better-UI 和其他依赖不会一起打包。
+
 ## Unified LIB Kernel（ULK）
 
 其他模组可以通过 [ULK Fumo API](docs/FUMO_API.md) 注册坐姿玩偶，并复用 64×64 皮肤模板、舞动及空间音效。
