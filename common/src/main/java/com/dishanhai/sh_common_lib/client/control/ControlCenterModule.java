@@ -1,10 +1,13 @@
 // Author: dishanhai
 package com.dishanhai.sh_common_lib.client.control;
 
+import com.dishanhai.sh_better_ui.client.api.ShBetterUiApi;
+import com.dishanhai.sh_better_ui.client.api.UiExtensionRegistry;
 import com.dishanhai.sh_better_ui.client.api.UiScreenBuilder;
 import com.dishanhai.sh_better_ui.client.gui.display.GraphicIcon;
 import com.dishanhai.sh_better_ui.kernel.api.ModuleContext;
 import com.dishanhai.sh_better_ui.kernel.api.ServiceDescriptor;
+import com.dishanhai.sh_common_lib.api.ulk.settings.AssistantSettingsProvider;
 import com.dishanhai.sh_common_lib.api.client.ulk.UnifiedLibUiService;
 import com.dishanhai.sh_common_lib.api.ulk.UnifiedLibKernel;
 import com.dishanhai.sh_better_ui.kernel.api.ModuleDescriptor;
@@ -59,6 +62,7 @@ public final class ControlCenterModule implements UIModule {
 
     private ModuleContext module;
     private ScreenService screens;
+    private UiExtensionRegistry.Registration assistantSettings;
 
     @Override
     public ModuleDescriptor descriptor() {
@@ -82,12 +86,16 @@ public final class ControlCenterModule implements UIModule {
             if (playerInfoHud != null) playerInfoHud.render(frame);
         });
         AnnouncementAppearance.start(context);
+        assistantSettings = ShBetterUiApi.extensions().register("sh_common_lib:assistant_settings",
+                Supplier.class, ignored -> new AssistantSettingsProvider());
         module = context;
         active = this;
     }
 
     @Override
     public void stop(ModuleContext context) {
+        if (assistantSettings != null) assistantSettings.close();
+        assistantSettings = null;
         AnnouncementAppearance.stop(context);
         if (active == this) active = null;
         module = null;

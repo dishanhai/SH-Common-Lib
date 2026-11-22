@@ -1,4 +1,12 @@
 {
+  "sh_common_lib.assistant.setting.loading_animation": "Loading animation",
+  "sh_common_lib.assistant.setting.loading_animation.description": "Show the SHCLIB loading animation when entering a world.",
+  "sh_common_lib.assistant.setting.jei_enabled": "JEI search enhancement",
+  "sh_common_lib.assistant.setting.jei_enabled.description": "Enable the JEI search enhancement features.",
+  "sh_common_lib.assistant.setting.jei_ae2_orderable": "AE2 orderable badge",
+  "sh_common_lib.assistant.setting.jei_ae2_orderable.description": "Show an orderable badge on eligible AE2 entries in JEI.",
+  "sh_common_lib.assistant.setting.jei_render_optimization": "JEI material rendering optimization",
+  "sh_common_lib.assistant.setting.jei_render_optimization.description": "Enable the optional JEI material rendering optimization.",
   "block.sh_common_lib.dishanhai_fumo": "dishanhai",
   "block.sh_common_lib.beibeipuo_fumo": "BeiBeiPuo",
   "subtitles.sh_common_lib.beibeipuo_fumo": "BeiBeiPuo plays music",

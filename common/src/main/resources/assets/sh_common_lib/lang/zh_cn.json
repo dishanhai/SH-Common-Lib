@@ -1,4 +1,12 @@
 {
+  "sh_common_lib.assistant.setting.loading_animation": "加载动画",
+  "sh_common_lib.assistant.setting.loading_animation.description": "进入世界时显示 SHCLIB 加载动画。",
+  "sh_common_lib.assistant.setting.jei_enabled": "JEI 搜索增强",
+  "sh_common_lib.assistant.setting.jei_enabled.description": "启用 JEI 搜索增强功能。",
+  "sh_common_lib.assistant.setting.jei_ae2_orderable": "AE2 可下单角标",
+  "sh_common_lib.assistant.setting.jei_ae2_orderable.description": "在 JEI 中符合条件的 AE2 物品上显示可下单角标。",
+  "sh_common_lib.assistant.setting.jei_render_optimization": "JEI 素材渲染优化",
+  "sh_common_lib.assistant.setting.jei_render_optimization.description": "启用可选的 JEI 素材渲染优化。",
   "block.sh_common_lib.dishanhai_fumo": "dishanhai",
   "block.sh_common_lib.beibeipuo_fumo": "BeiBeiPuo",
   "subtitles.sh_common_lib.beibeipuo_fumo": "BeiBeiPuo 播放音乐",
