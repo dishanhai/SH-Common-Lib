@@ -11,6 +11,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
@@ -21,6 +22,15 @@ public record OfflineSpeechRecognition(Path executable, Path model) {
     private static final int MIN_VOICED_FRAMES = 5;
     private static final long CAPTURE_NANOS = TimeUnit.SECONDS.toNanos(5);
     private static final long END_SILENCE_NANOS = TimeUnit.MILLISECONDS.toNanos(800);
+
+    public static OfflineSpeechRecognition forWhisperDirectory(Path directory) {
+        return new OfflineSpeechRecognition(directory.resolve(isWindows() ? "whisper-cli.exe" : "whisper-cli"),
+                directory.resolve("ggml-base.bin"));
+    }
+
+    static boolean isWindows() {
+        return System.getProperty("os.name", "").toLowerCase(Locale.ROOT).startsWith("windows");
+    }
 
     public boolean installed() {
         return Files.isRegularFile(executable) && Files.isExecutable(executable) && Files.isRegularFile(model);
