@@ -23,7 +23,7 @@
 | 平台 | SH-Better-UI | KotlinForForge |
 | --- | --- | --- |
 | Forge 1.20.1 | 1.0.12 或兼容的更高 1.x 版本 | 4.12.0～4.x |
-| NeoForge 1.21.1 | 1.0.11 或兼容的更高 1.x 版本 | 5.10.0～5.x |
+| NeoForge 1.21.1 | 1.0.13 或兼容的更高 1.x 版本 | 5.10.0～5.x |
 | NeoForge 26.1.2 | 1.0.12-alpha.8 或兼容的更高版本（Minecraft 26.1.2） | 6.2.0 |
 
 构建默认从同级 `SH-Better-UI` 的对应 `build/libs/` 目录选择本平台最新的本地 JAR。版本按数字排序，支持正式版以及 `alpha`、`beta`、`rc` 预发行版，且须在上表所列最低版本至 2.0.0 之前。Forge 选择开发包，可在 SH-Better-UI 根目录运行 `gradlew.bat devJar` 生成。NeoForge 选择对应 Minecraft 版本的成品包。`-PshBetterUiJar=<路径>` 优先使用指定的 JAR。Forge 开发运行时的 KotlinForForge 默认来自 SH-Better-UI 的 `libs/`，可用 `-PkotlinForForgeJar=<路径>` 指定。游戏内安装各平台的正式 JAR。

@@ -130,6 +130,8 @@
 
 - NeoForge 目录从 `neoforge` 改名为 `neoforge-1.21.1` 后，除批处理构建入口外，还要同步 26.1.2 的共享源码和资源路径，以及 1.21.1 使用的同级 SHBUI JAR 路径；分别无额外路径参数重跑两端构建。
 
+- SHCLIB 提高 SHBUI 依赖下限时，核对对应加载器的上游版本配置和 CI 固定提交。SHBUI 的 NeoForge 1.21.1 版本由该模块的 `gradle.properties` 单独定义。配置对齐后重建 JAR，核对文件名和 `META-INF/neoforge.mods.toml` 中的版本，再从 `build-all.bat` 验证默认依赖选择。
+
 - 多个 Codex 聊天共用工作区时，共享 Java 源码和 SHBUI 本地 JAR 可能暂处于接口迁移的中间状态。确认相关改动与依赖构建完成后再验证消费方，不能用迁移前的编译结果代表最终工作区。
 
 - Minecraft 26.1.2 的 `ServerPlayer` 不再提供旧版的 `getServer()`；跨版本服务端线程检查应由平台实现分别通过旧版 `player.getServer()` 和新版 `player.level().getServer()` 获取服务器。

@@ -7,7 +7,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Block;
 
 /** A Fumo block item can also occupy the vanilla head slot. */
-public final class FumoHeadItem extends BlockItem {
+public class FumoHeadItem extends BlockItem {
     public FumoHeadItem(Block block, Properties properties) {
         super(block, properties);
     }
