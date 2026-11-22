@@ -20,6 +20,7 @@ import com.dishanhai.sh_common_lib.client.loading.ClientLoading;
 import com.dishanhai.sh_common_lib.client.jei.JeiSearchPreferences;
 import com.dishanhai.sh_common_lib.internal.item.ArtisanConfig;
 import com.dishanhai.sh_common_lib.client.item.ArtisanAppearancePreferences;
+import com.dishanhai.sh_common_lib.client.item.PhoneScreen;
 import com.dishanhai.sh_common_lib.client.voice.VoiceItemClient;
 import com.dishanhai.sh_common_lib.client.voice.VoiceItemPreferences;
 import com.mojang.blaze3d.platform.InputConstants;
@@ -51,6 +52,8 @@ public final class ControlCenterModule implements UIModule {
             InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_F4, NeoForgeKeyMappings.CATEGORY);
     private static final VoiceItemClient VOICE = new VoiceItemClient(VOICE_KEY,
             player -> player.permissions().hasPermission(net.minecraft.server.permissions.Permissions.COMMANDS_GAMEMASTER));
+    private static PlayerInfoHud playerInfoHud;
+
     @Override
     public ModuleDescriptor descriptor() {
         return ModuleDescriptor.builder().id(ID).version(UiVersion.parse("1.0.0"))
@@ -68,11 +71,13 @@ public final class ControlCenterModule implements UIModule {
     public void start(ModuleContext context) {
         context.engine().require(UIPlatform.KEY);
         AnnouncementAppearance.start(context);
+        PhoneScreen.bindNotes(context);
     }
 
     @Override
     public void stop(ModuleContext context) {
         AnnouncementAppearance.stop(context);
+        PhoneScreen.bindNotes(null);
     }
 
     public static KeyMapping openKey() {
@@ -82,6 +87,7 @@ public final class ControlCenterModule implements UIModule {
     public static KeyMapping voiceKey() { return VOICE_KEY; }
 
     public static void tick(PlayerInfoHud hud) {
+        playerInfoHud = hud;
         VOICE.tick();
         if (!OPEN_KEY.consumeClick()) return;
         while (OPEN_KEY.consumeClick()) {
@@ -91,6 +97,10 @@ public final class ControlCenterModule implements UIModule {
         if (client.player != null && client.screen == null && client.getOverlay() == null) {
             client.setScreen(create(null, hud));
         }
+    }
+
+    public static void openFromPhone(Screen parent) {
+        if (playerInfoHud != null) Minecraft.getInstance().setScreen(create(parent, playerInfoHud));
     }
 
     public static Screen create(Screen parent, PlayerInfoHud hud) {

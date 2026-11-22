@@ -6,6 +6,7 @@ import com.dishanhai.sh_common_lib.client.beacon.BeaconWorldRenderer;
 import net.minecraft.resources.Identifier;
 import com.dishanhai.sh_common_lib.client.item.CosmicArtisanShortcut;
 import com.dishanhai.sh_common_lib.client.item.AccelerationClient;
+import com.dishanhai.sh_common_lib.client.item.PhoneScreen;
 import com.dishanhai.sh_common_lib.client.item.AccelerationInput;
 import com.dishanhai.sh_common_lib.client.item.AccelerationWorldRenderer;
 import com.dishanhai.sh_common_lib.client.item.CosmicArtisanAutoClick;
@@ -18,6 +19,7 @@ import net.minecraft.client.Minecraft;
 import net.neoforged.neoforge.client.event.InputEvent;
 import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
 import net.neoforged.neoforge.client.event.RegisterGuiLayersEvent;
+import net.neoforged.neoforge.client.event.RenderFrameEvent;
 import net.neoforged.neoforge.client.settings.KeyConflictContext;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
@@ -56,7 +58,13 @@ final class NeoForgeArtisanClient {
                 InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_X, NeoForgeKeyMappings.CATEGORY);
         modBus.addListener((RegisterKeyMappingsEvent event) -> event.register(accelerationKey));
         var shortcut = new CosmicArtisanShortcut(key);
+        NeoForge.EVENT_BUS.addListener((RenderFrameEvent.Post event) -> PhoneScreen.afterFrame());
         NeoForge.EVENT_BUS.addListener((InputEvent.InteractionKeyMappingTriggered event) -> {
+            if (event.isUseItem() && PhoneScreen.openIfHeld(event.getHand())) {
+                event.setSwingHand(false);
+                event.setCanceled(true);
+                return;
+            }
             if (event.isUseItem() && AccelerationInput.mark(Minecraft.getInstance(),
                     GLFW.glfwGetKey(Minecraft.getInstance().getWindow().handle(), GLFW.GLFW_KEY_LEFT_CONTROL) == GLFW.GLFW_PRESS
                     || GLFW.glfwGetKey(Minecraft.getInstance().getWindow().handle(), GLFW.GLFW_KEY_RIGHT_CONTROL) == GLFW.GLFW_PRESS)) {

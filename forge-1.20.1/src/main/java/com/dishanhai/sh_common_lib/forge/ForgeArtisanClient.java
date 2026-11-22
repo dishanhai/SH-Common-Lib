@@ -11,6 +11,7 @@ import net.minecraftforge.client.event.RenderLevelStageEvent;
 import net.minecraft.resources.ResourceLocation;
 import com.dishanhai.sh_common_lib.client.item.CosmicArtisanShortcut;
 import com.dishanhai.sh_common_lib.client.item.AccelerationClient;
+import com.dishanhai.sh_common_lib.client.item.PhoneScreen;
 import com.dishanhai.sh_common_lib.client.item.AccelerationInput;
 import com.dishanhai.sh_common_lib.client.item.AccelerationWorldMarkers;
 import com.dishanhai.sh_common_lib.client.item.AccelerationWorldRenderer;
@@ -67,7 +68,15 @@ final class ForgeArtisanClient {
                 InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_X, "key.categories.sh_common_lib");
         modBus.addListener((RegisterKeyMappingsEvent event) -> event.register(accelerationKey));
         var shortcut = new CosmicArtisanShortcut(key);
+        MinecraftForge.EVENT_BUS.addListener((TickEvent.RenderTickEvent event) -> {
+            if (event.phase == TickEvent.Phase.END) PhoneScreen.afterFrame();
+        });
         MinecraftForge.EVENT_BUS.addListener((InputEvent.InteractionKeyMappingTriggered event) -> {
+            if (event.isUseItem() && PhoneScreen.openIfHeld(event.getHand())) {
+                event.setSwingHand(false);
+                event.setCanceled(true);
+                return;
+            }
             if (event.isUseItem() && AccelerationInput.mark(Minecraft.getInstance(),
                     net.minecraft.client.gui.screens.Screen.hasControlDown())) {
                 event.setSwingHand(false); event.setCanceled(true); return;

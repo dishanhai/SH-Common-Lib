@@ -43,16 +43,18 @@ import net.neoforged.neoforge.registries.DeferredRegister;
 public final class NeoForgeShCommonLib {
     private static final DeferredRegister.Blocks BLOCKS = DeferredRegister.createBlocks(ShCommonLib.MOD_ID);
 
-    private static final DeferredRegister.Items BLOCK_ITEMS = DeferredRegister.createItems(ShCommonLib.MOD_ID);
+    private static final DeferredRegister.Items ITEMS = DeferredRegister.createItems(ShCommonLib.MOD_ID);
+    private static final net.neoforged.neoforge.registries.DeferredItem<Item> PHONE =
+            ITEMS.registerSimpleItem("phone", new Item.Properties().stacksTo(1));
     private static final net.neoforged.neoforge.registries.DeferredBlock<CosmicBeaconBlock> BEACON = BLOCKS.registerBlock(
             CosmicBeacon.BLOCK_ID, properties -> new CosmicBeaconBlock(properties, NeoForgeBeaconNetwork::reply),
             BlockBehaviour.Properties.of());
     private static final net.neoforged.neoforge.registries.DeferredItem<BlockItem> BEACON_ITEM =
-            BLOCK_ITEMS.registerSimpleBlockItem(BEACON);
+            ITEMS.registerSimpleBlockItem(BEACON);
     private static final net.neoforged.neoforge.registries.DeferredBlock<FakeFumoBlock> FAKE_FUMO =
             BLOCKS.registerBlock("fake_fumo", FakeFumoBlock::new, BlockBehaviour.Properties.of());
     private static final net.neoforged.neoforge.registries.DeferredItem<BlockItem> FAKE_FUMO_ITEM =
-            BLOCK_ITEMS.registerSimpleBlockItem(FAKE_FUMO);
+            ITEMS.registerSimpleBlockItem(FAKE_FUMO);
     private static final String DISHANHAI_FUMO = "dishanhai_fumo";
     private static final String BEIBEIPUO_FUMO = "beibeipuo_fumo";
     private static final DeferredRegister<BlockEntityType<?>> BLOCK_ENTITIES =
@@ -75,21 +77,22 @@ public final class NeoForgeShCommonLib {
                 FMLPaths.CONFIGDIR.get(), manager -> manager.getResource(fumoPoolResource),
                 item -> BuiltInRegistries.ITEM.getOptional(ResourceLocation.parse(item)).orElse(null))));
         UnifiedLibKernel.install(new NeoForgeUlkPlatform());
-        var fumos = Fumos.register(modBus, BLOCKS, BLOCK_ITEMS, BLOCK_ENTITIES,
+        var fumos = Fumos.register(modBus, BLOCKS, ITEMS, BLOCK_ENTITIES,
                 DISHANHAI_FUMO, DISHANHAI_FUMO, BEIBEIPUO_FUMO);
         var fallbackFumo = ResourceLocation.fromNamespaceAndPath("sh_better_ui", DISHANHAI_FUMO);
         var currentFumo = ResourceLocation.fromNamespaceAndPath(ShCommonLib.MOD_ID, DISHANHAI_FUMO);
         BLOCKS.addAlias(fallbackFumo, currentFumo);
-        BLOCK_ITEMS.addAlias(fallbackFumo, currentFumo);
+        ITEMS.addAlias(fallbackFumo, currentFumo);
         BLOCK_ENTITIES.addAlias(fallbackFumo, currentFumo);
         var fallbackBeiBeiPuo = ResourceLocation.fromNamespaceAndPath("sh_better_ui", BEIBEIPUO_FUMO);
         var currentBeiBeiPuo = ResourceLocation.fromNamespaceAndPath(ShCommonLib.MOD_ID, BEIBEIPUO_FUMO);
         BLOCKS.addAlias(fallbackBeiBeiPuo, currentBeiBeiPuo);
-        BLOCK_ITEMS.addAlias(fallbackBeiBeiPuo, currentBeiBeiPuo);
+        ITEMS.addAlias(fallbackBeiBeiPuo, currentBeiBeiPuo);
         BLOCKS.register(modBus);
-        BLOCK_ITEMS.register(modBus);
+        ITEMS.register(modBus);
         BLOCK_ENTITIES.register(modBus);
         modBus.addListener((BuildCreativeModeTabContentsEvent event) -> {
+            if (event.getTabKey().equals(CreativeModeTabs.TOOLS_AND_UTILITIES)) event.accept(PHONE.get());
             if (event.getTabKey().equals(CreativeModeTabs.FUNCTIONAL_BLOCKS)) event.accept(BEACON_ITEM.get());
             if (event.getTabKey().equals(CreativeModeTabs.COLORED_BLOCKS)) {
                 event.accept(fumos.variant(DISHANHAI_FUMO).item().get());

@@ -44,15 +44,17 @@ public final class ForgeShCommonLib {
     private static final DeferredRegister<Block> BLOCKS =
             DeferredRegister.create(ForgeRegistries.BLOCKS, ShCommonLib.MOD_ID);
 
-    private static final DeferredRegister<Item> BLOCK_ITEMS = DeferredRegister.create(ForgeRegistries.ITEMS, ShCommonLib.MOD_ID);
+    private static final DeferredRegister<Item> ITEMS = DeferredRegister.create(ForgeRegistries.ITEMS, ShCommonLib.MOD_ID);
+    private static final net.minecraftforge.registries.RegistryObject<Item> PHONE =
+            ITEMS.register("phone", () -> new Item(new Item.Properties().stacksTo(1)));
     private static final net.minecraftforge.registries.RegistryObject<CosmicBeaconBlock> BEACON = BLOCKS.register(CosmicBeacon.BLOCK_ID,
             () -> new CosmicBeaconBlock(BlockBehaviour.Properties.of(), ForgeBeaconNetwork::reply));
-    private static final net.minecraftforge.registries.RegistryObject<Item> BEACON_ITEM = BLOCK_ITEMS.register(
+    private static final net.minecraftforge.registries.RegistryObject<Item> BEACON_ITEM = ITEMS.register(
             CosmicBeacon.BLOCK_ID, () -> new BlockItem(BEACON.get(), new Item.Properties()));
     private static final net.minecraftforge.registries.RegistryObject<FakeFumoBlock> FAKE_FUMO =
             BLOCKS.register("fake_fumo", () -> new FakeFumoBlock(BlockBehaviour.Properties.of()));
     private static final net.minecraftforge.registries.RegistryObject<Item> FAKE_FUMO_ITEM =
-            BLOCK_ITEMS.register("fake_fumo", () -> new BlockItem(FAKE_FUMO.get(), new Item.Properties()));
+            ITEMS.register("fake_fumo", () -> new BlockItem(FAKE_FUMO.get(), new Item.Properties()));
     private static final String DISHANHAI_FUMO = "dishanhai_fumo";
     private static final String BEIBEIPUO_FUMO = "beibeipuo_fumo";
     private static final DeferredRegister<BlockEntityType<?>> BLOCK_ENTITIES =
@@ -77,13 +79,14 @@ public final class ForgeShCommonLib {
                 FMLPaths.CONFIGDIR.get(), manager -> manager.getResource(fumoPoolResource),
                 item -> BuiltInRegistries.ITEM.getOptional(ResourceLocation.parse(item)).orElse(null))));
         UnifiedLibKernel.install(new ForgeUlkPlatform());
-        fumos = Fumos.register(modBus, BLOCKS, BLOCK_ITEMS, BLOCK_ENTITIES,
+        fumos = Fumos.register(modBus, BLOCKS, ITEMS, BLOCK_ENTITIES,
                 DISHANHAI_FUMO, DISHANHAI_FUMO, BEIBEIPUO_FUMO);
         MinecraftForge.EVENT_BUS.addListener(this::remapFallbackFumo);
         BLOCKS.register(modBus);
-        BLOCK_ITEMS.register(modBus);
+        ITEMS.register(modBus);
         BLOCK_ENTITIES.register(modBus);
         modBus.addListener((BuildCreativeModeTabContentsEvent event) -> {
+            if (event.getTabKey().equals(CreativeModeTabs.TOOLS_AND_UTILITIES)) event.accept(PHONE.get());
             if (event.getTabKey().equals(CreativeModeTabs.FUNCTIONAL_BLOCKS)) event.accept(BEACON_ITEM.get());
             if (event.getTabKey().equals(CreativeModeTabs.COLORED_BLOCKS)) {
                 event.accept(fumos.variant(DISHANHAI_FUMO).item().get());

@@ -27,6 +27,7 @@ import com.dishanhai.sh_common_lib.client.loading.ClientLoading;
 import com.dishanhai.sh_common_lib.client.jei.JeiSearchPreferences;
 import com.dishanhai.sh_common_lib.internal.item.ArtisanConfig;
 import com.dishanhai.sh_common_lib.client.item.ArtisanAppearancePreferences;
+import com.dishanhai.sh_common_lib.client.item.PhoneScreen;
 import com.dishanhai.sh_common_lib.client.voice.VoiceItemClient;
 import com.dishanhai.sh_common_lib.client.voice.VoiceItemPreferences;
 import com.mojang.blaze3d.platform.InputConstants;
@@ -86,6 +87,7 @@ public final class ControlCenterModule implements UIModule {
             if (playerInfoHud != null) playerInfoHud.render(frame);
         });
         AnnouncementAppearance.start(context);
+        PhoneScreen.bindNotes(context);
         assistantSettings = ShBetterUiApi.extensions().register("sh_common_lib:assistant_settings",
                 Supplier.class, ignored -> new AssistantSettingsProvider());
         module = context;
@@ -97,6 +99,7 @@ public final class ControlCenterModule implements UIModule {
         if (assistantSettings != null) assistantSettings.close();
         assistantSettings = null;
         AnnouncementAppearance.stop(context);
+        PhoneScreen.bindNotes(null);
         if (active == this) active = null;
         module = null;
         screens = null;
@@ -113,6 +116,7 @@ public final class ControlCenterModule implements UIModule {
     public static KeyMapping voiceKey() { return VOICE_KEY; }
 
     public static void tick(PlayerInfoHud hud) {
+        playerInfoHud = hud;
         VOICE.tick();
         if (!OPEN_KEY.consumeClick()) return;
         while (OPEN_KEY.consumeClick()) {
@@ -122,6 +126,10 @@ public final class ControlCenterModule implements UIModule {
         if (client.player != null && client.screen == null && client.getOverlay() == null) {
             client.setScreen(create(null, hud));
         }
+    }
+
+    public static void openFromPhone(Screen parent) {
+        if (playerInfoHud != null) Minecraft.getInstance().setScreen(create(parent, playerInfoHud));
     }
 
     public static Screen create(Screen parent, PlayerInfoHud hud) {
