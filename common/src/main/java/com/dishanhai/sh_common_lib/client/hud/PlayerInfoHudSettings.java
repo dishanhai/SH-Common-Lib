@@ -17,7 +17,7 @@ public record PlayerInfoHudSettings(boolean enabled, double x, double y, int sca
     static final int MIN_SCALE = 50;
     static final int MAX_SCALE = 200;
     static final int SCALE_STEP = 5;
-    private static final int DEFAULT_SCALE = 75;
+    private static final int DEFAULT_SCALE = 85;
     public static final PlayerInfoHudSettings DEFAULT = fromProperties(new Properties());
 
     public PlayerInfoHudSettings {
