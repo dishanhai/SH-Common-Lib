@@ -4,10 +4,10 @@ package com.dishanhai.sh_common_lib.client.hud;
 import com.dishanhai.sh_common_lib.client.ClientPanels;
 import com.dishanhai.sh_better_ui.kernel.api.text.TextReadabilityPalette;
 import com.dishanhai.sh_better_ui.client.gui.text.UiHudRichText;
+import com.dishanhai.sh_better_ui.client.gui.display.GraphicIcon;
 import com.dishanhai.sh_better_ui.client.gui.scaled.UiPreferences;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
-import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 
@@ -20,6 +20,7 @@ public final class HudPanel {
     private static final int TEXT_X = PADDING + ICON_SIZE + 4;
 
     private final List<Row> rows;
+    private final List<GraphicIcon> icons;
     private final int width;
     private final int height;
     private final TextReadabilityPalette palette = new TextReadabilityPalette();
@@ -30,6 +31,7 @@ public final class HudPanel {
 
     public HudPanel(Font font, List<Row> rows, int minimumTextWidth) {
         this.rows = List.copyOf(rows);
+        this.icons = this.rows.stream().map(row -> new GraphicIcon(row.icon())).toList();
         int textWidth = this.rows.stream().mapToInt(row -> font.width(row.text())).max().orElse(0);
         width = TEXT_X + PADDING + Math.max(textWidth, minimumTextWidth);
         height = rows.size() * (font.lineHeight + 3) + 2 * PADDING;
@@ -84,9 +86,15 @@ public final class HudPanel {
             palette.update(null, 0xff000000, clearGlass ? 0xffffffff : ClientPanels.panelTextBackdrop());
             int textColor = palette.color(ClientPanels.TEXT);
             int lineY = PADDING + 1;
-            for (var row : rows) {
-                graphics.blit(RenderPipelines.GUI_TEXTURED, row.icon(), PADDING, lineY, 0f, 0f,
-                        ICON_SIZE, ICON_SIZE, ICON_SIZE, ICON_SIZE, row.color());
+            for (int i = 0; i < rows.size(); i++) {
+                var row = rows.get(i);
+                pose.pushMatrix();
+                try {
+                    pose.translate(PADDING, lineY).scale((float) ICON_SIZE / GraphicIcon.PIXELS);
+                    icons.get(i).draw(graphics, 0, 0, 1, row.color(), UiPreferences.configured());
+                } finally {
+                    pose.popMatrix();
+                }
                 UiHudRichText.draw(graphics, font, row.text().getVisualOrderText(), TEXT_X, lineY,
                         textColor, UiPreferences.configured(), palette);
                 lineY += font.lineHeight + 3;
