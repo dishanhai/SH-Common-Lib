@@ -167,6 +167,7 @@
 - 垃圾桶安装模块走 SHBUI 面板内的四个服务端容器槽。原版槽位负责实际物品转移、堆叠校验和存档同步，UUK 提供外观与控件。用户在首轮设计后明确了这个安装入口。
 - 垃圾桶应力模块的独立图标需要引用原版的具体钟表帧 `minecraft:item/clock_00`。原版资源包含分帧贴图，`minecraft:item/clock` 不是有效贴图路径。
 - 按素面方桶的参考图简化垃圾桶时，桶身和闭合薄盖各用一个长方体，压纹与倒角画入贴图。桶身宽深不等时，南北与东西的碰撞盒应随方块状态交换 X、Z，并对照导出模型验算尺寸。
+- PCL 的 NeoForge 1.21.1 实例曾加载同名 0.4.1 旧包，模型仍含 216 个几何元素。遇到游戏与 Blockbench 外观不一致时，从启动日志定位实际 `mods` 目录，直接比对已加载 JAR 中的模型和贴图。客户端完全退出后再备份并替换档案，避免在游戏运行中改动已加载的 JAR。
 - NeoForge 1.21.1 隔离开发客户端使用当前 SHBUI 1.0.11 构建时，`GuiTextureBlendMixin` 注入 `ShaderInstance` 的回调组可能在初始化阶段失败。验收垃圾桶时，通过 `-PshBetterUiJar` 指向仅在测试目录内关闭该注入的副本，保留其余 UUK 依赖。正式 SHBUI 产物仍需单独复验。
 - Forge 1.20.1 的服务端玩家网络连接使用 `player.connection.connection`，NeoForge 两端用 `player.connection.getConnection()`。跨版本加可选网络包时，沿用各端现有的连接查询和频道协商检查。
 - Forge 1.20.1 开发客户端加载 Curios 5.14.1 时，若 `AccessorEntity` 找不到 `f_19803_`，在隔离启动配置打开 `mixin.env.remapRefMap`，并把 `mixin.env.refMapRemappingFile` 指向该模块的 `build/createSrgToMcp/output.srg`。本次用此配置通过 Fumo 头饰测试。

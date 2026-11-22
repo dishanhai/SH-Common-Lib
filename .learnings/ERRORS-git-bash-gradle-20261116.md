@@ -11,3 +11,5 @@
 2026-11-19 补充：若 Git Bash 包装脚本把 `GRADLE_OPTS` 中的 `-Djava.io.tmpdir=C:\jtmp` 传成 `C:jtmp`，本次调用用 `GRADLE_OPTS="-Djava.io.tmpdir=C:/jtmp"` 即可，保留 Windows JVM 能识别的绝对路径。
 
 2026-11-20 补充：SH-Better-UI Forge 在线构建时，MCPRepo 下载 Minecraft 客户端 POM 连接超时，随后 Kotlin 编译找不到 JOML、LWJGL 等类。依赖缓存已齐备时，用仓库的 Gradle 8.8 以 `build --offline --no-daemon --console=plain` 重跑可通过编译、测试和重映射打包。
+
+2026-11-21 补充：在 Git Bash 用 `rg -Fx` 核对 Windows JDK 的 `jar tf` 输出时，行末的 CR 会导致精确匹配失败。先将列表经 `tr -d '\r'` 转为 LF，再匹配完整条目。SHCLIB 三个版本的 JAR 均已用此方法确认包含 ULK Markdown API。
