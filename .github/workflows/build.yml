@@ -52,7 +52,7 @@ jobs:
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           repository: dishanhai/SH-Better-UI
-          ref: d91e3bd8feb67b2ca9be96ec3446193779ccaaee
+          ref: 95b682294c4ec6e0520bb423614a6250c6ec663b
           path: SH-Better-UI
           persist-credentials: false
 

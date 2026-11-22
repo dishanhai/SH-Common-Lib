@@ -21,6 +21,7 @@ import java.util.Locale;
 import static com.dishanhai.sh_common_lib.client.hud.PlayerInfoHud.LANG;
 
 final class PlayerInfoHudLayout {
+    private static final int ROW_ICON_SIZE = 10;
     private static final float NATIVE_TEXT_SCALE = 1f;
     private static final float WIDTH_SHARE = 0.55f;
     private static final float HEIGHT_SHARE = 0.50f;
@@ -141,7 +142,7 @@ final class PlayerInfoHudLayout {
         for (var shortcut : shortcuts) entries.add(new Row(truncate(shortcut, textWidth), 0, HudGroups.Group.CONTROLS));
         var plan = sections(entries, headings, true, true);
         var visible = plan.rows().stream().map(Row::content).toList();
-        return new Panel(new UiHudPanel(font, visible), visible, plan.boundaries());
+        return new Panel(new UiHudPanel(font, visible, 0, ROW_ICON_SIZE), visible, plan.boundaries());
     }
 
     private static boolean fits(Panel panel, int width, int height, float scale) {
@@ -157,7 +158,7 @@ final class PlayerInfoHudLayout {
             int page = Math.floorMod(viewport.page(), pages);
             int reserved = viewport.pageWidths().reserve(page, pages, measured, textWidth);
             if (reserved > measured) {
-                body = new UiHudPanel(font, panel.rows(), reserved);
+                body = new UiHudPanel(font, panel.rows(), reserved, ROW_ICON_SIZE);
                 width = emptyWidth + reserved;
             }
         }

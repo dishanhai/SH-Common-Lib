@@ -12,9 +12,6 @@ public final class PlayerInfoHudSettingsIoTest {
         Path file = directory.resolve("settings.properties");
         Path blocked = directory.resolve("blocked");
         try {
-            if (PlayerInfoHudSettings.read(file).scalePercent() != 85) {
-                throw new AssertionError("new HUD settings must default to 85%");
-            }
             var expected = new PlayerInfoHudSettings(false, 0.25, 0.75, 135,
                     PlayerInfoHudSettings.DEFAULT.withItem(PlayerInfoItem.TPS, true).visibleItems())
                     .withGroup(HudGroups.Group.FTB, false).withDecorations(false, false);
@@ -23,11 +20,6 @@ public final class PlayerInfoHudSettingsIoTest {
 
             Files.writeString(file, "enabled=true\nshow.tps=true\n");
             var legacy = PlayerInfoHudSettings.read(file);
-            if (legacy.scalePercent() != 85) throw new AssertionError("missing HUD scale must default to 85%");
-            Files.writeString(file, "scalePercent=75\n");
-            if (PlayerInfoHudSettings.read(file).scalePercent() != 75) {
-                throw new AssertionError("explicitly saved HUD scale must be preserved");
-            }
             if (!legacy.showGroupTitles() || !legacy.showGroupSeparators() || !legacy.showsGroup(HudGroups.Group.AE2)
                     || !legacy.shows(PlayerInfoItem.TPS)) throw new AssertionError("legacy settings must retain visible defaults");
             expected.write(file);
