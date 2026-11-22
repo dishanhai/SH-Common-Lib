@@ -29,6 +29,7 @@ import com.dishanhai.sh_common_lib.internal.item.ArtisanConfig;
 import com.dishanhai.sh_common_lib.client.item.ArtisanAppearancePreferences;
 import com.dishanhai.sh_common_lib.client.item.PhoneScreen;
 import com.dishanhai.sh_common_lib.client.voice.VoiceItemClient;
+import com.dishanhai.sh_common_lib.client.voice.VoiceItemDownloadScreen;
 import com.dishanhai.sh_common_lib.client.voice.VoiceItemPreferences;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.Util;
@@ -194,6 +195,8 @@ public final class ControlCenterModule implements UIModule {
         var developer = new SettingsGroup(label("developer"), GraphicIcon.DEVELOPMENT, List.of(
                 new SettingsGroup.Toggle(enabled -> label(enabled ? "voice_items_on" : "voice_items_off"),
                         () -> draft.voiceItems().enabled(), draft::setVoiceItems),
+                new SettingsGroup.Page(label("voice_download"), GraphicIcon.DOWNLOAD,
+                        VoiceItemDownloadScreen::unavailable, VoiceItemDownloadScreen::open),
                 new SettingsGroup.Toggle(enabled -> label(enabled ? "voice_fuzzy_on" : "voice_fuzzy_off"),
                         () -> draft.voiceItems().fuzzy(), draft::setVoiceFuzzy, () -> draft.voiceItems().enabled()),
                 new SettingsGroup.Page(com.dishanhai.sh_common_lib.client.recipe.RecipeEditorAccess.title(), GraphicIcon.DEVELOPMENT,
