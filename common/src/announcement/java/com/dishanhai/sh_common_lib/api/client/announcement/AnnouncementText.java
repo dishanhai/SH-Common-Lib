@@ -7,6 +7,7 @@ import com.dishanhai.sh_better_ui.client.gui.display.GraphicDisplayLayout.Bounds
 import com.dishanhai.sh_better_ui.client.gui.display.GraphicIcon;
 import com.dishanhai.sh_better_ui.client.gui.scaled.DarkModeTheme;
 import com.dishanhai.sh_better_ui.client.gui.scaled.LiquidGlassTheme;
+import com.dishanhai.sh_common_lib.api.ulk.markdown.MarkdownDocument.*;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
@@ -15,7 +16,6 @@ import net.minecraft.client.gui.narration.NarrationElementOutput;
 import net.minecraft.client.gui.narration.NarratedElementType;
 import net.minecraft.network.chat.ClickEvent;
 import net.minecraft.network.chat.Component;
-import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.network.chat.Style;
 import net.minecraft.util.FormattedCharSequence;
 import org.lwjgl.glfw.GLFW;
@@ -27,7 +27,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
-import java.util.regex.Pattern;
 
 import static com.dishanhai.sh_common_lib.api.client.announcement.FullscreenAnnouncements.label;
 
@@ -35,19 +34,16 @@ final class AnnouncementText extends AbstractWidget {
     private static final int TRACK = 9;
     private static final int INSET = 7;
     private static final int ICON_SPACE = GraphicIcon.PIXELS + 5;
-    private static final int MARKDOWN_LIMIT = 65_536;
-    private static final Pattern LOCAL_LINK = Pattern.compile(
-            "(?<!\\x60)(\\x60+).*?\\1(?!\\x60)|(?<![!\\\\])\\[([^\\]\\r\\n]+)\\]\\(#([^\\s)]+)\\)");
 
     private final UiScreen owner;
     private final Font font = Minecraft.getInstance().font;
     private final Bounds area;
     private final List<Row> rows = new ArrayList<>();
     private final Map<Action, Hit> actions = new LinkedHashMap<>();
-    private final Map<String, List<AnnouncementMarkdown.Details>> ancestors = new HashMap<>();
+    private final Map<String, List<Details>> ancestors = new HashMap<>();
     private final Map<String, Integer> anchorPositions = new HashMap<>();
     private final Map<Integer, Boolean> expanded = new HashMap<>();
-    private final List<AnnouncementMarkdown.Block> blocks;
+    private final List<Block> blocks;
     private final List<AnnouncementCatalog.Link> links;
     private final boolean english;
     private final Supplier<AnnouncementText> current;
@@ -68,7 +64,7 @@ final class AnnouncementText extends AbstractWidget {
         this.english = english;
         this.current = current;
         this.otherAnchor = otherAnchor;
-        blocks = AnnouncementMarkdown.parse(markdown);
+        blocks = AnnouncementInlineText.blocks(markdown);
         indexAnchors(blocks, new ArrayList<>());
         if (previous != null) {
             expanded.putAll(previous.expanded);
@@ -78,17 +74,17 @@ final class AnnouncementText extends AbstractWidget {
         rebuildRows();
     }
 
-    private void indexAnchors(List<AnnouncementMarkdown.Block> content, List<AnnouncementMarkdown.Details> parents) {
+    private void indexAnchors(List<Block> content, List<Details> parents) {
         for (var block : content) {
             switch (block) {
-                case AnnouncementMarkdown.Heading heading -> ancestors.put(heading.anchor(), List.copyOf(parents));
-                case AnnouncementMarkdown.Anchor anchor -> ancestors.put(anchor.id(), List.copyOf(parents));
-                case AnnouncementMarkdown.Details details -> {
+                case Heading heading -> ancestors.put(heading.anchor(), List.copyOf(parents));
+                case Anchor anchor -> ancestors.put(anchor.id(), List.copyOf(parents));
+                case Details details -> {
                     parents.add(details);
                     indexAnchors(details.children(), parents);
                     parents.removeLast();
                 }
-                case AnnouncementMarkdown.Text ignored -> {}
+                default -> {}
             }
         }
     }
@@ -130,56 +126,38 @@ final class AnnouncementText extends AbstractWidget {
         scrollTo(offset);
     }
 
-    private void layout(List<AnnouncementMarkdown.Block> content, int indent) {
+    private void layout(List<Block> content, int indent) {
         for (var block : content) {
             switch (block) {
-                case AnnouncementMarkdown.Anchor anchor -> anchorPositions.put(anchor.id(), height);
-                case AnnouncementMarkdown.Heading heading -> {
+                case Anchor anchor -> anchorPositions.put(anchor.id(), height);
+                case Heading heading -> {
                     height += 4;
                     if (!heading.anchor().isEmpty()) anchorPositions.put(heading.anchor(), height);
                     float scale = heading.level() == 1 ? 1.4f : heading.level() == 2 ? 1.25f : 1.1f;
-                    add(AnnouncementIcons.decorate(inline(heading.markdown()).withStyle(style -> style.withBold(true))), scale, indent,
+                    add(AnnouncementIcons.decorate(AnnouncementInlineText.render(heading.content()).withStyle(style -> style.withBold(true))), scale, indent,
                             heading.level() <= 2 ? GraphicIcon.BOOKMARK : null, Tone.HEADING, null);
                     height += 2;
                 }
-                case AnnouncementMarkdown.Details details -> {
+                case Details details -> {
                     boolean open = isOpen(details);
                     var action = new Action(Kind.DETAILS, "", details.id());
-                    var title = details.summary().isBlank() ? label("details") : inline(details.summary());
+                    var title = details.summary().plainText().isBlank() ? label("details")
+                            : AnnouncementInlineText.render(details.summary());
                     add(AnnouncementIcons.decorate(title.copy().withStyle(style -> style.withBold(true))), 1, indent,
                             open ? GraphicIcon.COLLAPSE : GraphicIcon.EXPAND, Tone.HEADING, action);
                     if (open) layout(details.children(), Math.min(indent + 14, Math.max(0, area.width() / 4)));
                 }
-                case AnnouncementMarkdown.Text text -> {
-                    if (text.markdown().isBlank()) height += 5;
-                    else add(text.fenced() ? markdown(text.markdown()) : AnnouncementIcons.decorate(inline(text.markdown())),
-                            1, indent, null, Tone.BODY, null);
+                case Line line when line.content().plainText().isBlank() -> height += 5;
+                default -> {
+                    var text = AnnouncementInlineText.body(block);
+                    add(block instanceof CodeBlock ? text : AnnouncementIcons.decorate(text), 1, indent, null, Tone.BODY, null);
                 }
             }
         }
     }
 
-    private boolean isOpen(AnnouncementMarkdown.Details details) {
+    private boolean isOpen(Details details) {
         return expanded.computeIfAbsent(details.id(), ignored -> details.initiallyOpen());
-    }
-
-    private static MutableComponent markdown(String source) {
-        return source.length() <= MARKDOWN_LIMIT ? ShBetterUiApi.markdown().parse(source) : Component.literal(source);
-    }
-
-    private static MutableComponent inline(String source) {
-        var result = Component.empty();
-        var matcher = LOCAL_LINK.matcher(source);
-        int start = 0;
-        while (matcher.find()) {
-            if (matcher.group(2) == null) continue;
-            result.append(markdown(source.substring(start, matcher.start())));
-            String id = AnnouncementMarkdown.fragment(matcher.group(3));
-            var action = new ClickEvent(ClickEvent.Action.CHANGE_PAGE, id);
-            result.append(markdown(matcher.group(2)).withStyle(style -> style.withUnderlined(true).withClickEvent(action)));
-            start = matcher.end();
-        }
-        return result.append(markdown(source.substring(start)));
     }
 
     private void add(Component text, float scale, int indent, GraphicIcon icon, Tone tone, Action fallback) {

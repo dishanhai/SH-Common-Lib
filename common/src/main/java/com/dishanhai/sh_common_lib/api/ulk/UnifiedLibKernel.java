@@ -1,15 +1,22 @@
 // Author: dishanhai
 package com.dishanhai.sh_common_lib.api.ulk;
 
+import com.dishanhai.sh_common_lib.api.ulk.markdown.Markdown;
+import com.dishanhai.sh_common_lib.api.ulk.markdown.MarkdownDocument;
 import java.util.Objects;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Inventory;
 
-/** Unified LIB Kernel: authoritative, read-only player inventory inspection. */
+/** Entry points for shared ULK services. */
 public final class UnifiedLibKernel {
     private static volatile Platform platform;
 
     private UnifiedLibKernel() {}
+
+    /** Parses an immutable Markdown document without requiring a loader or server thread. */
+    public static MarkdownDocument parseMarkdown(String source) {
+        return Markdown.parse(source);
+    }
 
     /** Called once by SHCLIB's loader during initialization. */
     public static void install(Platform implementation) { platform = Objects.requireNonNull(implementation); }

@@ -193,6 +193,13 @@ tasks.register('logAnalyzerTest', JavaExec) {
     mainClass = 'com.dishanhai.sh_common_lib.api.ulk.log.LogAnalyzerTest'
 }
 
+tasks.register('markdownTest', JavaExec) {
+    group = 'verification'
+    description = 'Checks the ULK Markdown document, inline styles and announcement syntax.'
+    classpath = sourceSets.controlCenterVerification.runtimeClasspath
+    mainClass = 'com.dishanhai.sh_common_lib.api.ulk.markdown.MarkdownTest'
+}
+
 def ulkVerificationClasses = layout.buildDirectory.dir('classes/ulkVerification')
 tasks.register('compileUlkVerification', JavaCompile) {
     source files('../common/src/test/ulk-fixtures/net/minecraft/world/item/ItemStack.java',
@@ -215,7 +222,7 @@ tasks.register('inventorySnapshotTest', JavaExec) {
 }
 
 tasks.named('check') {
-    dependsOn 'logAnalyzerTest'
+    dependsOn 'logAnalyzerTest', 'markdownTest'
     dependsOn 'accelerationPolicyTest', 'accelerationPersistenceTest', 'tickBudgetTest', 'mobAiLeasesTest'
     dependsOn 'jeiSearchLayoutTest'
     dependsOn 'recipeEditorTest', 'recipeImporterTest', 'brewingDefinitionsTest', 'brewingDatapackTest', 'brewingApiTest', 'brewingRuleCacheTest'

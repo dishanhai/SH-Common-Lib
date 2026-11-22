@@ -5,6 +5,8 @@ import com.dishanhai.sh_better_ui.client.gui.display.GraphicDisplayLayout.Bounds
 import com.dishanhai.sh_better_ui.client.gui.display.GraphicIcon;
 import com.dishanhai.sh_better_ui.client.gui.scaled.RoundedCorners;
 import com.dishanhai.sh_better_ui.client.gui.scaled.UiPreferences;
+import com.dishanhai.sh_common_lib.api.ulk.markdown.Markdown;
+import com.dishanhai.sh_common_lib.api.ulk.markdown.MarkdownDocument.*;
 import com.dishanhai.sh_common_lib.client.ClientPanels;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
@@ -39,10 +41,10 @@ final class AnnouncementText extends AbstractWidget {
     private final Bounds area;
     private final List<Row> rows = new ArrayList<>();
     private final Map<Action, Hit> actions = new LinkedHashMap<>();
-    private final Map<String, List<AnnouncementMarkdown.Details>> ancestors = new HashMap<>();
+    private final Map<String, List<Details>> ancestors = new HashMap<>();
     private final Map<String, Integer> anchorPositions = new HashMap<>();
     private final Map<Integer, Boolean> expanded = new HashMap<>();
-    private final List<AnnouncementMarkdown.Block> blocks;
+    private final List<Block> blocks;
     private final List<AnnouncementCatalog.Link> links;
     private final boolean english;
     private final Predicate<String> otherAnchor;
@@ -61,7 +63,7 @@ final class AnnouncementText extends AbstractWidget {
         this.links = links;
         this.english = english;
         this.otherAnchor = otherAnchor;
-        blocks = AnnouncementMarkdown.parse(markdown);
+        blocks = AnnouncementInlineText.blocks(markdown);
         indexAnchors(blocks, new ArrayList<>());
         if (previous != null) {
             expanded.putAll(previous.expanded);
@@ -71,17 +73,17 @@ final class AnnouncementText extends AbstractWidget {
         rebuildRows();
     }
 
-    private void indexAnchors(List<AnnouncementMarkdown.Block> content, List<AnnouncementMarkdown.Details> parents) {
+    private void indexAnchors(List<Block> content, List<Details> parents) {
         for (var block : content) {
             switch (block) {
-                case AnnouncementMarkdown.Heading heading -> ancestors.put(heading.anchor(), List.copyOf(parents));
-                case AnnouncementMarkdown.Anchor anchor -> ancestors.put(anchor.id(), List.copyOf(parents));
-                case AnnouncementMarkdown.Details details -> {
+                case Heading heading -> ancestors.put(heading.anchor(), List.copyOf(parents));
+                case Anchor anchor -> ancestors.put(anchor.id(), List.copyOf(parents));
+                case Details details -> {
                     parents.add(details);
                     indexAnchors(details.children(), parents);
                     parents.removeLast();
                 }
-                case AnnouncementMarkdown.Text ignored -> {}
+                default -> {}
             }
         }
     }
@@ -123,37 +125,37 @@ final class AnnouncementText extends AbstractWidget {
         scrollTo(offset);
     }
 
-    private void layout(List<AnnouncementMarkdown.Block> content, int indent) {
+    private void layout(List<Block> content, int indent) {
         for (var block : content) {
             switch (block) {
-                case AnnouncementMarkdown.Anchor anchor -> anchorPositions.put(anchor.id(), height);
-                case AnnouncementMarkdown.Heading heading -> {
+                case Anchor anchor -> anchorPositions.put(anchor.id(), height);
+                case Heading heading -> {
                     height += 4;
                     if (!heading.anchor().isEmpty()) anchorPositions.put(heading.anchor(), height);
                     float scale = heading.level() == 1 ? 1.4f : heading.level() == 2 ? 1.25f : 1.1f;
-                    add(AnnouncementIcons.decorate(AnnouncementInlineText.parse(heading.markdown()).withStyle(style -> style.withBold(true))), scale, indent,
+                    add(AnnouncementIcons.decorate(AnnouncementInlineText.render(heading.content()).withStyle(style -> style.withBold(true))), scale, indent,
                             heading.level() <= 2 ? GraphicIcon.BOOKMARK : null, Tone.HEADING, null);
                     height += 2;
                 }
-                case AnnouncementMarkdown.Details details -> {
+                case Details details -> {
                     boolean open = isOpen(details);
                     var action = new Action(Kind.DETAILS, "", details.id());
-                    var title = details.summary().isBlank() ? label("details") : AnnouncementInlineText.parse(details.summary());
+                    var title = details.summary().plainText().isBlank() ? label("details")
+                            : AnnouncementInlineText.render(details.summary());
                     add(AnnouncementIcons.decorate(title.copy().withStyle(style -> style.withBold(true))), 1, indent,
                             open ? GraphicIcon.COLLAPSE : GraphicIcon.EXPAND, Tone.HEADING, action);
                     if (open) layout(details.children(), Math.min(indent + 14, Math.max(0, area.width() / 4)));
                 }
-                case AnnouncementMarkdown.Text text -> {
-                    if (text.markdown().isBlank()) height += 5;
-                    else add(text.fenced() ? AnnouncementInlineText.codeBlock(text.markdown())
-                            : AnnouncementIcons.decorate(AnnouncementInlineText.parse(text.markdown())),
-                            1, indent, null, Tone.BODY, null);
+                case Line line when line.content().plainText().isBlank() -> height += 5;
+                default -> {
+                    var text = AnnouncementInlineText.body(block);
+                    add(block instanceof CodeBlock ? text : AnnouncementIcons.decorate(text), 1, indent, null, Tone.BODY, null);
                 }
             }
         }
     }
 
-    private boolean isOpen(AnnouncementMarkdown.Details details) {
+    private boolean isOpen(Details details) {
         return expanded.computeIfAbsent(details.id(), ignored -> details.initiallyOpen());
     }
 
@@ -196,7 +198,7 @@ final class AnnouncementText extends AbstractWidget {
         var event = style.getClickEvent();
         return switch (event) {
             case ClickEvent.OpenUrl url -> new Action(Kind.WEB, url.uri().toString(), -1);
-            case ClickEvent.Custom custom when custom.id().equals(AnnouncementInlineText.ANCHOR)
+            case ClickEvent.Custom custom when custom.id().equals(AnnouncementPlatform.ANCHOR)
                     && custom.payload().orElse(null) instanceof StringTag value -> new Action(Kind.ANCHOR, value.value(), -1);
             default -> null;
         };
@@ -393,8 +395,7 @@ final class AnnouncementText extends AbstractWidget {
         switch (selected.kind()) {
             case WEB -> {
                 Minecraft.getInstance().keyboardHandler.setClipboard(selected.value());
-                var uri = AnnouncementInlineText.webUri(selected.value());
-                if (open && uri != null) owner.openLink(uri);
+                if (open) Markdown.webUri(selected.value()).ifPresent(owner::openLink);
             }
             case ANCHOR -> {
                 if (!otherAnchor.test(selected.value())) jumpTo(selected.value());

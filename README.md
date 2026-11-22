@@ -59,6 +59,25 @@ Windows 下可在项目根目录运行 `build-all.bat` 构建三个版本。将 
 
 其他模组可以通过 [ULK Fumo API](docs/FUMO_API.md) 注册坐姿玩偶，并复用 64×64 皮肤模板、舞动及空间音效。
 
+### Markdown 文本 API
+
+`UnifiedLibKernel.parseMarkdown(String)` 返回不可变的 `MarkdownDocument`。调用方可遍历 `blocks()` 取得标题、正文行、引用、列表、任务项、围栏代码、分隔线、锚点和折叠块，也可用 `plainText()` 提取可读文本。客户端和服务端均可直接调用。
+
+```java
+import com.dishanhai.sh_common_lib.api.ulk.UnifiedLibKernel;
+import com.dishanhai.sh_common_lib.api.ulk.markdown.Markdown;
+
+var document = UnifiedLibKernel.parseMarkdown("# 更新说明\n- [x] 支持 **Markdown**");
+String summary = document.plainText();
+var spans = Markdown.parseInline("**已完成** · [目录](#更新说明)").spans();
+```
+
+`Span` 提供文字、粗体／斜体／删除线／行内代码样式，以及可选的链接数据。外链仅接受带主机名且无用户凭据的 HTTP(S) 地址，文内链接返回规范化的锚点。图片保留替代文字，其他 HTML 标签按字面文本保留。链接的打开、跳转和确认由使用方处理。
+
+解析器按物理行处理常用 Markdown 语法。表格、引用式链接和 Setext 标题按正文处理。每次调用最多接受 65,536 个 UTF-16 代码单元，超限抛出 `IllegalArgumentException`。全屏公告已使用这套解析器，超长公告以纯文本显示。
+
+### 库存检查 API
+
 ULK 提供服务端只读玩家物品检查。`UnifiedLibKernel.inspect` 需要在目标玩家的服务器线程调用，返回当前时刻的快照；快照保留物品 NBT 或数据组件，数量使用 `long`。手持物品分别归入 `MAIN_HAND` 和 `OFF_HAND`，不再计入 `INVENTORY`；其余玩家槽位、Curios 饰品、精妙背包（包括嵌套和共享背包）、AE2 无线终端与随身元件、Mekanism 便携 QIO 和 QIO 驱动器的内容分别标记来源。此接口只检查物品，不统计流体或化学品。可选模组未安装时不影响其他来源。
 
 ```java
