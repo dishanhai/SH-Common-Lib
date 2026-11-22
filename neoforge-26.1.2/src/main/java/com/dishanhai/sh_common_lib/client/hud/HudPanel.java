@@ -40,7 +40,7 @@ public final class HudPanel {
         this.icons = this.rows.stream().map(row -> new GraphicIcon(row.icon())).toList();
         int textWidth = this.rows.stream().mapToInt(row -> font.width(row.text())).max().orElse(0);
         width = TEXT_X + PADDING + Math.max(textWidth, minimumTextWidth);
-        height = rows.size() * (font.lineHeight + 3) + 2 * PADDING;
+        height = rows.size() * rowHeight(font) + 2 * PADDING;
     }
 
     boolean isEmpty() {
@@ -75,6 +75,10 @@ public final class HudPanel {
 
     private void draw(GuiGraphicsExtractor graphics, Font font, int x, int y, float scale, boolean glass, boolean popover, int selected) {
         if (isEmpty()) return;
+        var preferences = UiPreferences.configured();
+        int rowHeight = rowHeight(font);
+        float iconX = PADDING + (ICON_SIZE - iconSize) / 2f;
+        float iconScale = (float) iconSize / GraphicIcon.PIXELS;
         var pose = graphics.pose();
         pose.pushMatrix();
         try {
@@ -84,32 +88,36 @@ public final class HudPanel {
             else if (glass) clearGlass = ClientPanels.hud(graphics, 0, 0, width, height);
             else ClientPanels.surface(graphics, new com.dishanhai.sh_better_ui.client.gui.display.GraphicDisplayLayout.Bounds(0, 0, width, height), null, 0xFF18202C);
             if (selected >= 0 && selected < rows.size()) {
-                int rowY = PADDING + selected * (font.lineHeight + 3);
-                if (glass) ClientPanels.strongPopover(graphics, PADDING - 2, rowY, width - 2 * PADDING + 4, font.lineHeight + 3);
-                else ClientPanels.surface(graphics, new com.dishanhai.sh_better_ui.client.gui.display.GraphicDisplayLayout.Bounds(PADDING - 2, rowY, width - 2 * PADDING + 4, font.lineHeight + 3), null, 0xFF18202C);
+                int rowY = PADDING + selected * rowHeight;
+                if (glass) ClientPanels.strongPopover(graphics, PADDING - 2, rowY, width - 2 * PADDING + 4, rowHeight);
+                else ClientPanels.surface(graphics, new com.dishanhai.sh_better_ui.client.gui.display.GraphicDisplayLayout.Bounds(PADDING - 2, rowY, width - 2 * PADDING + 4, rowHeight), null, 0xFF18202C);
             }
             // The clear surface refracts the world. Keep text protection on bright terrain as well.
             palette.update(null, 0xff000000, clearGlass ? 0xffffffff : ClientPanels.panelTextBackdrop());
             int textColor = palette.color(ClientPanels.TEXT);
-            int lineY = PADDING + 1;
-            float centeredInset = (ICON_SIZE - iconSize) / 2f;
-            float iconScale = (float) iconSize / GraphicIcon.PIXELS;
+            int rowY = PADDING;
             for (int i = 0; i < rows.size(); i++) {
                 var row = rows.get(i);
-                pose.pushMatrix();
-                try {
-                    pose.translate(PADDING + centeredInset, lineY + centeredInset).scale(iconScale);
-                    icons.get(i).draw(graphics, 0, 0, 1, row.color(), UiPreferences.configured());
-                } finally {
-                    pose.popMatrix();
+                if ((row.color() >>> 24) != 0) {
+                    pose.pushMatrix();
+                    try {
+                        pose.translate(iconX, rowY + (rowHeight - iconSize) / 2).scale(iconScale);
+                        icons.get(i).draw(graphics, 0, 0, 1, preferences.highContrast() ? textColor : row.color(), preferences);
+                    } finally {
+                        pose.popMatrix();
+                    }
                 }
-                UiHudRichText.draw(graphics, font, row.text().getVisualOrderText(), TEXT_X, lineY,
-                        textColor, UiPreferences.configured(), palette);
-                lineY += font.lineHeight + 3;
+                UiHudRichText.draw(graphics, font, row.text().getVisualOrderText(),
+                        TEXT_X, rowY + (rowHeight - font.lineHeight) / 2, textColor, preferences, palette);
+                rowY += rowHeight;
             }
         } finally {
             pose.popMatrix();
         }
+    }
+
+    private static int rowHeight(Font font) {
+        return Math.max(ICON_SIZE, font.lineHeight) + 3;
     }
 
     public static Identifier icon(String name) {

@@ -66,13 +66,22 @@ final class PlayerInfoHudLayout {
         int budgetHeight = Math.min(viewport.usableHeight(), (int) (viewport.height() * HEIGHT_SHARE));
         // Measure the panel's fixed icon column, padding and margins at the minimum readable scale.
         var emptyPanel = new UiHudPanel(font, List.of());
-        var empty = emptyPanel.fit(budgetWidth, Integer.MAX_VALUE, minimum);
-        int textWidth = (int) Math.floor(empty.travelX() / (double) minimum);
         var emptySize = emptyPanel.fit(Integer.MAX_VALUE, Integer.MAX_VALUE, 1f);
+        var available = emptyPanel.fit(budgetWidth, budgetHeight, Float.MIN_NORMAL);
+        int availableWidth = available.width() + available.travelX();
+        int textWidth = Math.max(0, (int) Math.floor(availableWidth / (double) minimum) - emptySize.width());
         var shortened = rows.stream().map(row -> new Row(truncate(row.content(), textWidth), row.priority(), row.group())).toList();
         var shortHeadings = new EnumMap<HudGroups.Group, Row>(HudGroups.Group.class);
         headings.forEach((group, row) -> shortHeadings.put(group, new Row(truncate(row.content(), textWidth), 0, group)));
         var shortenedPanel = panel(shortened, null, shortHeadings, textWidth);
+        var footer = new Row(pageNotice(rows.size(), rows.size(), rows.size(), textWidth), 0, HudGroups.Group.CONTROLS);
+        if (!rows.isEmpty() && !shortHeadings.isEmpty() && !fits(shortenedPanel, budgetWidth, budgetHeight, minimum)
+                && !fits(panel(shortened.subList(0, 1), footer.content(), shortHeadings, textWidth),
+                        budgetWidth, budgetHeight, minimum)) {
+            // Let the data and shortcuts use the available height before shrinking the whole panel.
+            shortHeadings.clear();
+            shortenedPanel = panel(shortened, null, shortHeadings, textWidth);
+        }
         if (rows.isEmpty() || fits(shortenedPanel, budgetWidth, budgetHeight, minimum)) {
             return place(shortenedPanel, viewport, budgetWidth, budgetHeight, requested, 0, 1, emptySize.width(), textWidth);
         }
@@ -90,17 +99,16 @@ final class PlayerInfoHudLayout {
         // candidate label once instead of rebuilding and remeasuring a panel for every trial.
         var baseSize = panel(List.of(), null, shortHeadings, textWidth).body().fit(Integer.MAX_VALUE, Integer.MAX_VALUE, 1f);
         int rowHeight = new UiHudPanel(font, List.of(rows.get(0).content())).fit(Integer.MAX_VALUE, Integer.MAX_VALUE, 1f).height() - emptySize.height();
-        // A near-zero scale keeps the empty panel at one pixel and avoids rounding at the viewport edge.
-        var available = emptyPanel.fit(budgetWidth, budgetHeight, Float.MIN_NORMAL);
         var rowFit = new HudRowFit<Row>(baseSize.width(), baseSize.height(), emptySize.width(),
                 rowHeight,
-                available.width() + available.travelX(), available.height() + available.travelY(), minimum,
+                availableWidth, available.height() + available.travelY(), minimum,
                 row -> font.width(row.content().text()), candidate -> sections(candidate, shortHeadings, false, shortcuts.isEmpty()).rows());
-        var footer = new Row(truncate(pageNotice(rows.size(), rows.size(), rows.size()), textWidth), 0, HudGroups.Group.CONTROLS);
         var pages = HudPages.partition(shortened, Row::priority, rowFit, footer);
         if (!pages.pages().isEmpty()) {
             int selected = Math.floorMod(viewport.page(), pages.pages().size());
-            var pageFooter = truncate(pageNotice(selected + 1, pages.pages().size(), pages.omitted()), textWidth);
+            var pageFooter = pages.pages().size() == 1
+                    ? truncate(notice(noticeKey, pages.omitted()), textWidth)
+                    : pageNotice(selected + 1, pages.pages().size(), pages.omitted(), textWidth);
             return place(panel(pages.pages().get(selected), pageFooter, shortHeadings, textWidth), viewport, budgetWidth, budgetHeight,
                     requested, pages.omitted(), pages.pages().size(), emptySize.width(), textWidth);
         }
@@ -112,7 +120,6 @@ final class PlayerInfoHudLayout {
 
     private UiHudPanel.Row truncate(UiHudPanel.Row row, int width) {
         var text = HudText.truncate(font, row.text(), width);
-        if (text == row.text() && font.width(text) > width) text = Component.empty();
         return text == row.text() ? row : new UiHudPanel.Row(row.icon(), row.iconColor(), text);
     }
 
@@ -132,14 +139,14 @@ final class PlayerInfoHudLayout {
     }
 
     private HudSections.Plan<Row> sections(List<Row> rows, Map<HudGroups.Group, Row> headings, boolean lines, boolean controlsTitle) {
-        return HudSections.layout(rows, Row::group, group -> titles && (controlsTitle || group != HudGroups.Group.CONTROLS),
+        return HudSections.layout(rows, Row::group, group -> headings.containsKey(group) && (controlsTitle || group != HudGroups.Group.CONTROLS),
                 headings::get, lines && separators);
     }
 
     private Panel panel(List<Row> rows, UiHudPanel.Row notice, Map<HudGroups.Group, Row> headings, int textWidth) {
         var entries = new ArrayList<Row>(rows);
-        if (notice != null) entries.add(new Row(notice, 0, HudGroups.Group.CONTROLS));
         for (var shortcut : shortcuts) entries.add(new Row(truncate(shortcut, textWidth), 0, HudGroups.Group.CONTROLS));
+        if (notice != null) entries.add(new Row(notice, 0, HudGroups.Group.CONTROLS));
         var plan = sections(entries, headings, true, true);
         var visible = plan.rows().stream().map(Row::content).toList();
         return new Panel(new UiHudPanel(font, visible, 0, ROW_ICON_SIZE), visible, plan.boundaries());
@@ -170,10 +177,9 @@ final class PlayerInfoHudLayout {
                 hidden, pages, panel.boundaries(), width);
     }
 
-    private UiHudPanel.Row pageNotice(int page, int total, int hidden) {
+    private UiHudPanel.Row pageNotice(int page, int total, int hidden, int textWidth) {
         return new UiHudPanel.Row(GraphicIcon.KEYBOARD, 0xFFDBE4EF,
-                Component.translatable(LANG + (hidden > 0 ? "page_indicator_hidden" : "page_indicator"),
-                        page, total, pageKeys, hidden));
+                HudText.pageNotice(font, textWidth, page, total, hidden, pageKeys));
     }
 
     private static UiHudPanel.Row notice(String key, int hidden) {

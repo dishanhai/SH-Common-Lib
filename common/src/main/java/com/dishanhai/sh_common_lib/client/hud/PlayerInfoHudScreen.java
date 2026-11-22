@@ -75,7 +75,7 @@ final class PlayerInfoHudScreen extends Screen {
         int sliderWidth = Math.min(220, width - 16);
         scaleSlider = sliderWidth > 8 ? new UiSlider(new Bounds((width - sliderWidth) / 2, 0, sliderWidth, 18),
                 MIN_SCALE, MAX_SCALE, SCALE_STEP, scalePercent, UiPreferences.configured(),
-                percent -> Component.translatable(LANG + "scale", percent), percent -> {
+                percent -> HudText.scaleLabel(percent, fitPreview(percent).placement().scale()), percent -> {
                     scalePercent = percent;
                     preview.updatePlacement();
                 }) : null;
@@ -110,7 +110,11 @@ final class PlayerInfoHudScreen extends Screen {
     }
 
     private PlayerInfoHudLayout.View fitPreview() {
-        return layout.fit(width, height, toolbarY, scalePercent, minecraft.getWindow().getGuiScale(), hud.pageIndex());
+        return fitPreview(scalePercent);
+    }
+
+    private PlayerInfoHudLayout.View fitPreview(int percent) {
+        return layout.fit(width, height, toolbarY, percent, minecraft.getWindow().getGuiScale(), hud.pageIndex());
     }
 
     private UiButton button(int x, int width, Component label, UiButton.OnPress action) {

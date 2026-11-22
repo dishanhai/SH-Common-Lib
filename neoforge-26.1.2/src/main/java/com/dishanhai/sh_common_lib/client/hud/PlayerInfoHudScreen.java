@@ -72,7 +72,7 @@ final class PlayerInfoHudScreen extends Screen {
         scaleSlider = sliderWidth > 8 ? ShBetterUiApi.controls().slider(
                 new Bounds((width - sliderWidth) / 2, toolbarY + 15, sliderWidth, 18),
                 MIN_SCALE, MAX_SCALE, SCALE_STEP, scalePercent, UiPreferences.configured(),
-                value -> Component.translatable(LANG + "scale", value), value -> {
+                value -> HudText.scaleLabel(value, fitPreview(value).placement().scale()), value -> {
                     scalePercent = value;
                     preview.updatePlacement();
                 }) : null;
@@ -105,7 +105,11 @@ final class PlayerInfoHudScreen extends Screen {
     }
 
     private PlayerInfoHudLayout.View fitPreview() {
-        return layout.fit(width, height, toolbarY, scalePercent, minecraft.getWindow().getGuiScale(), hud.pageIndex());
+        return fitPreview(scalePercent);
+    }
+
+    private PlayerInfoHudLayout.View fitPreview(int percent) {
+        return layout.fit(width, height, toolbarY, percent, minecraft.getWindow().getGuiScale(), hud.pageIndex());
     }
 
     private Button button(int x, int width, Component label, Button.OnPress action) {

@@ -3,7 +3,7 @@ package com.dishanhai.sh_common_lib.api.ulk.fumo;
 
 import com.dishanhai.sh_common_lib.internal.block.DishanhaiFumoBlock;
 import com.dishanhai.sh_common_lib.internal.block.FumoCurioRenderer;
-import com.dishanhai.sh_common_lib.internal.block.FumoHeadItem;
+import com.dishanhai.sh_common_lib.internal.block.ForgeFumoHeadItem;
 import com.dishanhai.sh_common_lib.internal.block.FumoRenderer;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.level.block.Block;
@@ -30,7 +30,7 @@ public final class Fumos {
                                     String... variantPaths) {
         var pack = new FumoPack(entityPath, variantPaths, (path, type) -> {
             var block = blocks.register(path, () -> new DishanhaiFumoBlock(BlockBehaviour.Properties.of(), type));
-            var item = items.register(path, () -> new FumoHeadItem(block.get(), new Item.Properties()));
+            var item = items.register(path, () -> new ForgeFumoHeadItem(block.get(), new Item.Properties()));
             return new FumoPack.Variant(block, item);
         }, (path, validBlocks, factory) -> entities.register(path,
                 () -> BlockEntityType.Builder.of(factory::apply, validBlocks.get()).build(null)));
