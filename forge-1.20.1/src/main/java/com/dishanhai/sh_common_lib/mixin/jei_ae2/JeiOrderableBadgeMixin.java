@@ -1,12 +1,10 @@
 // Author: dishanhai
 package com.dishanhai.sh_common_lib.mixin.jei_ae2;
 
-import appeng.api.stacks.AEFluidKey;
-import com.dishanhai.sh_common_lib.client.jei.JeiOrderableBadge;
+import com.dishanhai.sh_common_lib.client.jei.JeiOrderableBadgePlatform;
 import com.dishanhai.sh_common_lib.client.jei.JeiSearchPreferences;
 import mezz.jei.api.ingredients.rendering.BatchRenderElement;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraftforge.fluids.FluidStack;
 import net.minecraftforge.fml.ModList;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Pseudo;
@@ -34,7 +32,7 @@ abstract class JeiOrderableBadgeMixin {
                                           Map.Entry<?, List<BatchRenderElement<?>>> batch) {
         renderBatch(graphics, batch);
         if (JeiSearchPreferences.current().ae2Orderable() && ModList.get().isLoaded("ae2")) {
-            JeiOrderableBadge.draw(graphics, batch.getValue(), FluidStack.class, AEFluidKey::of);
+            JeiOrderableBadgePlatform.draw(graphics, batch.getValue());
         }
     }
 }
