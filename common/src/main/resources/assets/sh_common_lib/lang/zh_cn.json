@@ -954,7 +954,7 @@
   "screen.sh_common_lib.recipe_editor.overwrite": "覆盖已有导出文件？",
   "screen.sh_common_lib.recipe_editor.overwrite_hint": "将替换 %s。取消可保留原文件。",
   "screen.sh_common_lib.recipe_editor.select_item": "选择物品",
-  "screen.sh_common_lib.recipe_editor.fill_sequence": "连续填写原料",
+  "screen.sh_common_lib.recipe_editor.fill_sequence": "批量填写配方",
   "screen.sh_common_lib.recipe_editor.ingredient_id": "物品 ID 或 #物品标签",
   "screen.sh_common_lib.recipe_editor.potion_id": "药水 ID",
   "screen.sh_common_lib.recipe_editor.ingredient_hint": "只选取物品 ID；标签以 # 开头。NBT/数据组件请使用自定义 JSON。",

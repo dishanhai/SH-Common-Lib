@@ -17,6 +17,8 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.TitleScreen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.contents.TranslatableContents;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
@@ -39,7 +41,10 @@ public final class RecipeEditorSmoke {
     private static Object itemCatalog, itemSearchIndex;
     private static String expectedResultId;
     private static String expectedId;
+    private static BatchCheck batchCheck;
     private static final StringBuilder viewports = new StringBuilder();
+
+    private record BatchCheck(Screen picker, Item tagIcon, Item second, Item third, Item output, ItemStack previousOutput) {}
 
     @SubscribeEvent
     public static void frame(RenderFrameEvent.Post event) {
@@ -52,6 +57,12 @@ public final class RecipeEditorSmoke {
         try {
             require(now < deadline, "Timed out at step " + step);
             if (client.getOverlay() != null) return;
+            // The smoke drives synthetic input even when another desktop window has OS focus.
+            if (!client.isWindowActive()) client.setWindowActive(true);
+            if (Boolean.getBoolean("shclib.recipe.jeiSmoke")) {
+                verifyJeiOrder(client, output);
+                return;
+            }
             if (step == 0) {
                 if (!(client.screen instanceof TitleScreen)) return;
                 var recipe = new com.dishanhai.sh_common_lib.api.ulk.recipe.BrewingRecipe("recipe_smoke:public_api",
@@ -136,10 +147,7 @@ public final class RecipeEditorSmoke {
                 type(fields(client.screen).get(0), "#minecraft:logs");
                 click(client.screen, button(client.screen, "apply"));
             } else if (step == 12) {
-                var rail = client.screen.children().stream().filter(UiNavigationRail.class::isInstance)
-                        .map(UiNavigationRail.class::cast).findFirst().orElseThrow();
-                // The middle entry is Properties in both the horizontal segments and the sidebar.
-                clickAt(client.screen, rail.getX() + rail.getWidth() / 2.0, rail.getY() + rail.getHeight() / 2.0);
+                workspaceView(client.screen, GLFW.GLFW_KEY_HOME, GLFW.GLFW_KEY_RIGHT, GLFW.GLFW_KEY_DOWN);
             } else if (step == 13) {
                 require(fields(client.screen).size() >= 3, "Properties fields did not initialize");
                 require(fields(client.screen).getFirst().getValue().equals(expectedResultId), "Recipe ID did not use the selected output ID");
@@ -147,16 +155,23 @@ public final class RecipeEditorSmoke {
                 capture(output, "properties-" + scale);
                 click(client.screen, button(client.screen, "actions"));
             } else if (step == 14) {
-                assertBounds(client.screen);
-                require(overlay(client.screen).isModalOpen(), "Actions did not open as an overlay");
-                capture(output, "actions-" + scale);
-                pressOverlay(client.screen, GLFW.GLFW_KEY_ESCAPE);
-                var editor = client.screen;
-                editor.onClose();
-                require(client.screen == editor && overlay(editor).isModalOpen(), "Unsaved prompt replaced the editor");
-                pressOverlay(editor, GLFW.GLFW_KEY_ENTER);
-                require(client.screen == editor, "Continue editing closed the recipe");
-                verifySequenceDrag(editor);
+                if (batchCheck == null) {
+                    assertBounds(client.screen);
+                    require(overlay(client.screen).isModalOpen(), "Actions did not open as an overlay");
+                    capture(output, "actions-" + scale);
+                    pressOverlay(client.screen, GLFW.GLFW_KEY_ESCAPE);
+                    var editor = client.screen;
+                    editor.onClose();
+                    require(client.screen == editor && overlay(editor).isModalOpen(), "Unsaved prompt replaced the editor");
+                    pressOverlay(editor, GLFW.GLFW_KEY_ENTER);
+                    require(client.screen == editor, "Continue editing closed the recipe");
+                    batchCheck = stageBatch(editor);
+                    next = now + 50_000_000L;
+                    return;
+                }
+                capture(output, "batch-output-" + scale);
+                verifyBatch(batchCheck);
+                batchCheck = null;
                 verifyManualResultId(client.screen);
                 if (scale == 4) verifyDraftScroll(client.screen, output);
                 if (scale != 5) {
@@ -173,7 +188,7 @@ public final class RecipeEditorSmoke {
                 RecipeEditor.open(client.screen, () -> null, RecipeTarget.NEOFORGE_1_21_1);
             } else if (step >= 17 && fumo(client, output, step - 17)) {
                 Files.writeString(Path.of(output, "success.txt"), viewports
-                        + "Native picker cache reuse, row scrolling, sequence drag and cancel, output ID, workspace navigation, generic field editing and Forge GTCEu authoring passed; Fumo item selection, weight validation and editing,"
+                        + "Native picker cache reuse, row scrolling, exact-slot move and swap, drag cancel, batch output and undo, output ID, workspace navigation, generic field editing and Forge GTCEu authoring passed; Fumo item selection, weight validation and editing,"
                         + " removal, undo, default and custom JSON export, and overwrite confirmation passed.\n");
                 finished = true;
                 client.stop();
@@ -332,31 +347,90 @@ public final class RecipeEditorSmoke {
         return field.get(owner);
     }
 
-    private static void verifySequenceDrag(Screen editor) throws Exception {
+    private static void verifyJeiOrder(Minecraft client, String output) throws Exception {
+        if (client.level == null || !com.dishanhai.sh_better_ui.client.jei.JeiIntegration.isAvailable()) return;
+        var backend = fieldValue(com.dishanhai.sh_better_ui.client.jei.JeiIntegration.class, "backend", null);
+        var runtime = (mezz.jei.api.runtime.IJeiRuntime) fieldValue(backend.getClass(), "runtime", backend);
+        var filter = runtime.getIngredientFilter();
+        filter.setFilterText("");
+        var registry = net.minecraft.core.registries.BuiltInRegistries.ITEM;
+        var expected = filter.getFilteredItemStacks().stream().filter(stack -> !stack.isEmpty())
+                .map(stack -> registry.getKey(stack.getItem()).toString()).distinct().toList();
+        require(expected.size() > 100, "JEI did not provide a usable overlay order");
+        String search = "diamond";
+        filter.setFilterText(search);
+        require(filter.getFilteredItemStacks().size() < expected.size(), "Expected JEI search to narrow the native list");
+        RecipeEditorAccess.open(client.screen, () -> null);
+        var editor = client.screen;
+        click(editor, slots(editor).getFirst());
+        var catalog = fieldValue(com.dishanhai.sh_better_ui.client.gui.scaled.UiResourcePicker.class, "cachedItems", null);
+        var entries = (List<?>) fieldValue(catalog.getClass(), "entries", catalog);
+        var pickerIds = entries.stream().map(entry -> ((com.dishanhai.sh_better_ui.kernel.api.controls.ResourcePickerState.Entry<?>) entry).id())
+                .toList();
+        var ids = new java.util.HashSet<>(pickerIds);
+        var shared = expected.stream().filter(ids::contains).toList();
+        require(shared.size() > 100 && pickerIds.subList(0, shared.size()).equals(shared),
+                "Picker default differs from unfiltered JEI order");
+        require(filter.getFilterText().equals(search), "Opening the picker changed the native JEI search");
+        Files.writeString(Path.of(output, "success.txt"), "Native JEI order verified for " + shared.size() + " IDs. The JEI search stayed intact.\n");
+        finished = true;
+        client.stop();
+    }
+
+    private static BatchCheck stageBatch(Screen editor) throws Exception {
+        editor = workspaceView(editor, GLFW.GLFW_KEY_HOME);
+        var previousOutput = stack(slots(editor).get(1), 0).copy();
         click(editor, button(editor, "actions"));
         chooseOverlay(editor, 3);
         var picker = Minecraft.getInstance().screen;
-        require(picker != editor && slots(picker).size() == 2, "Sequence action did not open the resource picker");
+        require(picker != editor && slots(picker).size() == 3, "Batch picker is missing its output slot");
+        assertBounds(picker);
         var grid = slots(picker).getFirst();
         var preview = slots(picker).get(1);
-        for (int i = 0; i < 3; i++) clickAt(picker, grid.getX() + 5 + i * 20, grid.getY() + 5);
-        var first = stack(preview, 0).getItem();
+        var output = slots(picker).get(2);
+        require(stack(output, 0).getCount() == previousOutput.getCount(), "Batch picker lost existing output count");
+        for (int i = 0; i < 2; i++) clickAt(picker, grid.getX() + 5 + i * 20, grid.getY() + 5);
+        var tagIcon = stack(preview, 0).getItem();
         var second = stack(preview, 1).getItem();
         var third = stack(preview, 2).getItem();
         double x = preview.getX() + 5, y = preview.getY() + 5;
-        drag(picker, x, y, x + 20, y, true);
-        require(Minecraft.getInstance().screen == picker && stack(preview, 0).getItem() == first,
+        drag(picker, x, y, x + 40, y, true);
+        require(Minecraft.getInstance().screen == picker && stack(preview, 0).getItem() == tagIcon,
                 "Escape during drag discarded or reordered the selection");
-        drag(picker, x, y, x + 20, y, false);
-        require(stack(preview, 0).getItem() == second && stack(preview, 1).getItem() == first, "Drag did not reorder the preview");
-        drag(picker, x, y, x, y + 20, false);
-        require(stack(preview, 0).getItem() == first && stack(preview, 1).getItem() == third
-                && stack(preview, 2).getItem() == second && stack(preview, 3).isEmpty(), "Dropping on an empty cell did not move to the end");
+        drag(picker, x, y, x + 40, y, false);
+        require(stack(preview, 0).getItem() == third && stack(preview, 1).getItem() == second
+                && stack(preview, 2).getItem() == tagIcon, "Dropping onto an occupied slot must swap without shifting the middle slot");
+        drag(picker, x, y, x + 20, y + 40, false);
+        require(stack(preview, 0).isEmpty() && stack(preview, 1).getItem() == second
+                && stack(preview, 2).getItem() == tagIcon && stack(preview, 7).getItem() == third,
+                "Dropping onto an empty slot did not preserve its exact position");
+        click(picker, output);
+        clickAt(picker, grid.getX() + 45, grid.getY() + 5);
+        var expectedOutput = stack(output, 0).getItem();
+        type(fields(picker).get(1), "0");
+        require(!pickerButton(picker, "confirm").active, "Batch accepted an invalid output quantity");
+        type(fields(picker).get(1), "12");
+        return new BatchCheck(picker, tagIcon, second, third, expectedOutput, previousOutput);
+    }
+
+    private static void verifyBatch(BatchCheck check) throws Exception {
+        var picker = check.picker();
         click(picker, pickerButton(picker, "confirm"));
         var updated = workspaceView(Minecraft.getInstance().screen, GLFW.GLFW_KEY_HOME);
         var ingredients = slots(updated).getFirst();
-        require(stack(ingredients, 0).getItem() == first && stack(ingredients, 1).getItem() == third
-                && stack(ingredients, 2).getItem() == second, "Confirmed recipe lost the dragged order");
+        require(stack(ingredients, 0).isEmpty() && stack(ingredients, 1).getItem() == check.second()
+                && stack(ingredients, 2).getItem() == check.tagIcon() && stack(ingredients, 7).getItem() == check.third(),
+                "Confirmed recipe lost the fixed slot positions or the manual tag");
+        var labels = (java.util.function.IntFunction<?>) fieldValue(UiIngredientSlots.class, "slotName", ingredients);
+        require(((Component) labels.apply(2)).getString().contains("#minecraft:logs"), "Moved tag became an item ID");
+        require(stack(slots(updated).get(1), 0).getItem() == check.output()
+                && stack(slots(updated).get(1), 0).getCount() == 12, "Batch output was not committed");
+        click(updated, button(updated, "undo"));
+        var restored = Minecraft.getInstance().screen;
+        require(stack(slots(restored).getFirst(), 0).getItem() == check.tagIcon()
+                && stack(slots(restored).getFirst(), 7).isEmpty()
+                && stack(slots(restored).get(1), 0).getCount() == check.previousOutput().getCount(),
+                "Batch inputs and output did not undo as one edit");
     }
 
     private static void verifyManualResultId(Screen screen) {

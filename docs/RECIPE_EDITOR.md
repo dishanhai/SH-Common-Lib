@@ -20,7 +20,7 @@
 | 药水瓶型转换 | 输入瓶型物品、原料、输出瓶型物品；保留药水数据 |
 | GTCEu 机器 | Forge 1.20.1 格式的机器类型、时长、EU/t、多项物品和流体输入输出 |
 | 通用配方 | 任意序列化器的字段表、对象、数组、值和完整 JSON 源码 |
-| Fumo 奖池 | 奖励物品、正整数权重；支持增删、分页和空奖池 |
+| Fumo 奖池 | 奖励物品、正整数权重；支持增删、滚动浏览和空奖池 |
 
 物品选择器仅选取物品注册 ID。需要 NBT、数据组件、多选原料或模组专属属性时，使用自定义 JSON；工具不会把 JEI 物品变体的附加数据隐式写入普通物品槽。26.1.2 选择器使用注册表默认物品形态，旧版本优先使用 SHBUI 提供的 JEI 目录。
 
@@ -28,13 +28,13 @@
 
 点击原料或产物槽直接打开资源选取器，参照 GTSH `MultiPickerScreen` 的左侧来源／模组、中间搜索网格、右侧已选清单和底部确认／取消结构。点击物品先修改本地选择，确认后回填配方；取消保留原内容。配方原料使用单选替换，产物可以调整数量。工具栏、来源与操作按钮使用 SHBUI 图标，物品名称与提示保留原生富文本样式和行内物品图标。
 
-来源包括物品目录、玩家物品栏和可用的 JEI 物品书签；未安装／未就绪的 JEI、没有玩家的主菜单会显示空来源。物品目录优先采用 JEI 顺序，再用注册表补齐。搜索支持名称／ID、`@模组`、`#标签`、`*ID`、`$提示文本`，空格连接的条件同时满足；支持名称、模组、ID 和数量排序。高 GUI 缩放时保留三列布局，并将来源切换压缩为循环按钮。NeoForge 26.1.2 尚无 JEI 书签后端。需要同时更新本次构建的 SHCLIB 与 SHBUI。
+来源包括物品目录、玩家物品栏和可用的 JEI 物品书签；未安装／未就绪的 JEI、没有玩家的主菜单会显示空来源。物品目录默认采用 JEI 物品列表的顺序，再用注册表补齐。两边的搜索各自生效。选取器支持名称／ID、`@模组`、`#标签`、`*ID`、`$提示文本`，空格连接的条件同时满足；支持名称、模组、ID 和数量排序。高 GUI 缩放时保留三列布局，并将来源切换压缩为循环按钮。NeoForge 26.1.2 使用注册表目录。需要同时更新本次构建的 SHCLIB 与 SHBUI。
 
 “手填 ID”保留原料 ID／`#标签` 输入，点击“应用”写入画布。药水槽填写药水注册 ID，例如 `minecraft:awkward`；瓶型转换选择 `minecraft:potion`、`minecraft:splash_potion` 或 `minecraft:lingering_potion`。纹饰图案 ID 需在世界动态注册表可用后校验。选择器中的背包／书签原型保留 NBT／组件，但当前配方画布只写入物品 ID；需要复杂原料时使用自定义 JSON。
 
 选取或手填单一产物时，空白或默认配方 ID 会取产物的完整 ID，例如 `sh_common_lib:cosmic_beacon`。已有配方 ID 可在画布或属性页手动编辑。
 
-有序／无序合成可拖动交换原料。连续填写时可拖动已选原料调序，拖到空格会移到队尾。右键或 Delete 清空槽位，Enter 选择，方向键移动槽位焦点。Esc 取消拖放。工具栏提供撤销和重做。
+有序／无序合成的「批量填写配方」会载入当前原料和产物。点击目录物品填入首个空原料格，或先点击要指定的原料格。拖到空格时直接移入该格，拖到已有原料的格子时交换两格。点击产物槽可切换选取目标，再从目录选择产物并设置数量。右键或 Delete 清空当前槽位，Enter 选择，方向键移动槽位焦点。Esc 取消拖放。确认后原料和产物作为一次编辑，可整体撤销和重做。
 
 资源目录、模组列表、草稿、Fumo 奖池、GTCEu 材料表、通用字段和代码预览都可以在各自区域滚动。长列表的滚动条支持拖动和键盘操作。
 
@@ -142,7 +142,11 @@ UUK 的 `UiIngredientSlots`、`UiCodeEditor`、`UiWorkbench` 提供通用界面�
 
 相关 Gradle 验证任务为 `recipeEditorTest`、`recipeImporterTest`、`brewingDefinitionsTest`、`brewingDatapackTest`、`brewingApiTest`、`brewingRuleCacheTest`，均挂入 `check`。覆盖版本格式、生成 Java 编译与执行、JSON 导入保真、草稿存取、路径边界、数据包合并与公开注册 API。UUK 有独立拖放、资源选择草稿／过滤／布局和主题资源验证。
 
-NeoForge 1.21.1 的原生客户端回归可从该模块目录运行 `./gradlew -I ../gradle/recipe-editor-smoke.init.gradle runClient --no-daemon`。它使用隔离目录 `build/recipe-editor-smoke/`，检查 GUI 缩放 4／3 的槽位点击、搜索、暂存／连续选择、确认回填、产物数量／非法数量／取消、手填标签和属性页，并显式加载酿造原料槽以验证客户端 Mixin 可应用。输出截图与结果后自动关闭，测试源码只通过此初始化脚本加入，不进入正式 JAR。
+NeoForge 1.21.1 的原生客户端回归可从该模块目录运行 `./gradlew -I ../gradle/recipe-editor-smoke.init.gradle runClient --no-daemon`。它使用隔离目录 `build/recipe-editor-smoke/`，检查槽位点击、搜索、批量移动／交换、取消拖动、产物数量、整批撤销、手填标签和属性页，并显式加载酿造原料槽以验证客户端 Mixin 可应用。输出截图与结果后自动关闭，测试源码只通过此初始化脚本加入。
+
+将测试存档副本放入 `build/recipe-editor-jei-smoke/saves/`，追加 `-PrecipeJeiWorld="存档目录名"` 可运行带 JEI 的排序回归。该流程对比原生物品目录和选取器顺序，并检查打开选取器后 JEI 的搜索词。
+
+2026-11-21 在 NeoForge 1.21.1 的 GUI 缩放 1／3／4 通过批量编辑客户端回归。仅安装 JEI 的隔离存档对照了 1,324 个物品 ID 的原生顺序，打开选取器后 JEI 的搜索词保留。
 
 构建不替代客户端验收。实际 GUI 缩放、拖放、主题、旁白、JEI 共存、KubeJS 启动、数据包加载以及单人／独立服务器酿造仍按 `TODO.md` 验收。
 
@@ -152,6 +156,6 @@ NeoForge 1.21.1 的原生客户端回归可从该模块目录运行 `./gradlew -
 
 ## 界面设计参考
 
-工作区宽度充足时并排展示编辑区与生成结果，宽屏增加侧栏。窄屏使用分段导航，当前页、键盘焦点和主要操作均服从玩家选择的 UUK 主题。分栏行为参考 [Apple Split Views](https://developer.apple.com/design/human-interface-guidelines/split-views) 和 [Ionic Split Pane](https://ionicframework.com/docs/api/split-pane)。
+工作区和子弹窗采用山海配方修改器开发者工具 `gt_shanhai:_recipe_modifier_dev` 的深蓝底板、直角边框和青色选中线。按钮按下时变暗，减少动效设置下保留颜色反馈。工作区宽度充足时并排展示编辑区与生成结果，宽屏增加侧栏，窄屏使用分段导航。分栏行为参考 [Apple Split Views](https://developer.apple.com/design/human-interface-guidelines/split-views) 和 [Ionic Split Pane](https://ionicframework.com/docs/api/split-pane)。
 
 字段名、可编辑值和子项入口按列对齐，常用改动可在当前行完成。控件分组和选中态参考 [Konsta UI List](https://konstaui.com/react/list) 与 [Framework7 Segmented](https://framework7.io/docs/segmented)。游戏内界面由 UUK 原生控件组成。

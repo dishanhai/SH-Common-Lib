@@ -18,10 +18,12 @@ public final class RecipeEditorAccess {
             screen.getMethod("currentScreen");
             var workbench = Class.forName("com.dishanhai.sh_better_ui.client.api.UiWorkbench", false, loader);
             workbench.getMethod("textColor");
+            workbench.getMethod("editorBuilder", Component.class, Screen.class);
             workbench.getMethod("popup", Component.class, Screen.class, int.class, int.class);
             workbench.getMethod("showChoices", screen, Component.class, Component.class, java.util.List.class, Component.class);
             workbench.getMethod("selectItemSequence", screen,
-                            Component.class, Supplier.class, int.class, java.util.function.Consumer.class);
+                            Component.class, Supplier.class, java.util.List.class, net.minecraft.world.item.ItemStack.class,
+                            java.util.function.BiConsumer.class);
             String scaled = "com.dishanhai.sh_better_ui.client.gui.scaled.";
             Class.forName("com.dishanhai.sh_better_ui.client.api.ControlsApi", false, loader)
                     .getMethod("navigationRail", net.minecraft.client.gui.Font.class,

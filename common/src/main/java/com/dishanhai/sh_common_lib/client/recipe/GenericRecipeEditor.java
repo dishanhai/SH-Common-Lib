@@ -181,7 +181,7 @@ final class GenericRecipeEditor {
                 if (flush()) member(path, key, start, null);
             });
             edit.setIcon(GraphicIcon.EDIT);
-            edit.setCornerRadius(4);
+            edit.setCornerRadius(0);
             if (container) {
                 var label = text(tree.isArray(child) ? "generic.elements" : "generic.members", tree.childCount(child));
                 var open = button(owner, vx, y + 1, vw, 19, label, () -> { if (flush()) browse(child, 0); });
@@ -257,7 +257,7 @@ final class GenericRecipeEditor {
             line(frame, text("generic.preview").copy().withStyle(s -> s.withBold(true)), sx, 45, sw, ink);
             int lines = Math.min(preview.length, Math.max(1, (owner.height - 86) / 12));
             int h = Math.max(44, lines * 12 + 16);
-            RoundedCorners.draw(frame.graphics(), sx, 60, sw, h, 7, 0, 0, UiTheme.current().surface());
+            RoundedCorners.draw(frame.graphics(), sx, 60, sw, h, 0, 0, 0, UiTheme.current().surface());
             for (int i = 0; i < lines; i++) {
                 int y = 68 + i * 12;
                 line(frame, Component.literal(Integer.toString(i + 1)), sx + 6, y, 23, muted);

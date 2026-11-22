@@ -5,6 +5,7 @@ import com.dishanhai.sh_better_ui.client.api.UiFrame;
 import com.dishanhai.sh_better_ui.client.api.ShBetterUiApi;
 import com.dishanhai.sh_better_ui.client.api.UiWorkbench;
 import com.dishanhai.sh_better_ui.client.gui.scaled.RoundedCorners;
+import com.dishanhai.sh_better_ui.client.gui.scaled.UiResourcePicker.InputSlot;
 import com.dishanhai.sh_better_ui.client.gui.scaled.UiTheme;
 import com.dishanhai.sh_better_ui.client.api.UiScreen;
 import com.dishanhai.sh_better_ui.client.api.UiScreenBuilder;
@@ -105,13 +106,11 @@ public final class RecipeEditor {
     }
 
     static UiScreenBuilder builder(Component title, Screen parent) {
-        return UiWorkbench.builder(title, parent).onRender(RecipeEditor::drawBackdrop);
+        return UiWorkbench.editorBuilder(title, parent).onRender(RecipeEditor::drawBackdrop);
     }
 
     static void drawBackdrop(UiScreen owner, UiFrame frame) {
-        var theme = UiTheme.current();
-        int background = frame.preferences().highContrast() ? theme.background() : theme.light() ? 0xFFEDEDF0 : 0xFF151517;
-        RoundedCorners.draw(frame.graphics(), 0, 0, owner.width, owner.height, 0, 0, 0, background);
+        frame.graphics().fill(0, 0, owner.width, owner.height, UiTheme.current().background());
     }
 
     private void open() {
@@ -137,7 +136,7 @@ public final class RecipeEditor {
 
     static UiButton button(UiScreen owner, int x, int y, int width, int height, Component label, Runnable action) {
         var control = UiWorkbench.button(owner, x, y, width, height, label, action);
-        control.setCornerRadius(Math.min(8, height / 2f));
+        control.setCornerRadius(0);
         return control;
     }
 
@@ -221,13 +220,13 @@ public final class RecipeEditor {
         drawBackdrop(owner, frame);
         var theme = UiTheme.current();
         boolean contrast = frame.preferences().highContrast();
-        int edge = contrast ? theme.text() : 0x20888890;
-        int fill = contrast ? theme.surface() : theme.light() ? 0xFFFCFCFD : 0xFF28282C;
-        int inset = contrast ? theme.background() : theme.light() ? 0xFFF4F4F7 : 0xFF202023;
+        int edge = contrast ? theme.text() : theme.border();
+        int fill = theme.surface();
+        int inset = theme.background();
         var bar = layout.toolbar();
         var status = layout.status();
         RoundedCorners.draw(frame.graphics(), bar.x() - 7, bar.y() - 5, bar.width() + 14,
-                status.bottom() - bar.y() + 7, 12, 1, edge, inset);
+                status.bottom() - bar.y() + 7, 0, 1, edge, inset);
         RoundedCorners.draw(frame.graphics(), bar.x(), bar.bottom() + 3, bar.width(), 1, 0, 0, 0, edge);
         if (layout.sidebar()) surface(frame, layout.navigation(), 0, inset);
         if (layout.split() && view != 2) {
@@ -241,14 +240,14 @@ public final class RecipeEditor {
             if (generatedArtifact != null) {
                 int height = Math.min(area.height() - 52, previewLines.length * 11 + 6);
                 RoundedCorners.draw(frame.graphics(), area.x() - 2, area.y() + 25, area.width() + 4, height,
-                        5, 0, 0, inset);
+                        0, 0, 0, inset);
             }
         }
     }
 
     private static void surface(UiFrame frame, RecipeEditorLayout.Rect area, int edge, int fill) {
         RoundedCorners.draw(frame.graphics(), area.x() - 4, area.y() - 4,
-                area.width() + 8, area.height() + 8, 9, 1, edge, fill);
+                area.width() + 8, area.height() + 8, 0, 1, edge, fill);
     }
 
     private boolean structuredRecipe() {
@@ -836,15 +835,22 @@ public final class RecipeEditor {
     }
 
     private void openSequence() {
-        UiWorkbench.selectItemSequence(screen, text("fill_sequence"), () -> inputs, inputCount(), stacks -> {
+        var initialInputs = document.inputs().subList(0, inputCount()).stream()
+                .map(id -> new InputSlot(id, icon(id, false))).toList();
+        var initialResult = icons.containsKey(document.result()) ? resultIcon() : ItemStack.EMPTY;
+        UiWorkbench.selectItemSequence(screen, text("fill_sequence"), () -> inputs, initialInputs, initialResult, (slots, result) -> {
             var values = new ArrayList<>(document.inputs());
-            for (int i = 0; i < stacks.size(); i++) {
-                var stack = stacks.get(i);
-                String id = itemId(stack, "");
-                if (!id.isEmpty()) values.set(i, id);
+            for (int i = 0; i < slots.size(); i++) values.set(i, slots.get(i).id());
+            var next = new RecipeDocument(document.id(), document.type(), values, document.result(), document.count(),
+                    document.experience(), document.cookingTime(), document.group(), document.rawJson());
+            if (result.isPresent()) {
+                var selected = result.get();
+                invalidNumbers.remove("count");
+                numberText.remove("count");
+                next = next.withEditedResult(itemId(selected, ""), selected.isEmpty() ? 1 : selected.getCount(),
+                        !document.id().equals(savedId));
             }
-            change(new RecipeDocument(document.id(), document.type(), values, document.result(), document.count(),
-                    document.experience(), document.cookingTime(), document.group(), document.rawJson()));
+            change(next);
             refresh();
         });
     }

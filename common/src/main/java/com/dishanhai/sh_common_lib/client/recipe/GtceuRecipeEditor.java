@@ -286,12 +286,12 @@ final class GtceuRecipeEditor {
         var theme = UiTheme.current();
         int edge = frame.preferences().highContrast() ? theme.text() : GuiMotion.lerpColor(theme.background(), theme.border(), .52f);
         RecipeEditor.drawBackdrop(owner, frame);
-        RoundedCorners.draw(frame.graphics(), sheet.x(), sheet.y(), 25, 25, 6, 0, 0,
+        RoundedCorners.draw(frame.graphics(), sheet.x(), sheet.y(), 25, 25, 0, 0, 0,
                 GuiMotion.lerpColor(theme.surface(), theme.accent(), .22f) | 0xFF000000);
-        RoundedCorners.draw(frame.graphics(), sheet.x(), sheet.paramsY(), sheet.width(), 39, 7, 1, edge, theme.surface());
+        RoundedCorners.draw(frame.graphics(), sheet.x(), sheet.paramsY(), sheet.width(), 39, 0, 1, edge, theme.surface());
         for (boolean output : List.of(false, true)) {
             int x = sheet.panelX(output);
-            RoundedCorners.draw(frame.graphics(), x, sheet.tablesY(), sheet.panelWidth(), sheet.panelHeight(), 8, 1, edge, theme.surface());
+            RoundedCorners.draw(frame.graphics(), x, sheet.tablesY(), sheet.panelWidth(), sheet.panelHeight(), 0, 1, edge, theme.surface());
             RoundedCorners.draw(frame.graphics(), x + 5, sheet.tablesY() + 24, sheet.panelWidth() - 10, 1, 0, 0, 0, edge);
         }
     }

@@ -8,7 +8,11 @@ gradle.beforeProject { p ->
         if (p.projectDir.name != 'neoforge-1.21.1') {
             throw new GradleException('Recipe editor smoke targets NeoForge 1.21.1')
         }
-        def game = new File(p.projectDir, 'build/recipe-editor-smoke')
+        def jeiWorld = p.findProperty('recipeJeiWorld')
+        def game = new File(p.projectDir, jeiWorld ? 'build/recipe-editor-jei-smoke' : 'build/recipe-editor-smoke')
+        if (jeiWorld) {
+            p.dependencies.add('runtimeOnly', 'mezz.jei:jei-1.21.1-neoforge:19.69.0.456') { transitive = false }
+        }
         p.sourceSets.main.java.srcDir('src/clientSmoke/java')
         p.neoForge.runs.named('client').configure {
             gameDirectory.set(game)
@@ -18,6 +22,11 @@ gradle.beforeProject { p ->
             programArgument '1680'
             programArgument '--height'
             programArgument '960'
+            if (jeiWorld) {
+                systemProperty 'shclib.recipe.jeiSmoke', 'true'
+                programArgument '--quickPlaySingleplayer'
+                programArgument jeiWorld.toString()
+            }
         }
         p.tasks.named('runClient').configure {
             doFirst {
