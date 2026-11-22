@@ -167,7 +167,9 @@ NeoForge 26.1.2 支持化学品和能量模块。化学品以 Mekanism: Version 
 
 在「主控中心 → 设置 → 开发者」开启「语音取物」，点击「应用」。默认关闭，快捷键默认为 **F4**，可以在「按键绑定」里修改。玩家需拥有原版 **OP 2 或更高权限**，物品由服务端的 `/give` 命令发放。
 
-初次使用时，将 [whisper.cpp](https://github.com/ggml-org/whisper.cpp/releases) 的 `whisper-cli`（Windows 用 `whisper-cli.exe`，并保留同目录的依赖 DLL）与 [多语言 ggml-base.bin](https://huggingface.co/ggerganov/whisper.cpp/blob/main/ggml-base.bin) 放进客户端的 `config/sh_common_lib/voice/`。语音在本机识别，每次操作最多录音 5 秒，临时音频在识别结束后删除。
+Windows x64 可在「主控中心 → 设置 → 开发者 → 快速下载语音识别组件」中确认下载。客户端会从 GitHub 和 Hugging Face 下载缺少的组件（首次最多约 152 MB），校验文件后安装到当前实例，无需重启。
+
+手动安装时，将 [whisper.cpp](https://github.com/ggml-org/whisper.cpp/releases) 的 `whisper-cli`（Windows 用 `whisper-cli.exe`，并保留同目录的依赖 DLL）与 [多语言 ggml-base.bin](https://huggingface.co/ggerganov/whisper.cpp/blob/main/ggml-base.bin) 放进客户端的 `config/sh_common_lib/voice/`。语音在本机识别，每次操作最多录音 5 秒，临时音频在识别结束后删除。
 
 - **按一次**取 1 件。**快速按两次**取该物品的一组，数量按物品的堆叠上限计算。
 - 看到物品栏上方「单件」或「整组」模式的「正在聆听」后，说出物品名。例如「木头 / wood」取橡木原木，「水 / water」取水桶。水桶的堆叠上限为 1。
