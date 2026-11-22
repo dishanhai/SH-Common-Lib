@@ -23,6 +23,7 @@ public final class HudPanel {
     private final List<GraphicIcon> icons;
     private final int width;
     private final int height;
+    private final int iconSize;
     private final TextReadabilityPalette palette = new TextReadabilityPalette();
 
     public HudPanel(Font font, List<Row> rows) {
@@ -30,7 +31,12 @@ public final class HudPanel {
     }
 
     public HudPanel(Font font, List<Row> rows, int minimumTextWidth) {
+        this(font, rows, minimumTextWidth, ICON_SIZE);
+    }
+
+    HudPanel(Font font, List<Row> rows, int minimumTextWidth, int iconSize) {
         this.rows = List.copyOf(rows);
+        this.iconSize = iconSize;
         this.icons = this.rows.stream().map(row -> new GraphicIcon(row.icon())).toList();
         int textWidth = this.rows.stream().mapToInt(row -> font.width(row.text())).max().orElse(0);
         width = TEXT_X + PADDING + Math.max(textWidth, minimumTextWidth);
@@ -71,6 +77,8 @@ public final class HudPanel {
         if (isEmpty()) return;
         var preferences = UiPreferences.configured();
         int rowHeight = rowHeight(font);
+        float iconX = PADDING + (ICON_SIZE - iconSize) / 2f;
+        float iconScale = (float) iconSize / GraphicIcon.PIXELS;
         var pose = graphics.pose();
         pose.pushMatrix();
         try {
@@ -93,7 +101,7 @@ public final class HudPanel {
                 if ((row.color() >>> 24) != 0) {
                     pose.pushMatrix();
                     try {
-                        pose.translate(PADDING, rowY + (rowHeight - ICON_SIZE) / 2).scale((float) ICON_SIZE / GraphicIcon.PIXELS);
+                        pose.translate(iconX, rowY + (rowHeight - iconSize) / 2).scale(iconScale);
                         icons.get(i).draw(graphics, 0, 0, 1, preferences.highContrast() ? textColor : row.color(), preferences);
                     } finally {
                         pose.popMatrix();
