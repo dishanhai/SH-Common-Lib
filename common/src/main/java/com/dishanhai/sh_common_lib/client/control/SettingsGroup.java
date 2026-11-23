@@ -4,6 +4,7 @@ package com.dishanhai.sh_common_lib.client.control;
 import com.dishanhai.sh_better_ui.client.api.UiScreen;
 import com.dishanhai.sh_better_ui.client.gui.display.GraphicDisplayLayout.Bounds;
 import com.dishanhai.sh_better_ui.client.gui.display.GraphicIcon;
+import com.dishanhai.sh_better_ui.client.gui.scaled.DarkModeTheme;
 import com.dishanhai.sh_better_ui.client.gui.scaled.LiquidGlassTheme;
 import com.dishanhai.sh_better_ui.client.gui.scaled.UiButton;
 import com.dishanhai.sh_better_ui.client.gui.scaled.UiSectionBar;
@@ -13,6 +14,7 @@ import com.dishanhai.sh_better_ui.client.gui.scaled.UiToggleButton;
 import com.dishanhai.sh_better_ui.client.gui.scaled.UiVerticalScrollBar;
 import com.dishanhai.sh_better_ui.kernel.api.layout.SplitActionRow;
 import com.dishanhai.sh_better_ui.kernel.api.layout.VerticalScroll;
+import net.minecraft.ChatFormatting;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.events.GuiEventListener;
@@ -53,6 +55,7 @@ final class SettingsGroup {
         boolean hasToggle() { return toggle != null; }
     }
 
+    private final Component title;
     private final UiSectionBar.Section section;
     private final List<Entry> entries;
     private final boolean twoColumns;
@@ -76,10 +79,15 @@ final class SettingsGroup {
 
     SettingsGroup(Component title, GraphicIcon icon, List<Entry> entries) { this(title, icon, entries, false); }
     SettingsGroup(Component title, GraphicIcon icon, List<Entry> entries, boolean twoColumns) {
-        this.section = new UiSectionBar.Section(title, icon);
+        this(title, title, icon, entries, twoColumns);
+    }
+    SettingsGroup(Component title, Component navigationTitle, GraphicIcon icon, List<Entry> entries, boolean twoColumns) {
+        this.title = title;
+        this.section = new UiSectionBar.Section(navigationTitle, icon);
         this.entries = List.copyOf(entries);
         this.twoColumns = twoColumns;
     }
+    Component title() { return title; }
     UiSectionBar.Section section() { return section; }
 
     void restorePosition(ControlCenterPosition.ListPosition position) {
@@ -103,8 +111,8 @@ final class SettingsGroup {
         this.beforeDetailChange = beforeDetailChange;
         firstRow = area.y() + font.lineHeight + 4;
         viewportHeight = Math.max(0, area.bottom() - firstRow);
-        columns = twoColumns && area.width() >= 164 ? 2 : 1;
-        int contentWidth = Math.max(0, area.width() - 12);
+        columns = ControlCenterLayout.settingsColumns(twoColumns, area.width());
+        int contentWidth = Math.max(0, area.width() - ControlCenterLayout.SETTINGS_SCROLL_GUTTER);
         rowWidth = (contentWidth - (columns - 1) * ControlCenterLayout.GAP) / columns;
         var preferences = screen.context().preferences();
         var rows = SettingsRows.of(entries, columns);
@@ -166,7 +174,7 @@ final class SettingsGroup {
             button.active = reason == null;
             if (reason != null) button.setPreview(reason);
         } else if (subgroup != null) {
-            button = new UiButton(0, 0, Math.max(0, area.width() - 12), ControlCenterLayout.ROW,
+            button = new UiButton(0, 0, Math.max(0, area.width() - ControlCenterLayout.SETTINGS_SCROLL_GUTTER), ControlCenterLayout.ROW,
                     subgroup.title(), ignored -> enterDetail(subgroup), preferences, false, UiStyle.LIQUID_GLASS);
             button.setLeadingIcon(GraphicIcon.NEXT);
         } else throw new IllegalStateException("Unknown settings entry");
@@ -291,15 +299,19 @@ final class SettingsGroup {
         beforeDetailChange = null;
         visible = false; lastFocus = null; manualRender = false;
     }
-    void render(GuiGraphics graphics, Font font, Component status) {
-        Component heading = status != null ? status : detail == null ? section.label() : detail.title();
+    void render(GuiGraphics graphics, Font font) {
+        Component heading = detail == null ? title : detail.title();
+        boolean highContrast = screen.context().preferences().highContrast();
         graphics.enableScissor(area.x(), area.y(), area.right(), area.y() + font.lineHeight);
         try {
-            graphics.drawString(font, heading, area.x(), area.y(),
-                    status == null ? LiquidGlassTheme.accentColor() : LiquidGlassTheme.textColor(), false);
+            graphics.drawString(font, heading.copy().withStyle(ChatFormatting.BOLD),
+                    area.x(), area.y(), LiquidGlassTheme.textColor(), false);
         } finally {
             graphics.disableScissor();
         }
+        int dividerY = area.y() + font.lineHeight + 1;
+        graphics.fill(area.x(), dividerY, area.right(), dividerY + 1,
+                highContrast ? LiquidGlassTheme.textColor() : DarkModeTheme.borderColor());
         if (headings.isEmpty()) return;
         var clip = rowClip();
         graphics.enableScissor(clip.x(), clip.y(), clip.right(), clip.bottom());
@@ -309,7 +321,8 @@ final class SettingsGroup {
                 if (sectionHeading.view() != detail) continue;
                 int y = rowY(sectionHeading.slot(), sectionHeading.view(), offset);
                 graphics.drawString(font, sectionHeading.title(), area.x(),
-                        y + (ControlCenterLayout.ROW - font.lineHeight) / 2, LiquidGlassTheme.accentColor(), false);
+                        y + (ControlCenterLayout.ROW - font.lineHeight) / 2,
+                        highContrast ? LiquidGlassTheme.textColor() : LiquidGlassTheme.accentColor(), false);
             }
         } finally {
             graphics.disableScissor();

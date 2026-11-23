@@ -13,13 +13,21 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
-record SettingsGroup(Component title, GraphicIcon icon, List<Entry> entries, boolean twoColumns) {
+record SettingsGroup(Component title, Component navigationTitle, GraphicIcon icon, List<Entry> entries, boolean twoColumns) {
     SettingsGroup {
         entries = List.copyOf(entries);
     }
 
     SettingsGroup(Component title, GraphicIcon icon, List<Entry> entries) {
         this(title, icon, entries, false);
+    }
+
+    SettingsGroup(Component title, GraphicIcon icon, List<Entry> entries, boolean twoColumns) {
+        this(title, title, icon, entries, twoColumns);
+    }
+
+    SettingsGroup(Component title, Component navigationTitle, GraphicIcon icon, List<Entry> entries) {
+        this(title, navigationTitle, icon, entries, false);
     }
 
     sealed interface Entry permits Toggle, Page, Subgroup, Heading {}

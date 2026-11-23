@@ -13,3 +13,5 @@
 2026-11-20 补充：SH-Better-UI Forge 在线构建时，MCPRepo 下载 Minecraft 客户端 POM 连接超时，随后 Kotlin 编译找不到 JOML、LWJGL 等类。依赖缓存已齐备时，用仓库的 Gradle 8.8 以 `build --offline --no-daemon --console=plain` 重跑可通过编译、测试和重映射打包。
 
 2026-11-21 补充：在 Git Bash 用 `rg -Fx` 核对 Windows JDK 的 `jar tf` 输出时，行末的 CR 会导致精确匹配失败。先将列表经 `tr -d '\r'` 转为 LF，再匹配完整条目。SHCLIB 三个版本的 JAR 均已用此方法确认包含 ULK Markdown API。
+
+2026-11-23 补充：SHCLIB 的 NeoForge 26.1.2 复用 1.21.1 的 Gradle wrapper。用 `./neoforge-1.21.1/gradlew -p neoforge-26.1.2` 运行时，`-I` 的相对路径以 26.1.2 模块为起点。临时验收脚本可传绝对路径，或使用 `-I build/control-center-smoke.init.gradle`。

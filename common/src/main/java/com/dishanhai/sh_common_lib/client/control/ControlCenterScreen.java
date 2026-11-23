@@ -34,6 +34,7 @@ import com.dishanhai.sh_better_ui.kernel.api.ScreenService;
 import com.dishanhai.sh_better_ui.kernel.api.UiId;
 import com.dishanhai.sh_common_lib.client.hud.PlayerInfoHud;
 import com.dishanhai.sh_common_lib.client.loading.ClientLoading;
+import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
@@ -57,6 +58,8 @@ final class ControlCenterScreen {
     private static final int OVERVIEW = 1;
     private static final float BODY_RADIUS = 5f;
     private static final Bounds HIDDEN = new Bounds(0, 0, 0, 0);
+    private static final Component TITLE = label("title").copy().withStyle(ChatFormatting.BOLD);
+    private static final Component COMPACT_TITLE = label("title.compact").copy().withStyle(ChatFormatting.BOLD);
     private static final List<UiSectionBar.Section> SECTIONS = List.of(
             new UiSectionBar.Section(label("settings"), GraphicIcon.SETTINGS),
             new UiSectionBar.Section(label("overview"), GraphicIcon.INFO));
@@ -95,7 +98,7 @@ final class ControlCenterScreen {
     private UiButton back;
     private UiButton reset;
     private UiButton apply;
-    private Component status;
+    private String status;
     private UiScreen owner;
     private boolean restoreBackFocus;
 
@@ -141,7 +144,7 @@ final class ControlCenterScreen {
 
         int x = layout.contentX();
         int contentWidth = layout.contentWidth();
-        body = new Bounds(x - 3, layout.bodyTop(), contentWidth + 6, layout.bodyHeight());
+        body = pageBody(selected);
         if (panel == null) {
             panel = ShBetterUiApi.motion().capsuleReveal();
             if (returning == null) returning = new UiScreenReturn(screen);
@@ -152,34 +155,37 @@ final class ControlCenterScreen {
         }
         panelOnly = !preferences.reducedMotion() && panel.active();
         tabs = screen.add(ShBetterUiApi.controls().jellySectionBar(
-                new Bounds(x, layout.tabsY(), contentWidth, ControlCenterLayout.ROW), preferences, SECTIONS, selected, this::select));
+                new Bounds(x, layout.tabsY(), layout.tabsWidth(), ControlCenterLayout.ROW),
+                preferences, SECTIONS, selected, this::select));
         tabs.buttons().get(OVERVIEW).setTooltip(Tooltip.create(label("overview.hint")));
 
         var sections = groups.stream().map(SettingsGroup::section).toList();
         groupTabs = screen.add(ShBetterUiApi.controls().scrollableSectionBar(
                 new Bounds(x, layout.groupsY(), contentWidth, ControlCenterLayout.ROW),
                 preferences, sections, selectedGroup, this::selectGroup).withJellyRadio());
+        for (int index = 0; index < groups.size(); index++) {
+            groupTabs.buttons().get(index).setTooltip(Tooltip.create(groups.get(index).title()));
+        }
         groupTabs.focus(selectedGroup);
-        var groupArea = new Bounds(x, body.y() + 4, contentWidth, Math.max(0, body.height() - 4));
+        var groupArea = new Bounds(x, layout.bodyTop(false) + 4, contentWidth, layout.bodyHeight(false) - 4);
         for (SettingsGroup group : groups) {
             group.init(screen, font, groupArea, this::changed,
                     () -> startPageMorph(groupTabs.buttons().get(selectedGroup)));
         }
         updateWidgetViewport(screen);
-        prepareOverview(font, groupArea);
+        prepareOverview(font);
 
         previous = screen.add(pageButton(layout.pagePreviousX(), label("previous_page"),
                 GraphicIcon.PREVIOUS, () -> changePage(-1), screen));
         next = screen.add(pageButton(layout.pageNextX(), label("next_page"),
                 GraphicIcon.NEXT, () -> changePage(1), screen));
-        int column = (contentWidth - 2 * ControlCenterLayout.GAP) / 3;
-        back = screen.add(button(x, layout.footerY(), column, CommonComponents.GUI_BACK,
+        int actionWidth = layout.footerActionWidth();
+        back = screen.add(button(x, layout.footerY(), actionWidth, CommonComponents.GUI_BACK,
                 GraphicIcon.BACK, this::requestClose, screen));
-        reset = screen.add(button(x + column + ControlCenterLayout.GAP, layout.footerY(), column,
+        reset = screen.add(button(layout.footerResetX(), layout.footerY(), actionWidth,
                 label("reset"), GraphicIcon.RESET, this::reset, screen));
-        apply = screen.add(button(x + 2 * (column + ControlCenterLayout.GAP), layout.footerY(),
-                contentWidth - 2 * (column + ControlCenterLayout.GAP), label("apply"), GraphicIcon.SUCCESS,
-                this::apply, screen, true));
+        apply = screen.add(button(layout.footerApplyX(), layout.footerY(), actionWidth,
+                label("apply"), GraphicIcon.SUCCESS, this::apply, screen, true));
         back.setTabOrderGroup(2);
         reset.setTabOrderGroup(2);
         apply.setTabOrderGroup(2);
@@ -213,14 +219,22 @@ final class ControlCenterScreen {
         return button;
     }
 
-    private void prepareOverview(Font font, Bounds area) {
+    private Bounds pageBody(int section) {
+        boolean overviewVisible = section == OVERVIEW;
+        return new Bounds(layout.contentX() - 3, layout.bodyTop(overviewVisible),
+                layout.contentWidth() + 6, layout.bodyHeight(overviewVisible));
+    }
+
+    private void prepareOverview(Font font) {
         overview.clear();
         for (String feature : FEATURES) {
             if (!overview.isEmpty()) overview.add(new OverviewLine(null, false));
-            font.split(label(feature), area.width()).forEach(line -> overview.add(new OverviewLine(line, true)));
-            font.split(label(feature + ".details"), area.width()).forEach(line -> overview.add(new OverviewLine(line, false)));
+            font.split(label(feature).copy().withStyle(ChatFormatting.BOLD), layout.contentWidth())
+                    .forEach(line -> overview.add(new OverviewLine(line, true)));
+            font.split(label(feature + ".details"), layout.contentWidth())
+                    .forEach(line -> overview.add(new OverviewLine(line, false)));
         }
-        overviewPageSize = Math.max(1, (area.height() - font.lineHeight - 2) / font.lineHeight);
+        overviewPageSize = layout.overviewPageSize(font.lineHeight);
         overviewPage = Math.min(overviewPage, overviewPages() - 1);
     }
 
@@ -228,8 +242,9 @@ final class ControlCenterScreen {
 
     private void select(int section) {
         if (selected == section) return;
-        startPageMorph(tabs.buttons().get(section));
+        startPageMorph(tabs.buttons().get(section), pageBody(SETTINGS));
         selected = section;
+        body = pageBody(selected);
         updateVisibility();
     }
 
@@ -256,24 +271,25 @@ final class ControlCenterScreen {
                 com.dishanhai.sh_common_lib.client.jei.JeiSearchPreferences::save, ArtisanControlSettings::save,
                 com.dishanhai.sh_common_lib.client.item.ArtisanAppearancePreferences::save,
                 com.dishanhai.sh_common_lib.client.voice.VoiceItemPreferences::save);
-        status = label(switch (result) {
+        status = switch (result) {
             case SAVED -> "saved";
             case PARTIAL -> "partially_saved";
             case FAILED -> "save_failed";
-        });
+        };
         refreshActions();
-        if (result != ControlCenterDraft.ApplyResult.SAVED) Minecraft.getInstance().getNarrator().sayNow(status);
+        if (result != ControlCenterDraft.ApplyResult.SAVED) Minecraft.getInstance().getNarrator().sayNow(label(status));
     }
 
     private void refreshActions() {
         if (reset == null || apply == null) return;
         boolean undo = draft.canUndoReset();
-        reset.setMessage(label(undo ? "reset_undo" : "reset"));
+        String resetKey = undo ? "reset_undo" : "reset";
+        reset.setMessage(label(layout.compactFooter() ? resetKey + ".compact" : resetKey));
         reset.setLeadingIcon(undo ? GraphicIcon.BACK : GraphicIcon.RESET);
         reset.setPreview(label(undo ? "reset_undo_hint" : "reset_hint"));
         reset.active = draft.canReset();
         apply.active = draft.dirty();
-        apply.setPreview(status == null ? label("apply_hint") : status);
+        apply.setPreview(label(status == null ? "apply_hint" : status));
     }
 
     private void changePage(int direction) {
@@ -347,10 +363,16 @@ final class ControlCenterScreen {
     private void drawChrome(UiFrame frame) {
         var graphics = frame.graphics();
         var font = Minecraft.getInstance().font;
-        int titleRight = previous != null && previous.visible ? layout.pagePreviousX() - 4
-                : layout.contentX() + layout.contentWidth();
+        int titleRight = titleRight();
+        if (status != null && layout.compact() && selected == SETTINGS) {
+            var message = statusText(font, layout.contentWidth() - font.width(COMPACT_TITLE) - ControlCenterLayout.GAP);
+            int messageX = titleRight - font.width(message);
+            graphics.drawString(font, message, messageX, layout.titleY(), LiquidGlassTheme.textColor(), false);
+            titleRight = messageX - ControlCenterLayout.GAP;
+        }
+        var title = font.width(TITLE) <= titleRight - layout.contentX() ? TITLE : COMPACT_TITLE;
         graphics.enableScissor(layout.contentX(), layout.top(), titleRight, layout.tabsY());
-        graphics.drawString(font, owner.getTitle(), layout.contentX(), layout.titleY(), LiquidGlassTheme.textColor(), false);
+        graphics.drawString(font, title, layout.contentX(), layout.titleY(), LiquidGlassTheme.textColor(), false);
         graphics.disableScissor();
         if (previous != null && previous.visible) {
             int page = selected == SETTINGS ? groups.get(selectedGroup).page() : overviewPage;
@@ -358,8 +380,27 @@ final class ControlCenterScreen {
             graphics.drawCenteredString(font, Component.translatable("screen.sh_common_lib.control_center.page",
                     page + 1, pages), layout.pagePreviousX() + ControlCenterLayout.PAGE_BUTTON_WIDTH
                     + ControlCenterLayout.PAGE_LABEL_WIDTH / 2, layout.pageY() + (layout.pageHeight() - font.lineHeight) / 2,
-                    LiquidGlassTheme.textColor());
+                    frame.preferences().highContrast() ? LiquidGlassTheme.textColor() : LiquidGlassTheme.mutedTextColor());
         }
+        if (status != null && !layout.compact()) {
+            int x = layout.contentX();
+            int right = x + layout.contentWidth();
+            var message = statusText(font, layout.contentWidth());
+            graphics.enableScissor(x, layout.bodyBottom(), right, layout.footerY());
+            graphics.drawString(font, message, right - font.width(message), layout.footerStatusY(font.lineHeight),
+                    LiquidGlassTheme.textColor(), false);
+            graphics.disableScissor();
+        }
+    }
+
+    private Component statusText(Font font, int availableWidth) {
+        var message = label(status);
+        return font.width(message) <= availableWidth ? message : label(status + ".compact");
+    }
+
+    private int titleRight() {
+        return previous != null && previous.visible ? layout.pagePreviousX() - 4
+                : layout.contentX() + layout.contentWidth();
     }
 
     private void drawBody(UiFrame frame, boolean panelTransition) {
@@ -420,25 +461,29 @@ final class ControlCenterScreen {
         var font = Minecraft.getInstance().font;
         if (selected == SETTINGS) {
             var group = groups.get(selectedGroup);
-            group.render(frame.graphics(), font, status);
+            group.render(frame.graphics(), font);
             if (manual) group.renderWidgets(frame.graphics(), frame.partialTick());
         } else {
-            renderOverview(frame.graphics(), font);
+            renderOverview(frame.graphics(), font, frame.preferences().highContrast());
         }
     }
 
-    private void renderOverview(GuiGraphics graphics, Font font) {
+    private void renderOverview(GuiGraphics graphics, Font font, boolean highContrast) {
         int start = overviewPage * overviewPageSize;
         int end = Math.min(overview.size(), start + overviewPageSize);
         int y = body.y() + 4;
         for (int index = start; index < end; index++) {
             var line = overview.get(index);
             if (line.text() != null) graphics.drawString(font, line.text(), layout.contentX(), y,
-                    line.heading() ? LiquidGlassTheme.accentColor() : LiquidGlassTheme.mutedTextColor(), false);
+                    highContrast ? LiquidGlassTheme.textColor()
+                            : line.heading() ? LiquidGlassTheme.accentColor() : LiquidGlassTheme.mutedTextColor(), false);
             y += font.lineHeight;
         }
-        if (status != null) graphics.drawString(font, status, layout.contentX(),
-                body.bottom() - font.lineHeight - 2, LiquidGlassTheme.textColor(), false);
+        if (status != null && layout.compact()) {
+            var message = statusText(font, layout.contentWidth());
+            graphics.drawString(font, message, layout.contentX() + layout.contentWidth() - font.width(message),
+                    body.bottom() - font.lineHeight - 2, LiquidGlassTheme.textColor(), false);
+        }
     }
 
     void foreground(UiScreen screen, UiFrame frame) {
@@ -462,7 +507,8 @@ final class ControlCenterScreen {
 
     private List<UiSkeleton.Block> panelSkeleton() {
         var blocks = bodySkeleton();
-        blocks.add(new UiSkeleton.Block(new Bounds(layout.contentX(), layout.titleY() + 2, 64, 6)));
+        blocks.add(new UiSkeleton.Block(new Bounds(layout.contentX(), layout.titleY() + 2,
+                Math.min(64, titleRight() - layout.contentX()), 6)));
         for (var widget : chrome) {
             if (!widget.visible || widget.getWidth() < 8) continue;
             blocks.add(new UiSkeleton.Block(new Bounds(widget.getX() + 2, widget.getY() + 3,
@@ -484,10 +530,14 @@ final class ControlCenterScreen {
     }
 
     private void startPageMorph(UiButton source) {
+        startPageMorph(source, body);
+    }
+
+    private void startPageMorph(UiButton source, Bounds snapshotArea) {
         var preferences = owner.context().preferences();
         long now = PageTransition.nowMs();
         boolean continuing = pageHandoff.active();
-        pageHandoff.capture(body, preferences);
+        pageHandoff.capture(snapshotArea, preferences);
         float center = source.getX() + source.getWidth() * 0.5f;
         center = Math.max(body.x() + 16f, Math.min(body.right() - 16f, center));
         pageMorph.sample(now, preferences);

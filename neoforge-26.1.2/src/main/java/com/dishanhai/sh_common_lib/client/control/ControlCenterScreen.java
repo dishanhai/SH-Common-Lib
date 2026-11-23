@@ -22,6 +22,7 @@ import com.dishanhai.sh_better_ui.kernel.api.glass.GlassVariant;
 import com.dishanhai.sh_common_lib.client.ClientPanels;
 import com.dishanhai.sh_common_lib.client.hud.PlayerInfoHud;
 import com.dishanhai.sh_common_lib.client.loading.ClientLoading;
+import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
@@ -44,6 +45,8 @@ import java.util.Optional;
 import static com.dishanhai.sh_common_lib.client.control.ControlCenterModule.label;
 
 final class ControlCenterScreen extends Screen {
+    private static final Component TITLE = label("title").copy().withStyle(ChatFormatting.BOLD);
+    private static final Component COMPACT_TITLE = label("title.compact").copy().withStyle(ChatFormatting.BOLD);
     private static final List<String> FEATURES = List.of("crate", "jei");
     private static final List<UiSectionBar.Section> SECTIONS = List.of(
             new UiSectionBar.Section(label("settings"), GraphicIcon.SETTINGS),
@@ -58,11 +61,9 @@ final class ControlCenterScreen extends Screen {
     private final List<OverviewLine> overviewLines = new ArrayList<>();
     private SettingsGroup selectedGroup;
     private boolean overview;
-    private Component status;
+    private String status;
     private ControlCenterLayout layout;
     private Bounds body;
-    private int statusY;
-    private int entryPage;
     private final VerticalScroll scrolling = new VerticalScroll();
     private final Map<SettingsGroup.Subgroup, Double> detailOffsets = new IdentityHashMap<>();
     private final List<Placed> placed = new ArrayList<>();
@@ -117,7 +118,6 @@ final class ControlCenterScreen extends Screen {
         cancelDrag();
         resetButton = applyButton = null;
         paging = false;
-        statusY = -1;
         layout = ControlCenterLayout.of(width, height);
         body = null;
         if (!layout.fits()) {
@@ -132,10 +132,10 @@ final class ControlCenterScreen extends Screen {
 
         int x = layout.contentX();
         int contentWidth = layout.contentWidth();
-        body = new Bounds(x - 3, layout.bodyTop(), contentWidth + 6, layout.bodyHeight());
+        body = new Bounds(x - 3, layout.bodyTop(overview), contentWidth + 6, layout.bodyHeight(overview));
         var preferences = UiPreferences.configured();
-        var tabArea = new Bounds(x, layout.tabsY(), contentWidth, ControlCenterLayout.ROW);
-        if (tabs == null || tabs.getWidth() != contentWidth) {
+        var tabArea = new Bounds(x, layout.tabsY(), layout.tabsWidth(), ControlCenterLayout.ROW);
+        if (tabs == null || tabs.getWidth() != layout.tabsWidth()) {
             tabs = ShBetterUiApi.controls().jellySectionBar(tabArea, preferences, SECTIONS,
                     overview ? 1 : 0, index -> show(index == 1));
             tabs.buttons().get(1).setTooltip(Tooltip.create(label("overview.hint")));
@@ -155,9 +155,12 @@ final class ControlCenterScreen extends Screen {
         } else {
             var groupArea = new Bounds(x, layout.groupsY(), contentWidth, ControlCenterLayout.ROW);
             if (groupTabs == null) {
-                var sections = groups.stream().map(group -> new UiSectionBar.Section(group.title(), group.icon())).toList();
+                var sections = groups.stream().map(group -> new UiSectionBar.Section(group.navigationTitle(), group.icon())).toList();
                 groupTabs = ShBetterUiApi.controls().scrollableSectionBar(groupArea, preferences, sections,
                         groups.indexOf(selectedGroup), this::showGroup).withJellyRadio();
+                for (int index = 0; index < groups.size(); index++) {
+                    groupTabs.buttons().get(index).setTooltip(Tooltip.create(groups.get(index).title()));
+                }
             } else {
                 groupTabs.setBounds(groupArea);
                 groupTabs.setPreferences(preferences);
@@ -165,8 +168,8 @@ final class ControlCenterScreen extends Screen {
             addRenderableWidget(groupTabs);
             if (requestedFocus == FocusTarget.GROUPS) focus = groupTabs;
             listTop = body.y() + 4 + font.lineHeight + 4;
-            listColumns = selectedGroup.twoColumns() && contentWidth >= 164 ? 2 : 1;
-            int listWidth = Math.max(0, contentWidth - 12);
+            listColumns = ControlCenterLayout.settingsColumns(selectedGroup.twoColumns(), contentWidth);
+            int listWidth = Math.max(0, contentWidth - ControlCenterLayout.SETTINGS_SCROLL_GUTTER);
             listColumnWidth = (listWidth - (listColumns - 1) * ControlCenterLayout.GAP) / listColumns;
             var entries = detail == null ? selectedGroup.entries() : detail.entries();
             var rowsLayout = SettingsRows.of(entries, listColumns);
@@ -237,7 +240,6 @@ final class ControlCenterScreen extends Screen {
             scrollbar.setTabOrderGroup(1);
             scrollbar.setSmoothScrolling(() -> UiPreferences.configured().reducedMotion());
             positionRows();
-            statusY = body.bottom();
             pages = 1;
             currentPage = 0;
         }
@@ -257,13 +259,13 @@ final class ControlCenterScreen extends Screen {
                         : previous.active ? previous : next;
             }
         }
-        int column = (contentWidth - 2 * ControlCenterLayout.GAP) / 3;
-        var back = addRenderableWidget(button(x, layout.footerY(), column, CommonComponents.GUI_BACK,
+        int actionWidth = layout.footerActionWidth();
+        var back = addRenderableWidget(button(x, layout.footerY(), actionWidth, CommonComponents.GUI_BACK,
                 GraphicIcon.BACK, this::onClose));
-        resetButton = addRenderableWidget(button(x + column + ControlCenterLayout.GAP, layout.footerY(), column,
+        resetButton = addRenderableWidget(button(layout.footerResetX(), layout.footerY(), actionWidth,
                 label("reset"), GraphicIcon.RESET, this::reset));
-        applyButton = addRenderableWidget(button(x + 2 * (column + ControlCenterLayout.GAP), layout.footerY(),
-                contentWidth - 2 * (column + ControlCenterLayout.GAP), label("apply"), GraphicIcon.SUCCESS, this::apply, true));
+        applyButton = addRenderableWidget(button(layout.footerApplyX(), layout.footerY(), actionWidth,
+                label("apply"), GraphicIcon.SUCCESS, this::apply, true));
         back.setTabOrderGroup(2);
         resetButton.setTabOrderGroup(2);
         applyButton.setTabOrderGroup(2);
@@ -326,15 +328,15 @@ final class ControlCenterScreen extends Screen {
         overviewLines.clear();
         for (String feature : FEATURES) {
             if (!overviewLines.isEmpty()) overviewLines.add(new OverviewLine(null, false));
-            font.split(label(feature), width).forEach(line -> overviewLines.add(new OverviewLine(line, true)));
+            font.split(label(feature).copy().withStyle(ChatFormatting.BOLD), width)
+                    .forEach(line -> overviewLines.add(new OverviewLine(line, true)));
             font.split(label(feature + ".details"), width).forEach(line -> overviewLines.add(new OverviewLine(line, false)));
         }
-        overviewPageSize = Math.max(1, (body.height() - 6 - font.lineHeight) / font.lineHeight);
+        overviewPageSize = layout.overviewPageSize(font.lineHeight);
     }
 
     private void movePage(int direction) {
-        if (overview) overviewPage += direction;
-        else entryPage += direction;
+        overviewPage += direction;
         status = null;
         queueRebuild(direction < 0 ? FocusTarget.PREVIOUS : FocusTarget.NEXT);
     }
@@ -353,7 +355,6 @@ final class ControlCenterScreen extends Screen {
         detail = null;
         rootOffset = 0;
         detailOffsets.clear();
-        entryPage = 0;
         status = null;
         queueRebuild(FocusTarget.GROUPS);
     }
@@ -385,13 +386,13 @@ final class ControlCenterScreen extends Screen {
                 com.dishanhai.sh_common_lib.client.jei.JeiSearchPreferences::save, ArtisanControlSettings::save,
                 com.dishanhai.sh_common_lib.client.item.ArtisanAppearancePreferences::save,
                 com.dishanhai.sh_common_lib.client.voice.VoiceItemPreferences::save);
-        status = label(switch (result) {
+        status = switch (result) {
             case SAVED -> "saved";
             case PARTIAL -> "partially_saved";
             case FAILED -> "save_failed";
-        });
+        };
         refreshActions();
-        if (result != ControlCenterDraft.ApplyResult.SAVED) minecraft.getNarrator().saySystemNow(status);
+        if (result != ControlCenterDraft.ApplyResult.SAVED) minecraft.getNarrator().saySystemNow(label(status));
     }
 
     private void syncToggles() {
@@ -405,12 +406,18 @@ final class ControlCenterScreen extends Screen {
     private void refreshActions() {
         if (resetButton == null || applyButton == null) return;
         boolean undo = draft.canUndoReset();
-        resetButton.setMessage(label(undo ? "reset_undo" : "reset"));
+        String resetKey = undo ? "reset_undo" : "reset";
+        resetButton.setMessage(label(layout.compactFooter() ? resetKey + ".compact" : resetKey));
         resetButton.setLeadingIcon(undo ? GraphicIcon.BACK : GraphicIcon.RESET);
         resetButton.setPreview(label(undo ? "reset_undo_hint" : "reset_hint"));
         resetButton.active = draft.canReset();
         applyButton.active = draft.dirty();
-        applyButton.setPreview(status == null ? label("apply_hint") : status);
+        applyButton.setPreview(label(status == null ? "apply_hint" : status));
+    }
+
+    private Component statusText(int availableWidth) {
+        var message = label(status);
+        return font.width(message) <= availableWidth ? message : label(status + ".compact");
     }
 
     @Override
@@ -433,6 +440,7 @@ final class ControlCenterScreen extends Screen {
         var theme = UiTheme.current();
         int textColor = preferences.highContrast() ? 0xFFFFFFFF : theme.text();
         int accentColor = preferences.highContrast() ? textColor : theme.accent();
+        int secondaryColor = preferences.highContrast() ? textColor : theme.secondaryText(ClientPanels.secondaryText(), .34f);
         int edge = preferences.highContrast() ? textColor : theme.border();
         if (!overview && scrollbar != null) advanceListMotion();
         var material = GlassMaterial.preset(theme.hudGlass() ? GlassVariant.CLEAR : GlassVariant.REGULAR);
@@ -448,15 +456,22 @@ final class ControlCenterScreen extends Screen {
                 : theme.surface() & 0xFFFFFF | (theme.hudGlass() ? 0x18000000 : 0xB8000000);
         RoundedCorners.draw(graphics, body.x(), body.y(), body.width(), body.height(), 5, 1, edge, bodyFill);
         graphics.nextStratum();
-        int titleRight = paging ? layout.pagePreviousX() - 4 : layout.contentX() + layout.contentWidth();
+        int contentRight = layout.contentX() + layout.contentWidth();
+        int titleRight = paging ? layout.pagePreviousX() - 4 : contentRight;
+        if (status != null && layout.compact() && !overview) {
+            var message = statusText(layout.contentWidth() - font.width(COMPACT_TITLE) - ControlCenterLayout.GAP);
+            int messageX = titleRight - font.width(message);
+            graphics.text(font, message, messageX, layout.titleY(), textColor);
+            titleRight = messageX - ControlCenterLayout.GAP;
+        }
+        var screenTitle = font.width(TITLE) <= titleRight - layout.contentX() ? TITLE : COMPACT_TITLE;
         graphics.enableScissor(layout.contentX(), layout.top(), titleRight, layout.tabsY());
-        graphics.text(font, title, layout.contentX(), layout.titleY(), textColor);
+        graphics.text(font, screenTitle, layout.contentX(), layout.titleY(), textColor);
         graphics.disableScissor();
         if (paging) {
-            int page = overview ? overviewPage : entryPage;
-            graphics.centeredText(font, Component.translatable("screen.sh_common_lib.control_center.page", page + 1, pageCount),
+            graphics.centeredText(font, Component.translatable("screen.sh_common_lib.control_center.page", overviewPage + 1, pageCount),
                     layout.pagePreviousX() + ControlCenterLayout.PAGE_BUTTON_WIDTH + ControlCenterLayout.PAGE_LABEL_WIDTH / 2,
-                    layout.pageY() + (layout.pageHeight() - font.lineHeight) / 2, textColor);
+                    layout.pageY() + (layout.pageHeight() - font.lineHeight) / 2, secondaryColor);
         }
         graphics.enableScissor(body.x(), body.y(), body.right(), body.bottom());
         try {
@@ -467,22 +482,31 @@ final class ControlCenterScreen extends Screen {
                 for (int index = start; index < end; index++) {
                     var line = overviewLines.get(index);
                     if (line.text() != null) graphics.text(font, line.text(), layout.contentX(), y,
-                            line.heading() ? accentColor : preferences.highContrast() ? textColor
-                                    : theme.secondaryText(ClientPanels.secondaryText(), .34f));
+                            line.heading() ? accentColor : secondaryColor);
                     y += font.lineHeight;
                 }
-                if (status != null) graphics.text(font, status, layout.contentX(),
-                        body.bottom() - font.lineHeight - 2, textColor);
-            } else {
-                boolean inlineStatus = status != null && statusY + font.lineHeight > body.bottom();
-                graphics.text(font, inlineStatus ? status : detail == null ? selectedGroup.title() : detail.title(), layout.contentX(), body.y() + 4,
-                        inlineStatus ? textColor : accentColor);
-                if (status != null && !inlineStatus) {
-                    graphics.textWithWordWrap(font, status, layout.contentX(), statusY, layout.contentWidth(), textColor);
+                if (layout.compact() && status != null) {
+                    var message = statusText(layout.contentWidth());
+                    graphics.text(font, message, contentRight - font.width(message),
+                            body.bottom() - font.lineHeight - 2, textColor);
                 }
+            } else {
+                Component heading = detail == null ? selectedGroup.title() : detail.title();
+                graphics.enableScissor(layout.contentX(), body.y(), contentRight, listTop);
+                graphics.text(font, heading.copy().withStyle(ChatFormatting.BOLD), layout.contentX(), body.y() + 4, textColor);
+                graphics.disableScissor();
+                int separatorY = body.y() + 4 + font.lineHeight + 1;
+                graphics.fill(layout.contentX(), separatorY, layout.contentX() + layout.contentWidth(), separatorY + 1, edge);
                 renderSettingsHeadings(graphics, accentColor);
             }
         } finally {
+            graphics.disableScissor();
+        }
+        if (!layout.compact() && status != null) {
+            int statusY = layout.footerStatusY(font.lineHeight);
+            var message = statusText(layout.contentWidth());
+            graphics.enableScissor(layout.contentX(), statusY, contentRight, layout.footerY());
+            graphics.text(font, message, contentRight - font.width(message), statusY, textColor);
             graphics.disableScissor();
         }
         super.extractRenderState(graphics, mouseX, mouseY, partialTick);
