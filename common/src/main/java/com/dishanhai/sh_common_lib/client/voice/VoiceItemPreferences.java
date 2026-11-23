@@ -9,7 +9,6 @@ import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
-import java.util.Locale;
 import java.util.Properties;
 
 public final class VoiceItemPreferences {
@@ -75,8 +74,6 @@ public final class VoiceItemPreferences {
     }
 
     static OfflineSpeechRecognition recognizer() {
-        boolean windows = System.getProperty("os.name", "").toLowerCase(Locale.ROOT).startsWith("windows");
-        return new OfflineSpeechRecognition(directory.resolve(windows ? "whisper-cli.exe" : "whisper-cli"),
-                directory.resolve("ggml-base.bin"));
+        return OfflineSpeechRecognition.forWhisperDirectory(directory);
     }
 }

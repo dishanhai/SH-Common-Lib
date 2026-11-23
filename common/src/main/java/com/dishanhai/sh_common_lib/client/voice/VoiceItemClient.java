@@ -64,6 +64,10 @@ public final class VoiceItemClient {
         } else if (clicks > 1 || (clicks == 1 && armed)) {
             start(client, true, now);
         } else if (clicks == 1) {
+            if (!VoiceItemPreferences.recognizer().installed()) {
+                show(client, "setup_required", ChatFormatting.RED);
+                return;
+            }
             armed = true;
             pressedAt = now;
             show(client, "single_armed", ChatFormatting.AQUA);
