@@ -1,0 +1,20 @@
+{
+  "multipart": [
+    {
+      "when": { "facing": "south" },
+      "apply": { "model": "sh_common_lib:block/trash_can" }
+    },
+    {
+      "when": { "facing": "west" },
+      "apply": { "model": "sh_common_lib:block/trash_can", "y": 90 }
+    },
+    {
+      "when": { "facing": "north" },
+      "apply": { "model": "sh_common_lib:block/trash_can", "y": 180 }
+    },
+    {
+      "when": { "facing": "east" },
+      "apply": { "model": "sh_common_lib:block/trash_can", "y": 270 }
+    }
+  ]
+}
