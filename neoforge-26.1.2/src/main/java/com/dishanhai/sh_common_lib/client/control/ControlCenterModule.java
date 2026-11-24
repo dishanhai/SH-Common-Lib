@@ -157,7 +157,7 @@ public final class ControlCenterModule implements UIModule {
                 new SettingsGroup.Page(label("developer_settings"), GraphicIcon.SETTINGS,
                         com.dishanhai.sh_common_lib.client.recipe.RecipeEditorAccess::unavailable,
                         com.dishanhai.sh_common_lib.client.recipe.RecipeEditorAccess::openDeveloperSettings)));
-        var loading = new SettingsGroup(label("loading"), GraphicIcon.TICK, List.of(
+        var loading = new SettingsGroup(label("loading"), label("nav.loading"), GraphicIcon.TICK, List.of(
                 new SettingsGroup.Toggle(enabled -> label(enabled ? "loading_animation_on" : "loading_animation_off"),
                         draft::animation, draft::setAnimation),
                 new SettingsGroup.Toggle(enabled -> label(enabled ? "loading_profiling_on" : "loading_profiling_off"),
@@ -165,7 +165,7 @@ public final class ControlCenterModule implements UIModule {
                 new SettingsGroup.Page(label("loading_reports"), GraphicIcon.COMPUTER,
                         () -> Files.isDirectory(ClientLoading.reportDirectory()) ? null : label("loading_reports_empty"),
                         (parent, focus) -> Util.getPlatform().openFile(ClientLoading.reportDirectory().toFile()))));
-        var announcements = new SettingsGroup(Component.translatable("sh_common_lib.announcement.appearance"),
+        var announcements = new SettingsGroup(Component.translatable("sh_common_lib.announcement.appearance"), label("nav.announcements"),
                 GraphicIcon.SETTINGS, List.of(new SettingsGroup.Page(Component.translatable("sh_common_lib.announcement.appearance.choose"), GraphicIcon.SETTINGS,
                         () -> AnnouncementAppearance.available() ? null : label("unavailable"),
                         AnnouncementAppearance::open)));
@@ -192,7 +192,7 @@ public final class ControlCenterModule implements UIModule {
                         () -> com.dishanhai.sh_common_lib.client.jei.JeiSearchProvider.installed() ? null : label("jei_provider_unavailable"),
                         ControlCenterModule::chooseJeiProvider),
                 new SettingsGroup.Page(label("jei_clear_history"), GraphicIcon.RESET, () -> null, ControlCenterModule::clearJeiHistory)));
-        var modExtensions = new SettingsGroup(label("mod_extensions"), GraphicIcon.SETTINGS, List.of(jei), true);
+        var modExtensions = new SettingsGroup(label("mod_extensions"), label("nav.extensions"), GraphicIcon.SETTINGS, List.of(jei), true);
         return List.of(playerInfo, loading, modExtensions, ArtisanControlSettings.group(draft), announcements, developer);
     }
 
