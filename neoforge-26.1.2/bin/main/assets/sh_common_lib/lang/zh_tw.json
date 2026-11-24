@@ -1,0 +1,23 @@
+{
+  "block.sh_common_lib.fake_fumo": "dishanhai™®",
+  "command.sh_common_lib.fumojump.no_fumo": "請先在頭部欄位佩戴一個 Fumo。",
+  "command.sh_common_lib.fumojump.started": "頭上的 Fumo 開始彈跳。",
+  "command.sh_common_lib.fumojump.started_bgm": "頭上的 Fumo 開始彈跳並播放音樂。",
+  "command.sh_common_lib.fumojump.stopped": "頭上的 Fumo 停止彈跳。",
+  "command.sh_common_lib.fumojump.bgm_on": "Fumo 的背景音樂已開啟。",
+  "command.sh_common_lib.fumojump.bgm_off": "Fumo 的背景音樂已關閉。",
+  "block.sh_common_lib.trash_can": "垃圾桶",
+  "screen.sh_common_lib.trash_can.unavailable": "需要安裝對應模組。",
+  "item.sh_common_lib.trash_can_chemical_module": "垃圾桶化學品模組",
+  "screen.sh_common_lib.trash_can.chemical": "化學品",
+  "screen.sh_common_lib.trash_can.chemical.hint": "放入化學品模組，接收並銷毀 Mekanism 化學品。",
+  "item.sh_common_lib.trash_can_source_module": "垃圾桶魔源模組",
+  "screen.sh_common_lib.trash_can.source": "魔源",
+  "screen.sh_common_lib.trash_can.source.hint": "放入魔源模組，接收並銷毀新生魔藝的魔源。",
+  "item.sh_common_lib.trash_can_stress_module": "垃圾桶應力模組",
+  "screen.sh_common_lib.trash_can.stress": "應力",
+  "screen.sh_common_lib.trash_can.stress.hint": "先在鐵砧把應力模組命名為 SU 上限，再放入此槽。",
+  "item.sh_common_lib.trash_can_energy_module": "垃圾桶能量模組",
+  "screen.sh_common_lib.trash_can.energy": "能量",
+  "screen.sh_common_lib.trash_can.energy.hint": "放入能量模組，接收 FE，並可接入 ME 網路。"
+}

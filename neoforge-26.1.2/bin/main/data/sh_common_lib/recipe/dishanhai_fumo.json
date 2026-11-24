@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    " W ",
+    "WPW",
+    "BWB"
+  ],
+  "key": {
+    "W": "minecraft:white_wool",
+    "P": "minecraft:purple_dye",
+    "B": "minecraft:black_wool"
+  },
+  "result": {
+    "id": "sh_common_lib:dishanhai_fumo"
+  }
+}

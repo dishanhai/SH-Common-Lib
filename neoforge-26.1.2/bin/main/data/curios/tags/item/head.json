@@ -1,0 +1,7 @@
+{
+  "replace": false,
+  "values": [
+    "sh_common_lib:dishanhai_fumo",
+    "sh_common_lib:beibeipuo_fumo"
+  ]
+}

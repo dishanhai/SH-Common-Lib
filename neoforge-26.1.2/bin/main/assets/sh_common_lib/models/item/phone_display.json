@@ -1,0 +1,33 @@
+{
+  "ambientocclusion": false,
+  "gui_light": "front",
+  "textures": {
+    "body": "sh_common_lib:item/phone",
+    "screen": "sh_common_lib:item/phone_screen",
+    "particle": "#body"
+  },
+  "display": {
+    "gui": {
+      "rotation": [10, -16, 12],
+      "scale": [0.91, 0.91, 0.91]
+    },
+    "ground": {
+      "translation": [0, 3.25, 0],
+      "scale": [0.42, 0.42, 0.42]
+    },
+    "fixed": {
+      "rotation": [0, 180, 0],
+      "scale": [0.94, 0.94, 0.94]
+    },
+    "firstperson_righthand": {
+      "rotation": [0, -15, -8],
+      "translation": [-2.55, 4.35, -0.85],
+      "scale": [0.57, 0.57, 0.57]
+    },
+    "thirdperson_righthand": {
+      "rotation": [3, 0, 0],
+      "translation": [0, 3.1, 0.75],
+      "scale": [0.56, 0.56, 0.56]
+    }
+  }
+}

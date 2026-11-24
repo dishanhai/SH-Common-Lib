@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    " B ",
+    "BGB",
+    "WBW"
+  ],
+  "key": {
+    "W": "minecraft:white_wool",
+    "B": "minecraft:black_wool",
+    "G": "minecraft:gray_dye"
+  },
+  "result": {
+    "id": "sh_common_lib:beibeipuo_fumo"
+  }
+}

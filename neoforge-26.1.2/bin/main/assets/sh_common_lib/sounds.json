@@ -1,0 +1,14 @@
+{
+  "dishanhai_fumo": {
+    "subtitle": "subtitles.sh_common_lib.dishanhai_fumo",
+    "sounds": [
+      { "name": "sh_common_lib:plushie_music", "stream": true, "attenuation_distance": 16 }
+    ]
+  },
+  "beibeipuo_fumo": {
+    "subtitle": "subtitles.sh_common_lib.beibeipuo_fumo",
+    "sounds": [
+      { "name": "sh_common_lib:plushie_music", "stream": true, "attenuation_distance": 16 }
+    ]
+  }
+}
