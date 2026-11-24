@@ -1,0 +1,12 @@
+{
+  "variants": {
+    "facing=north,holding=false": { "model": "sh_common_lib:block/beibeipuo_fumo" },
+    "facing=east,holding=false": { "model": "sh_common_lib:block/beibeipuo_fumo", "y": 90 },
+    "facing=south,holding=false": { "model": "sh_common_lib:block/beibeipuo_fumo", "y": 180 },
+    "facing=west,holding=false": { "model": "sh_common_lib:block/beibeipuo_fumo", "y": 270 },
+    "facing=north,holding=true": { "model": "sh_common_lib:block/beibeipuo_fumo_holding" },
+    "facing=east,holding=true": { "model": "sh_common_lib:block/beibeipuo_fumo_holding", "y": 90 },
+    "facing=south,holding=true": { "model": "sh_common_lib:block/beibeipuo_fumo_holding", "y": 180 },
+    "facing=west,holding=true": { "model": "sh_common_lib:block/beibeipuo_fumo_holding", "y": 270 }
+  }
+}

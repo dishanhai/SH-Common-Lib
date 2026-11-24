@@ -1,0 +1,7 @@
+{
+  "parent": "sh_common_lib:item/phone_display",
+  "loader": "neoforge:obj",
+  "model": "sh_common_lib:models/item/phone.obj",
+  "automatic_culling": false,
+  "emissive_ambient": false
+}
